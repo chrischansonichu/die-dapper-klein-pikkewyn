@@ -19,7 +19,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(raylib)
 
 # Our Project
-add_executable(${PROJECT_NAME})
+add_executable(${PROJECT_NAME}
+        src/screens.h)
 add_subdirectory(src)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES

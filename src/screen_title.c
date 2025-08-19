@@ -61,11 +61,32 @@ void UpdateTitleScreen(void)
 // Title Screen Draw logic
 void DrawTitleScreen(void)
 {
-    // TODO: Draw TITLE screen here!
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), GREEN);
+    const int W = GetScreenWidth();
+    const int H = GetScreenHeight();
+
+    // Layout
+    const int btnW = W / 6;
+    const int btnH = H / 6;
+    const int gap  = (W - 3*btnW) / 4;   // = W/8 when divisible
+    const int bottomRow    = (int)(H * 0.75f);   // top of the row
+
+    const int x0 = gap;
+    const int x1 = x0 + btnW + gap;
+    const int x2 = x1 + btnW + gap;
+
+    // Bg + title
+    DrawRectangleGradientV(0, 0, W, H, SKYBLUE, BLUE);
     Vector2 pos = { 20, 10 };
-    DrawTextEx(font, "TITLE SCREEN", pos, font.baseSize*3.0f, 4, DARKGREEN);
-    DrawText("PRESS ENTER or TAP to JUMP to GAMEPLAY SCREEN", 120, 220, 20, DARKGREEN);
+    DrawTextEx(font, "Die Dapper Klein Pikkewyn", pos, font.baseSize*3.0f, 4, DARKGREEN);
+    // DrawText("PRESS ENTER or TAP to JUMP to GAMEPLAY SCREEN", 120, 220, 20, DARKGREEN);
+
+    // Buttons (each W/6 wide, equally spaced, centered)
+    DrawRectangleLines(x0, bottomRow, btnW, btnH, DARKGREEN);
+    DrawText("New\n\nGame", x0+10, bottomRow+10, font.baseSize*2.0f, DARKGREEN);
+    DrawRectangleLines(x1, bottomRow, btnW, btnH, DARKGREEN);
+    DrawText("Load\n\nGame", x1+10, bottomRow+10, font.baseSize*2.0f, DARKGREEN);
+    DrawRectangleLines(x2, bottomRow, btnW, btnH, DARKGREEN);
+    DrawText("Options", x2+10, bottomRow+10, font.baseSize*2.0f, DARKGREEN);
 }
 
 // Title Screen Unload logic
