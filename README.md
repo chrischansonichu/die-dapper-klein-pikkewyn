@@ -4,7 +4,32 @@
 
 ### Description
 
-$(Your Game Description)
+This game is a work in progress. And will be for a very long time. It's designed to be played primarily by children.
+
+#### Overview:
+
+Top-down, pixel art RPG in the general artistic style of Pokémon Red.
+
+#### Story:
+
+The game follows a small, but brave little African penguin, as he attempts to save his colony from starvation at the
+hands of Chinese fishing vessels off the Cape. Jan de Pikkewyn (working name) will utilize various weapons and
+eventually armor in his quest to defeat the Chinese sailors and sink their ships.
+
+#### Mechanics:
+
+Starting-tier weapons will be something like discarded fishing hooks, progressing to shells, sea urchins, etc.,
+eventually ending with full armor. The gameplay will be more similar to JRPGs like Final Fantasy and Time Stalkers, with
+movement spots for both sides, as well as party members.
+Jan can add party members such as other penguins and seals, and call upon larger marine life for one-off aid with
+sinking ships, knocking sailors off the deck, etc.
+The ships progressively get harder (more sailors, more advanced weaponry, etc.)
+
+#### Technical:
+
+I'm going to attempt to program this in C, using the raylib library.
+
+-------
 
 ### Features
 
