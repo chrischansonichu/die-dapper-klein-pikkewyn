@@ -113,8 +113,8 @@ static Image BuildPenguinImage(int TILE, int FRAMES) {
         // direction
         for (int f = 0; f < FRAMES; ++f) {
             // frame
-            int ox = f * TILE;
-            int oy = row * TILE;
+            const int ox = f * TILE;
+            const int oy = row * TILE;
 
             // base: outline
             for (int y = 2; y < TILE - 1; ++y) {
@@ -135,14 +135,15 @@ static Image BuildPenguinImage(int TILE, int FRAMES) {
                 }
             }
             // eyes (row 0/3 front/back centered; left/right offset a bit)
-            int eyeY = 4;
-            int eyeL = (row == 1) ? 5 : (row == 2) ? 7 : 6;
-            int eyeR = (row == 1) ? 8 : (row == 2) ? 10 : 9;
+            const int eyeY = 4;
+            const int eyeL = (row == 1) ? 5 : (row == 2) ? 7 : 6;
+            const int eyeR = (row == 1) ? 8 : (row == 2) ? 10 : 9;
             ImageDrawPixel(&img, ox + eyeL, oy + eyeY, WHITE);
             ImageDrawPixel(&img, ox + eyeR, oy + eyeY, WHITE);
 
+            const int beakY = 6;
             // beak (front/back small triangle; side shift)
-            int beakY = 6, beakX = (row == 1) ? 4 : (row == 2) ? 11 : 7;
+            const int beakX = (row == 1) ? 4 : (row == 2) ? 11 : 7;
             for (int bx = 0; bx < 2; ++bx)
                 for (int by = 0; by < 2; ++by)
                     ImageDrawPixel(&img, ox + beakX + bx, oy + beakY + by, ORANGE);
@@ -152,7 +153,7 @@ static Image BuildPenguinImage(int TILE, int FRAMES) {
             ImageDrawPixel(&img, ox + 12, oy + 8, BLACK);
 
             // feet (animate by offsetting)
-            int footOffset = (f == 0) ? 0 : 1;
+            const int footOffset = (f == 0) ? 0 : 1;
             ImageDrawPixel(&img, ox + 6 - footOffset, oy + 13, ORANGE);
             ImageDrawPixel(&img, ox + 9 + footOffset, oy + 13, ORANGE);
         }
@@ -161,8 +162,8 @@ static Image BuildPenguinImage(int TILE, int FRAMES) {
 }
 
 static Texture2D BuildPenguinAtlas(int TILE, int FRAMES) {
-    Image img = BuildPenguinImage(TILE, FRAMES);
-    Texture2D t = LoadTextureFromImage(img);
+    const Image img = BuildPenguinImage(TILE, FRAMES);
+    const Texture2D t = LoadTextureFromImage(img);
     UnloadImage(img);
     SetTextureFilter(t, TEXTURE_FILTER_POINT);
     return t;
@@ -170,7 +171,7 @@ static Texture2D BuildPenguinAtlas(int TILE, int FRAMES) {
 
 static Penguin gPenguin = {0};
 
-static void PenguinInit(Vector2 start) {
+static void PenguinInit(const Vector2 start) {
     gPenguin.tile = 16;
     gPenguin.frames = 2;
     gPenguin.animFps = 6.0f;
@@ -178,8 +179,8 @@ static void PenguinInit(Vector2 start) {
     gPenguin.frame = 0;
     gPenguin.dir = 0; // down
     gPenguin.pos = start;
-    gPenguin.speed = 80.0f; // px/s
-    gPenguin.scale = 4;
+    gPenguin.speed = 160.0f; // px/s
+    gPenguin.scale = 3;
     gPenguin.atlas = BuildPenguinAtlas(gPenguin.tile, gPenguin.frames);
 }
 
@@ -190,7 +191,7 @@ static void PenguinUnload(void) {
     }
 }
 
-static void PenguinUpdate(float dt) {
+static void PenguinUpdate(const float dt) {
     // input
     Vector2 v = {0, 0};
     if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) v.x += 1;
@@ -205,7 +206,7 @@ static void PenguinUpdate(float dt) {
     else if (v.x > 0) gPenguin.dir = 2; // right
 
     // normalize diagonal
-    float len = sqrtf(v.x * v.x + v.y * v.y);
+    const float len = sqrtf(v.x * v.x + v.y * v.y);
     if (len > 0) {
         v.x /= len;
         v.y /= len;
@@ -216,10 +217,10 @@ static void PenguinUpdate(float dt) {
     gPenguin.pos.y += v.y * gPenguin.speed * dt;
 
     // clamp to screen
-    float w = gPenguin.tile * gPenguin.scale;
-    float h = gPenguin.tile * gPenguin.scale;
-    float maxX = GetScreenWidth() - w;
-    float maxY = GetScreenHeight() - h;
+    const int w = gPenguin.tile * gPenguin.scale;
+    const int h = gPenguin.tile * gPenguin.scale;
+    const int maxX = GetScreenWidth() - w;
+    const int maxY = GetScreenHeight() - h;
     if (gPenguin.pos.x < 0) gPenguin.pos.x = 0;
     if (gPenguin.pos.y < 0) gPenguin.pos.y = 0;
     if (gPenguin.pos.x > maxX) gPenguin.pos.x = maxX;
