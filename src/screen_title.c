@@ -58,35 +58,46 @@ void UpdateTitleScreen(void)
     }
 }
 
+void DrawButton(const char *text, const int buttonNumber) {
+    const int W = GetScreenWidth();
+    const int H = GetScreenHeight();
+    const int btnW = W / 6;
+    const int btnH = H / 6;
+    const int gap  = (W - 3*btnW) / 4;   // = W/8 when divisible
+    const int bottomRow    = (int)(H * 0.75f);   // top of the row
+
+    int posX = gap;
+    if (buttonNumber > 0){
+        posX = posX + buttonNumber * (btnW + gap);
+    }
+    const int thisFontSize = font.baseSize*2.0f;
+
+    const int textWidth  = MeasureText(text, thisFontSize);
+    const int textHeight = thisFontSize;
+
+    int textX = posX + (btnW  - textWidth)  / 2;
+    int textY = bottomRow + (btnH- textHeight) / 2;
+
+    DrawRectangleLines(posX, bottomRow, btnW, btnH, DARKGREEN);
+    DrawText(text, textX, textY, thisFontSize, DARKGREEN);
+}
+
 // Title Screen Draw logic
 void DrawTitleScreen(void)
 {
     const int W = GetScreenWidth();
     const int H = GetScreenHeight();
 
-    // Layout
-    const int btnW = W / 6;
-    const int btnH = H / 6;
-    const int gap  = (W - 3*btnW) / 4;   // = W/8 when divisible
-    const int bottomRow    = (int)(H * 0.75f);   // top of the row
-
-    const int x0 = gap;
-    const int x1 = x0 + btnW + gap;
-    const int x2 = x1 + btnW + gap;
-
     // Bg + title
     DrawRectangleGradientV(0, 0, W, H, SKYBLUE, BLUE);
     Vector2 pos = { 20, 10 };
     DrawTextEx(font, "Die Dapper Klein Pikkewyn", pos, font.baseSize*3.0f, 4, DARKGREEN);
-    // DrawText("PRESS ENTER or TAP to JUMP to GAMEPLAY SCREEN", 120, 220, 20, DARKGREEN);
+    DrawText("The story of Jan de Pikkewyn", 120, 220, 20, DARKGREEN);
 
     // Buttons (each W/6 wide, equally spaced, centered)
-    DrawRectangleLines(x0, bottomRow, btnW, btnH, DARKGREEN);
-    DrawText("New\n\nGame", x0+10, bottomRow+10, font.baseSize*2.0f, DARKGREEN);
-    DrawRectangleLines(x1, bottomRow, btnW, btnH, DARKGREEN);
-    DrawText("Load\n\nGame", x1+10, bottomRow+10, font.baseSize*2.0f, DARKGREEN);
-    DrawRectangleLines(x2, bottomRow, btnW, btnH, DARKGREEN);
-    DrawText("Options", x2+10, bottomRow+10, font.baseSize*2.0f, DARKGREEN);
+    DrawButton("New", 0);
+    DrawButton("Load", 1);
+    DrawButton("Options", 2);
 }
 
 // Title Screen Unload logic
