@@ -25,6 +25,7 @@
 
 #include "raylib.h"
 #include "screens.h"
+#include "raymath.h"
 
 //----------------------------------------------------------------------------------
 // Module Variables Definition (local)
@@ -89,6 +90,158 @@ static Texture2D BuildWaterAtlas(const int TILE, const int FRAMES) {
     return tex;
 }
 
+typedef struct {
+    Texture2D atlas;
+    int tile; // 16
+    int frames; // 2
+    float animFps; // 6.0
+    float animT; // accumulator
+    int frame; // 0..frames-1
+    int dir; // 0=down,1=left,2=right,3=up
+    Vector2 pos; // in pixels
+    float speed; // pixels/sec
+    int scale; // draw scale
+} Penguin;
+
+// Simple 16x16 pixel penguin, 4 rows (dir), 2 frames (walk)
+static Image BuildPenguinImage(int TILE, int FRAMES) {
+    const int W = TILE * FRAMES, H = TILE * 4;
+    Image img = GenImageColor(W, H, (Color){0, 0, 0, 0});
+    // colors
+
+    for (int row = 0; row < 4; ++row) {
+        // direction
+        for (int f = 0; f < FRAMES; ++f) {
+            // frame
+            int ox = f * TILE;
+            int oy = row * TILE;
+
+            // base: outline
+            for (int y = 2; y < TILE - 1; ++y) {
+                for (int x = 3; x < TILE - 3; ++x) {
+                    ImageDrawPixel(&img, ox + x, oy + y, BLACK);
+                }
+            }
+            // face/torso white belly
+            for (int y = 4; y < TILE - 3; ++y) {
+                for (int x = 5; x < TILE - 5; ++x) {
+                    ImageDrawPixel(&img, ox + x, oy + y, WHITE);
+                }
+            }
+            // head darker cap
+            for (int y = 2; y < 6; ++y) {
+                for (int x = 4; x < TILE - 4; ++x) {
+                    ImageDrawPixel(&img, ox + x, oy + y, BLACK);
+                }
+            }
+            // eyes (row 0/3 front/back centered; left/right offset a bit)
+            int eyeY = 4;
+            int eyeL = (row == 1) ? 5 : (row == 2) ? 7 : 6;
+            int eyeR = (row == 1) ? 8 : (row == 2) ? 10 : 9;
+            ImageDrawPixel(&img, ox + eyeL, oy + eyeY, WHITE);
+            ImageDrawPixel(&img, ox + eyeR, oy + eyeY, WHITE);
+
+            // beak (front/back small triangle; side shift)
+            int beakY = 6, beakX = (row == 1) ? 4 : (row == 2) ? 11 : 7;
+            for (int bx = 0; bx < 2; ++bx)
+                for (int by = 0; by < 2; ++by)
+                    ImageDrawPixel(&img, ox + beakX + bx, oy + beakY + by, ORANGE);
+
+            // flippers slightly outwards
+            ImageDrawPixel(&img, ox + 3, oy + 8, BLACK);
+            ImageDrawPixel(&img, ox + 12, oy + 8, BLACK);
+
+            // feet (animate by offsetting)
+            int footOffset = (f == 0) ? 0 : 1;
+            ImageDrawPixel(&img, ox + 6 - footOffset, oy + 13, ORANGE);
+            ImageDrawPixel(&img, ox + 9 + footOffset, oy + 13, ORANGE);
+        }
+    }
+    return img;
+}
+
+static Texture2D BuildPenguinAtlas(int TILE, int FRAMES) {
+    Image img = BuildPenguinImage(TILE, FRAMES);
+    Texture2D t = LoadTextureFromImage(img);
+    UnloadImage(img);
+    SetTextureFilter(t, TEXTURE_FILTER_POINT);
+    return t;
+}
+
+static Penguin gPenguin = {0};
+
+static void PenguinInit(Vector2 start) {
+    gPenguin.tile = 16;
+    gPenguin.frames = 2;
+    gPenguin.animFps = 6.0f;
+    gPenguin.animT = 0.0f;
+    gPenguin.frame = 0;
+    gPenguin.dir = 0; // down
+    gPenguin.pos = start;
+    gPenguin.speed = 80.0f; // px/s
+    gPenguin.scale = 4;
+    gPenguin.atlas = BuildPenguinAtlas(gPenguin.tile, gPenguin.frames);
+}
+
+static void PenguinUnload(void) {
+    if (gPenguin.atlas.id) {
+        UnloadTexture(gPenguin.atlas);
+        gPenguin.atlas.id = 0;
+    }
+}
+
+static void PenguinUpdate(float dt) {
+    // input
+    Vector2 v = {0, 0};
+    if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) v.x += 1;
+    if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) v.x -= 1;
+    if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) v.y += 1;
+    if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)) v.y -= 1;
+
+    // direction (prefer last non-zero axis for facing)
+    if (v.y > 0) gPenguin.dir = 0; // down
+    else if (v.y < 0) gPenguin.dir = 3; // up
+    if (v.x < 0) gPenguin.dir = 1; // left
+    else if (v.x > 0) gPenguin.dir = 2; // right
+
+    // normalize diagonal
+    float len = sqrtf(v.x * v.x + v.y * v.y);
+    if (len > 0) {
+        v.x /= len;
+        v.y /= len;
+    }
+
+    // move
+    gPenguin.pos.x += v.x * gPenguin.speed * dt;
+    gPenguin.pos.y += v.y * gPenguin.speed * dt;
+
+    // clamp to screen
+    float w = gPenguin.tile * gPenguin.scale;
+    float h = gPenguin.tile * gPenguin.scale;
+    float maxX = GetScreenWidth() - w;
+    float maxY = GetScreenHeight() - h;
+    if (gPenguin.pos.x < 0) gPenguin.pos.x = 0;
+    if (gPenguin.pos.y < 0) gPenguin.pos.y = 0;
+    if (gPenguin.pos.x > maxX) gPenguin.pos.x = maxX;
+    if (gPenguin.pos.y > maxY) gPenguin.pos.y = maxY;
+
+    // animate if moving
+    if (len > 0) {
+        gPenguin.animT += dt * gPenguin.animFps;
+        gPenguin.frame = ((int) gPenguin.animT) % gPenguin.frames;
+    } else {
+        gPenguin.frame = 0;
+        gPenguin.animT = 0.0f;
+    }
+}
+
+static void PenguinDraw(void) {
+    int TILE = gPenguin.tile;
+    Rectangle src = {(float) (gPenguin.frame * TILE), (float) (gPenguin.dir * TILE), (float) TILE, (float) TILE};
+    Rectangle dst = {gPenguin.pos.x, gPenguin.pos.y, (float) (TILE * gPenguin.scale), (float) (TILE * gPenguin.scale)};
+    DrawTexturePro(gPenguin.atlas, src, dst, (Vector2){0, 0}, 0.0f, WHITE);
+}
+
 //----------------------------------------------------------------------------------
 // Gameplay Screen Functions Definition
 //----------------------------------------------------------------------------------
@@ -100,17 +253,19 @@ void InitGameplayScreen(void) {
     finishScreen = 0;
     // Build once so we don't recreate/unload every frame
     gWaterAtlas = BuildWaterAtlas(gTile, gFrames);
+    PenguinInit((Vector2){GetScreenWidth() / 2.0f - 32, GetScreenHeight() / 2.0f - 32});
 }
 
 // Gameplay Screen Update logic
 void UpdateGameplayScreen(void) {
-    // TODO: Update GAMEPLAY screen variables here!
+    float dt = GetFrameTime();
+    PenguinUpdate(dt);
 
-    // Press enter or tap to change to ENDING screen
-    if (IsKeyPressed(KEY_ENTER) || IsGestureDetected(GESTURE_TAP)) {
-        finishScreen = 1;
-        PlaySound(fxCoin);
-    }
+    // // Press enter or tap to change to ENDING screen
+    // if (IsKeyPressed(KEY_ENTER) || IsGestureDetected(GESTURE_TAP)) {
+    //     finishScreen = 1;
+    //     PlaySound(fxCoin);
+    // }
 }
 
 // Gameplay Screen Draw logic
@@ -131,6 +286,7 @@ void DrawGameplayScreen(void) {
             DrawTexturePro(gWaterAtlas, src, dst, (Vector2){0, 0}, 0.0f, WHITE);
         }
     }
+    PenguinDraw();
 }
 
 // Gameplay Screen Unload logic
@@ -139,6 +295,7 @@ void UnloadGameplayScreen(void) {
         UnloadTexture(gWaterAtlas);
         gWaterAtlas.id = 0;
     }
+    PenguinUnload();
 }
 
 // Gameplay Screen should finish?
