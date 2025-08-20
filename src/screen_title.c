@@ -74,7 +74,7 @@ void DrawButton(const char *text, const int buttonNumber, const int finScreen) {
 
     const int textX = posX + (btnW - textWidth) / 2;
     const int textY = bottomRow + (btnH - textHeight) / 2;
-    Vector2 mouse = GetMousePosition();
+    const Vector2 mouse = GetMousePosition();
     const Rectangle rect = {(float) posX, (float) bottomRow, (float) btnW, (float) btnH};
     const bool hovered = CheckCollisionPointRec(mouse, rect);
 
