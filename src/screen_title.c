@@ -75,8 +75,8 @@ void DrawButton(const char *text, const int buttonNumber) {
     const int textWidth  = MeasureText(text, thisFontSize);
     const int textHeight = thisFontSize;
 
-    int textX = posX + (btnW  - textWidth)  / 2;
-    int textY = bottomRow + (btnH- textHeight) / 2;
+    const int textX = posX + (btnW  - textWidth)  / 2;
+    const int textY = bottomRow + (btnH- textHeight) / 2;
 
     DrawRectangleLines(posX, bottomRow, btnW, btnH, DARKGREEN);
     DrawText(text, textX, textY, thisFontSize, DARKGREEN);
@@ -90,9 +90,15 @@ void DrawTitleScreen(void)
 
     // Bg + title
     DrawRectangleGradientV(0, 0, W, H, SKYBLUE, BLUE);
-    Vector2 pos = { 20, 10 };
+    const Vector2 pos = { 20, 10 };
     DrawTextEx(font, "Die Dapper Klein Pikkewyn", pos, font.baseSize*3.0f, 4, DARKGREEN);
-    DrawText("The story of Jan de Pikkewyn", 120, 220, 20, DARKGREEN);
+    const char *subTitle = "Die storie van Jan de Pikkewyn";
+    const int subTitleFontSize = 20;
+    const int subTitleTextWidth  = MeasureText(subTitle, subTitleFontSize);
+    const int textX = 0 + (W  - subTitleTextWidth)  / 2;
+    const int textY = 0 + (H - subTitleFontSize) / 2;
+
+    DrawText(subTitle, textX, textY, subTitleFontSize, DARKGREEN);
 
     // Buttons (each W/6 wide, equally spaced, centered)
     DrawButton("New", 0);
