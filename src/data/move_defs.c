@@ -1,0 +1,16 @@
+#include "move_defs.h"
+
+const MoveDef gMoveDefs[MOVE_COUNT] = {
+    { 0, "Tackle",         "A basic tackle",              40, RANGE_MELEE   },
+    { 1, "FishingHook",    "Slash with a discarded hook", 55, RANGE_MELEE   },
+    { 2, "ShellThrow",     "Hurl a shell fragment",       65, RANGE_RANGED  },
+    { 3, "SeaUrchinSpike", "Stab with a sea urchin",      80, RANGE_MELEE   },
+    { 4, "WaveCall",       "Lower all enemy DEF by 20%",   0, RANGE_AOE     },
+    { 5, "ColonyRoar",     "Boost own ATK by 25%",         0, RANGE_SELF    },
+};
+
+const MoveDef *GetMoveDef(int id)
+{
+    if (id < 0 || id >= MOVE_COUNT) return &gMoveDefs[0];
+    return &gMoveDefs[id];
+}
