@@ -97,6 +97,7 @@ int main(void)
         case TITLE: UnloadTitleScreen(); break;
         case OPTIONS: UnloadOptionsScreen(); break;
         case GAMEPLAY: UnloadGameplayScreen(); break;
+        case BATTLE: UnloadBattleScreen(); break;
         case ENDING: UnloadEndingScreen(); break;
         default: break;
     }
@@ -127,6 +128,7 @@ static void ChangeToScreen(int screen)
         case TITLE: UnloadTitleScreen(); break;
         case OPTIONS: UnloadOptionsScreen(); break;
         case GAMEPLAY: UnloadGameplayScreen(); break;
+        case BATTLE: UnloadBattleScreen(); break;
         case ENDING: UnloadEndingScreen(); break;
         default: break;
     }
@@ -138,6 +140,7 @@ static void ChangeToScreen(int screen)
         case TITLE: InitTitleScreen(); break;
         case OPTIONS: InitOptionsScreen(); break;
         case GAMEPLAY: InitGameplayScreen(); break;
+        case BATTLE: InitBattleScreen(); break;
         case ENDING: InitEndingScreen(); break;
         default: break;
     }
@@ -175,6 +178,7 @@ static void UpdateTransition(void)
                 case TITLE: UnloadTitleScreen(); break;
                 case OPTIONS: UnloadOptionsScreen(); break;
                 case GAMEPLAY: UnloadGameplayScreen(); break;
+                case BATTLE: UnloadBattleScreen(); break;
                 case ENDING: UnloadEndingScreen(); break;
                 default: break;
             }
@@ -186,6 +190,7 @@ static void UpdateTransition(void)
                 case TITLE: InitTitleScreen(); break;
                 case OPTIONS: InitOptionsScreen(); break;
                 case GAMEPLAY: InitGameplayScreen(); break;
+                case BATTLE: InitBattleScreen(); break;
                 case ENDING: InitEndingScreen(); break;
                 default: break;
             }
@@ -255,7 +260,15 @@ static void UpdateDrawFrame(void)
                 UpdateGameplayScreen();
 
                 if (FinishGameplayScreen() == 1) TransitionToScreen(ENDING);
-                //else if (FinishGameplayScreen() == 2) TransitionToScreen(TITLE);
+                else if (FinishGameplayScreen() == 2) TransitionToScreen(BATTLE);
+
+            } break;
+            case BATTLE:
+            {
+                UpdateBattleScreen();
+
+                if (FinishBattleScreen() == 1) TransitionToScreen(GAMEPLAY);
+                else if (FinishBattleScreen() == 2) TransitionToScreen(ENDING);
 
             } break;
             case ENDING:
@@ -283,6 +296,7 @@ static void UpdateDrawFrame(void)
             case TITLE: DrawTitleScreen(); break;
             case OPTIONS: DrawOptionsScreen(); break;
             case GAMEPLAY: DrawGameplayScreen(); break;
+            case BATTLE: DrawBattleScreen(); break;
             case ENDING: DrawEndingScreen(); break;
             default: break;
         }

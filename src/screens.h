@@ -29,7 +29,7 @@
 //----------------------------------------------------------------------------------
 // Types and Structures Definition
 //----------------------------------------------------------------------------------
-typedef enum GameScreen { UNKNOWN = -1, LOGO = 0, TITLE, OPTIONS, GAMEPLAY, ENDING } GameScreen;
+typedef enum GameScreen { UNKNOWN = -1, LOGO = 0, TITLE, OPTIONS, GAMEPLAY, BATTLE, ENDING } GameScreen;
 
 //----------------------------------------------------------------------------------
 // Global Variables Declaration (shared by several modules)
@@ -78,6 +78,20 @@ void UpdateGameplayScreen(void);
 void DrawGameplayScreen(void);
 void UnloadGameplayScreen(void);
 int FinishGameplayScreen(void);
+
+//----------------------------------------------------------------------------------
+// Battle Screen Functions Declaration
+//----------------------------------------------------------------------------------
+void InitBattleScreen(void);
+void UpdateBattleScreen(void);
+void DrawBattleScreen(void);
+void UnloadBattleScreen(void);
+int  FinishBattleScreen(void);
+
+// Called by the overworld before transitioning to BATTLE.
+// Forward-declares Party to avoid including battle headers here.
+typedef struct Party Party;
+void BattlePrepareEncounter(Party *party, int enemyIds[], int enemyLevels[], int count);
 
 //----------------------------------------------------------------------------------
 // Ending Screen Functions Declaration
