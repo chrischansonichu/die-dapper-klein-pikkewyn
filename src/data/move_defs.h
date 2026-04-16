@@ -20,8 +20,9 @@ typedef struct MoveDef {
     int       id;
     char      name[MOVE_NAME_LEN];
     char      desc[MOVE_DESC_LEN];
-    int       power;    // damage base; 0 = status move
+    int       power;             // damage base; 0 = status move
     MoveRange range;
+    int       defaultDurability; // -1 = unlimited; >0 = uses before broken
 } MoveDef;
 
 // Forward declaration - defined in move_defs.c

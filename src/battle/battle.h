@@ -69,6 +69,7 @@ typedef struct BattleContext {
     // Narration
     char            narration[NARRATION_LEN];
     float           enterTimer;
+    bool            xpNarrationShown; // true after XP award narration displayed
 
     // Background tint for the battle scene
     Color           bgColor;

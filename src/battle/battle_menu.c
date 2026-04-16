@@ -2,6 +2,7 @@
 #include "battle_grid.h"
 #include "../data/move_defs.h"
 #include <string.h>
+#include <stdio.h>
 
 // Panel dimensions
 #define PANEL_X      0
@@ -97,17 +98,29 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor)
 
     int btnW = 175, btnH = 40, startX = 20, startY = PANEL_Y + 10;
     for (int i = 0; i < actor->moveCount; i++) {
-        const MoveDef *mv = GetMoveDef(actor->moveIds[i]);
+        const MoveDef *mv  = GetMoveDef(actor->moveIds[i]);
+        int dur            = actor->moveDurability[i];
+        bool broken        = (dur == 0);
         int col = i % 2, row = i / 2;
         int bx = startX + col * (btnW + 10);
         int by = startY + row * (btnH + 8);
         Color bg = (m->moveCursor == i) ? (Color){80, 100, 200, 255} : (Color){40, 40, 80, 255};
+        if (broken) bg = (Color){50, 50, 50, 255};
         DrawRectangle(bx, by, btnW, btnH, bg);
         DrawRectangleLines(bx, by, btnW, btnH, (Color){120, 140, 220, 255});
-        DrawText(mv->name, bx + 8, by + 6, 14, WHITE);
+        Color nameColor = broken ? GRAY : WHITE;
+        DrawText(mv->name, bx + 8, by + 6, 14, nameColor);
         const char *rangeStr = (mv->range == RANGE_MELEE) ? "MELEE" :
                                (mv->range == RANGE_RANGED) ? "RANGED" : "AOE";
         DrawText(rangeStr, bx + 8, by + 22, 12, GRAY);
+        // Durability indicator (right side of button)
+        if (broken) {
+            DrawText("BROKEN", bx + btnW - 58, by + 12, 11, RED);
+        } else if (dur >= 0) {
+            char durStr[8];
+            snprintf(durStr, sizeof(durStr), "%d", dur);
+            DrawText(durStr, bx + btnW - 24, by + 12, 13, (Color){200, 180, 80, 255});
+        }
     }
     // Back hint
     DrawText("X: Back", 640, PANEL_Y + PANEL_H - 22, 14, GRAY);

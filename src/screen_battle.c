@@ -12,8 +12,9 @@
 //----------------------------------------------------------------------------------
 // Module Variables Definition (local)
 //----------------------------------------------------------------------------------
-static int finishScreen = 0;
-static BattleContext gBattleCtx = {0};
+static int          finishScreen  = 0;
+static BattleContext gBattleCtx   = {0};
+static BattleResult  gLastResult  = BATTLE_ONGOING;
 
 //----------------------------------------------------------------------------------
 // Called by screen_gameplay before TransitionToScreen(BATTLE)
@@ -21,6 +22,12 @@ static BattleContext gBattleCtx = {0};
 void BattlePrepareEncounter(Party *party, int enemyIds[], int enemyLevels[], int count)
 {
     BattleSetPending(&gBattleCtx, party, enemyIds, enemyLevels, count);
+    gLastResult = BATTLE_ONGOING;
+}
+
+BattleResult GetLastBattleResult(void)
+{
+    return gLastResult;
 }
 
 //----------------------------------------------------------------------------------
@@ -38,9 +45,9 @@ void UpdateBattleScreen(void)
     BattleUpdate(&gBattleCtx, GetFrameTime());
 
     int result = BattleFinished(&gBattleCtx);
-    if (result == 1) finishScreen = 1;  // victory → back to overworld
-    if (result == 2) finishScreen = 2;  // defeat  → ending screen
-    if (result == 3) finishScreen = 1;  // fled    → back to overworld
+    if (result == 1) { gLastResult = BATTLE_VICTORY; finishScreen = 1; }  // → overworld
+    if (result == 2) { gLastResult = BATTLE_DEFEAT;  finishScreen = 2; }  // → ending
+    if (result == 3) { gLastResult = BATTLE_FLED;    finishScreen = 1; }  // → overworld
 }
 
 void DrawBattleScreen(void)

@@ -93,6 +93,15 @@ int  FinishBattleScreen(void);
 typedef struct Party Party;
 void BattlePrepareEncounter(Party *party, int enemyIds[], int enemyLevels[], int count);
 
+// Result of the most recently completed battle (set by screen_battle.c)
+typedef enum BattleResult {
+    BATTLE_ONGOING = 0,
+    BATTLE_VICTORY,
+    BATTLE_DEFEAT,
+    BATTLE_FLED,
+} BattleResult;
+BattleResult GetLastBattleResult(void);
+
 //----------------------------------------------------------------------------------
 // Ending Screen Functions Declaration
 //----------------------------------------------------------------------------------

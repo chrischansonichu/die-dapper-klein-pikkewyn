@@ -26,10 +26,17 @@ typedef struct Combatant {
     // Status modifiers (percentage multipliers, 100 = normal)
     int   atkMod;   // applied as: effective_atk = atk * atkMod / 100
     int   defMod;
+    // XP tracking
+    int   xp;
+    int   xpToNext;
+    // Per-move durability: mirrors moveIds[]; -1 = unlimited, 0 = broken
+    int   moveDurability[CREATURE_MAX_MOVES];
 } Combatant;
 
 void CombatantInit(Combatant *c, int creatureId, int level);
 int  CalculateDamage(const Combatant *attacker, const Combatant *defender, const MoveDef *move);
 void ApplyStatusMove(Combatant *targets[], int count, const MoveDef *move, bool isEnemy);
+int  CombatantXpReward(const Combatant *c);
+bool CombatantAddXp(Combatant *c, int amount);  // returns true if leveled up
 
 #endif // COMBATANT_H

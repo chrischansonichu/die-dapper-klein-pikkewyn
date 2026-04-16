@@ -8,11 +8,13 @@
 #include "raylib.h"
 #include "screens.h"
 #include "overworld/overworld.h"
+#include "overworld/enemy.h"
 
 //----------------------------------------------------------------------------------
 // Module Variables Definition (local)
 //----------------------------------------------------------------------------------
-static int finishScreen = 0;
+static int  finishScreen  = 0;
+static bool gInitialized  = false;  // false until first OverworldInit
 static OverworldState gOverworld = {0};
 
 //----------------------------------------------------------------------------------
@@ -22,7 +24,20 @@ static OverworldState gOverworld = {0};
 void InitGameplayScreen(void)
 {
     finishScreen = 0;
-    OverworldInit(&gOverworld);
+    if (!gInitialized) {
+        OverworldInit(&gOverworld);
+        gInitialized = true;
+    } else {
+        // Returning from battle: reload textures, preserve all game state
+        OverworldReloadResources(&gOverworld);
+        // Deactivate the enemy that was just defeated
+        if (GetLastBattleResult() == BATTLE_VICTORY &&
+            gOverworld.pendingEnemyIdx >= 0 &&
+            gOverworld.pendingEnemyIdx < gOverworld.enemyCount) {
+            gOverworld.enemies[gOverworld.pendingEnemyIdx].active = false;
+        }
+        gOverworld.pendingEnemyIdx = -1;
+    }
 }
 
 void UpdateGameplayScreen(void)
@@ -31,12 +46,14 @@ void UpdateGameplayScreen(void)
 
     if (gOverworld.pendingBattle) {
         gOverworld.pendingBattle = false;
-        // Wire up the encounter to the battle screen before transitioning
-        EncounterResult *enc = &gOverworld.pendingEncounter;
-        BattlePrepareEncounter(&gOverworld.party,
-                               enc->enemyIds,
-                               enc->enemyLevels,
-                               enc->enemyCount);
+        // Wire up the visible enemy to the battle screen before transitioning
+        int idx = gOverworld.pendingEnemyIdx;
+        if (idx >= 0 && idx < gOverworld.enemyCount) {
+            OverworldEnemy *e = &gOverworld.enemies[idx];
+            int ids[1]    = { e->creatureId };
+            int levels[1] = { e->level };
+            BattlePrepareEncounter(&gOverworld.party, ids, levels, 1);
+        }
         finishScreen = 2; // → BATTLE
     }
 }

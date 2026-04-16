@@ -159,6 +159,11 @@ static void ExecuteAction(BattleContext *ctx)
     }
 
     int dmg = CalculateDamage(actor, target, mv);
+    // Decrement move durability on hit (player moves only; enemies have unlimited)
+    if (!te->isEnemy && ctx->selectedMove >= 0) {
+        int *dur = &actor->moveDurability[ctx->selectedMove];
+        if (*dur > 0) (*dur)--;
+    }
     target->hp -= dmg;
     if (target->hp <= 0) {
         target->hp    = 0;
@@ -325,17 +330,26 @@ void BattleUpdate(BattleContext *ctx, float dt)
         int sel = actor ? BattleMenuUpdateMoveSelect(&ctx->menu, actor->moveCount) : -2;
         if (sel == -2) { ctx->state = BS_ACTION_MENU; break; } // back
         if (sel >= 0) {
+            // Ignore selection if move is broken
+            if (actor->moveDurability[sel] == 0) break;
             ctx->selectedMove = sel;
             const MoveDef *mv = GetMoveDef(actor->moveIds[sel]);
-            if (mv->range == RANGE_RANGED) {
-                ctx->menu.targetCursor = 0;
-                ctx->state = BS_TARGET_SELECT;
-            } else {
-                // MELEE / AOE: auto-target first living enemy
+
+            // Count living enemies to decide if target selection is needed
+            int liveCount = 0;
+            for (int i = 0; i < ctx->enemyCount; i++)
+                if (ctx->enemies[i].alive) liveCount++;
+
+            if (mv->range == RANGE_AOE || liveCount <= 1) {
+                // AOE hits all; single enemy = no choice needed
                 ctx->targetEnemyIdx = -1;
                 for (int i = 0; i < ctx->enemyCount; i++)
                     if (ctx->enemies[i].alive) { ctx->targetEnemyIdx = i; break; }
                 ctx->state = BS_EXECUTE;
+            } else {
+                // MELEE or RANGED with multiple enemies: let player choose
+                ctx->menu.targetCursor = 0;
+                ctx->state = BS_TARGET_SELECT;
             }
         }
         break;
@@ -349,6 +363,12 @@ void BattleUpdate(BattleContext *ctx, float dt)
             if (ctx->enemies[i].alive) liveIdx[liveCount++] = i;
 
         int sel = BattleMenuUpdateTarget(&ctx->menu, liveCount);
+
+        // Keep targetEnemyIdx in sync with cursor every frame so the draw
+        // can highlight the currently-pointed-at enemy
+        if (ctx->menu.targetCursor >= 0 && ctx->menu.targetCursor < liveCount)
+            ctx->targetEnemyIdx = liveIdx[ctx->menu.targetCursor];
+
         if (sel == -2) { ctx->state = BS_MOVE_SELECT; break; } // back
         if (sel >= 0 && sel < liveCount) {
             ctx->targetEnemyIdx = liveIdx[sel];
@@ -372,7 +392,28 @@ void BattleUpdate(BattleContext *ctx, float dt)
         break;
 
     case BS_ROUND_END:
-        if (AllEnemiesFainted(ctx)) { ctx->state = BS_VICTORY; break; }
+        if (AllEnemiesFainted(ctx)) {
+            if (!ctx->xpNarrationShown) {
+                // Award XP to all living party members
+                int totalXp = 0;
+                for (int i = 0; i < ctx->enemyCount; i++)
+                    totalXp += CombatantXpReward(&ctx->enemies[i]);
+                bool levelUp = false;
+                for (int i = 0; i < ctx->party->count; i++)
+                    if (ctx->party->members[i].alive)
+                        if (CombatantAddXp(&ctx->party->members[i], totalXp)) levelUp = true;
+                if (levelUp)
+                    snprintf(ctx->narration, NARRATION_LEN,
+                             "Victory! +%d XP  LEVEL UP! HP restored!", totalXp);
+                else
+                    snprintf(ctx->narration, NARRATION_LEN, "Victory! +%d XP", totalXp);
+                ctx->xpNarrationShown = true;
+                ctx->state = BS_NARRATION;
+            } else {
+                ctx->state = BS_VICTORY;
+            }
+            break;
+        }
         if (PartyAllFainted(ctx->party)) { ctx->state = BS_DEFEAT; break; }
         AdvanceTurn(ctx);
         ctx->state = BS_TURN_START;
