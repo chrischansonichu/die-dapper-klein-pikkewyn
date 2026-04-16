@@ -7,7 +7,7 @@ include(FetchContent)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Dependencies
-set(RAYLIB_VERSION 5.0)
+set(RAYLIB_VERSION 5.5)
 
 FetchContent_Declare(
         raylib
