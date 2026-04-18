@@ -238,29 +238,98 @@ void EnemyDraw(const OverworldEnemy *e)
 {
     if (!e->active) return;
 
-    int tilePixels = TILE_SIZE * TILE_SCALE;
+    const int tile = TILE_SIZE * TILE_SCALE;
 
-    // Interpolated pixel position during movement
-    float t  = e->moving ? (float)e->moveFrames / (float)ENEMY_MOVE_FRAMES : 1.0f;
-    float px = (float)(e->tileX * tilePixels) + (float)((e->targetTileX - e->tileX) * tilePixels) * t;
-    float py = (float)(e->tileY * tilePixels) + (float)((e->targetTileY - e->tileY) * tilePixels) * t;
-    int   sz = tilePixels; // one tile square
+    // Interpolated position
+    float t   = e->moving ? (float)e->moveFrames / (float)ENEMY_MOVE_FRAMES : 1.0f;
+    float fpx = (float)(e->tileX * tile) + (float)((e->targetTileX - e->tileX) * tile) * t;
+    float fpy = (float)(e->tileY * tile) + (float)((e->targetTileY - e->tileY) * tile) * t;
 
-    Color body = e->color;
-    DrawRectangle((int)px, (int)py, sz, sz, body);
-    DrawRectangleLines((int)px, (int)py, sz, sz, BLACK);
+    float sz   = (float)tile;
+    float cx   = fpx + sz * 0.5f;
+    float top  = fpy;
 
-    // Directional dot
-    int eyeX = (int)px + sz / 2;
-    int eyeY = (int)py + sz / 2;
-    if (e->dir == 0) eyeY = (int)py + sz * 3 / 4;
-    if (e->dir == 3) eyeY = (int)py + sz / 4;
-    if (e->dir == 1) eyeX = (int)px + sz / 4;
-    if (e->dir == 2) eyeX = (int)px + sz * 3 / 4;
-    DrawCircle(eyeX, eyeY, 3, BLACK);
+    // Palette
+    const Color skin    = (Color){255, 217,  15, 255};  // Simpsons yellow
+    const Color shirt   = (Color){ 30,  50, 110, 255};  // navy
+    const Color stripe  = (Color){235, 235, 235, 255};  // white stripe
+    const Color capTop  = (Color){245, 245, 245, 255};  // white cap
+    const Color capBand = (Color){ 20,  35,  80, 255};  // navy band
+    const Color dark    = (Color){ 20,  20,  30, 255};
+    const Color scarf   = e->color;
+
+    // Anchors
+    float headCy = top + sz * 0.42f;
+    float headR  = sz * 0.24f;
+    float capR   = headR + 1.0f;
+    float capCy  = headCy - sz * 0.03f;
+
+    // Body (rounded rect, slightly overlaps chin)
+    float bodyW = sz * 0.68f;
+    float bodyX = cx - bodyW * 0.5f;
+    float bodyY = headCy + headR * 0.40f;
+    float bodyH = (top + sz - 1.0f) - bodyY;
+    Rectangle body = { bodyX, bodyY, bodyW, bodyH };
+
+    DrawRectangleRounded(body, 0.45f, 12, shirt);
+
+    // Horizontal sailor stripes across the shirt
+    for (int i = 1; i <= 3; i++) {
+        float sy = bodyY + bodyH * (float)i / 4.0f;
+        DrawRectangle((int)(bodyX + 3), (int)(sy - 1),
+                      (int)(bodyW - 6), 2, stripe);
+    }
+
+    // Scarf/collar — horizontal ellipse at the neckline, per-enemy tint
+    DrawEllipse((int)cx, (int)bodyY, sz * 0.24f, sz * 0.06f, scarf);
+
+    // Head (yellow circle)
+    DrawCircle((int)cx, (int)headCy, headR, skin);
+
+    // Cap dome — upper half circle sitting on the head
+    DrawCircleSector((Vector2){cx, capCy}, capR,
+                     180.0f, 360.0f, 20, capTop);
+    // Navy band across the base of the dome
+    DrawRectangle((int)(cx - capR), (int)capCy - 1,
+                  (int)(capR * 2.0f), (int)(sz * 0.05f), capBand);
+
+    // Slanted eyes — thin diagonal strokes (no sclera/pupil — just the slant)
+    // Only visible when the sailor isn't facing away (up).
+    if (e->dir != 3) {
+        float eyeY   = headCy + sz * 0.02f;
+        float eyeLen = sz * 0.14f;
+        float slant  = sz * 0.04f;
+        float thick  = 2.5f;
+        float sep    = headR * 0.55f;
+
+        float leftCx  = cx - sep;
+        float rightCx = cx + sep;
+        if (e->dir == 1) { leftCx = cx - sep*1.55f; rightCx = cx - sep*0.35f; }
+        if (e->dir == 2) { leftCx = cx + sep*0.35f; rightCx = cx + sep*1.55f; }
+
+        // Endpoint dy pairs (0=left end, 1=right end), positive = lower on screen.
+        // Down-facing: outer corners up (left eye \ , right eye /).
+        // Side-facing: both eyes slant the same way so the whole face reads as tilted.
+        float lDy0, lDy1, rDy0, rDy1;
+        if (e->dir == 0) {
+            lDy0 = -slant; lDy1 =  slant;   // \ (left-end up, right-end down)
+            rDy0 =  slant; rDy1 = -slant;   // / (left-end down, right-end up)
+        } else if (e->dir == 1) {
+            lDy0 = -slant; lDy1 =  slant;
+            rDy0 = -slant; rDy1 =  slant;
+        } else { // dir == 2
+            lDy0 =  slant; lDy1 = -slant;
+            rDy0 =  slant; rDy1 = -slant;
+        }
+
+        DrawLineEx((Vector2){leftCx  - eyeLen*0.5f, eyeY + lDy0},
+                   (Vector2){leftCx  + eyeLen*0.5f, eyeY + lDy1}, thick, dark);
+        DrawLineEx((Vector2){rightCx - eyeLen*0.5f, eyeY + rDy0},
+                   (Vector2){rightCx + eyeLen*0.5f, eyeY + rDy1}, thick, dark);
+    }
 
     // "!" when alerted
     if (e->aiState == ENEMY_ALERTED) {
-        DrawText("!", (int)px + sz / 2 - 4, (int)py - 18, 20, YELLOW);
+        DrawText("!", (int)cx - 4, (int)top - 18, 20, YELLOW);
     }
 }
