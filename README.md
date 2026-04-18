@@ -1,8 +1,6 @@
 ## Die Dapper Klein Pikkewyn
 
-![Die Dapper Klein Pikkewyn](screenshots/screenshot001.png "Die Dapper Klein Pikkewyn")
-![Battle Screen](screenshots/screenshot002.png "Battle screen")
-![Level completion](screenshots/screenshot003.png "Level completion")
+![Die Dapper Klein Pikkewyn](screenshots/screenshot000.png "Die Dapper Klein Pikkewyn")
 
 ### Description
 
@@ -35,27 +33,30 @@ I'm going to attempt to program this in C, using the raylib library.
 
 ### Features
 
-- $(Game Feature 01)
-- $(Game Feature 02)
-- $(Game Feature 03)
+- Turn-based combat
+- Sneak attacks to initiate combat
+- Acquire friends to help you fight
+- Acquire weapons to fight with
+- Distance-aware combat system
 
 ### Controls
 
 Keyboard:
 
-- $(Game Control 01)
-- $(Game Control 02)
-- $(Game Control 03)
+- Arrow Keys or WASD to move
+- Z to interact, X to cancel
+- I to open/close inventory
+- Tab to switch inventory tabs
 
 ### Screenshots
 
-_TODO: Show your game to the world, animated GIFs recommended!._
+![Overworld](screenshots/screenshot001.png "Overworld")
+![Battle Screen](screenshots/screenshot002.png "Battle screen")
+![Level completion](screenshots/screenshot003.png "Level completion")
 
 ### Developers
 
-- $(Developer 01) - $(Role/Tasks Developed)
-- $(Developer 02) - $(Role/Tasks Developed)
-- $(Developer 03) - $(Role/Tasks Developed)
+- BD Himes
 
 ### Links
 
