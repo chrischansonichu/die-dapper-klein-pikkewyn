@@ -25,9 +25,19 @@ typedef struct BattleAnim {
     float          slideY;       // for BANIM_FAINT
     float          alpha;        // for BANIM_FAINT
     Vector2        shakeOffset;  // for BANIM_SHAKE
+    // Attacker lunge (BANIM_HIT only). hasActor gates the actor draw tweak.
+    bool           hasActor;
+    bool           actorIsEnemy;
+    int            actorIdx;
+    float          actorSlideX;  // +px toward opponent; player + , enemy -
 } BattleAnim;
 
 void BattleAnimPlay(BattleAnim *a, BattleAnimType type, bool isEnemy, int idx);
+// Same as BattleAnimPlay(BANIM_HIT,...) but also records the attacker so the
+// draw layer can lunge them forward while the target flashes.
+void BattleAnimPlayHitFrom(BattleAnim *a,
+                           bool actorIsEnemy, int actorIdx,
+                           bool targetIsEnemy, int targetIdx);
 void BattleAnimUpdate(BattleAnim *a, float dt);
 bool BattleAnimDone(const BattleAnim *a);
 // Apply shake offset to a draw position

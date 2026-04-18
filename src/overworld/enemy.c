@@ -1,5 +1,8 @@
 #include "enemy.h"
+#include "overworld.h"
+#include "../data/creature_defs.h"
 #include <stdlib.h>  // abs
+#include <math.h>
 
 // Direction vectors: 0=down, 1=left, 2=right, 3=up
 static const int DIR_DX[4] = {  0, -1,  1,  0 };
@@ -63,10 +66,21 @@ static bool EnemyCheckLoS(OverworldEnemy *e, const TileMap *map,
     return false;
 }
 
+// A tile is walkable for this enemy if it isn't solid and no other character
+// currently claims it. The enemy's own position is excluded via selfIdx.
+static bool EnemyCanEnter(const TileMap *map, const struct OverworldState *ow,
+                           int selfIdx, int x, int y)
+{
+    if (TileMapIsSolid(map, x, y)) return false;
+    if (ow && OverworldIsTileOccupied(ow, x, y, selfIdx)) return false;
+    return true;
+}
+
 // Try to start one tile-step from (tileX, tileY) toward (targetX, targetY).
 // Prefers the dominant axis; falls back to the other.
 // Returns true if a step was initiated.
 static bool BeginStepToward(OverworldEnemy *e, const TileMap *map,
+                             const struct OverworldState *ow, int selfIdx,
                              int targetX, int targetY)
 {
     int dx = targetX - e->tileX;
@@ -78,7 +92,7 @@ static bool BeginStepToward(OverworldEnemy *e, const TileMap *map,
     int stepY = (dy != 0) ? (dy > 0 ? 1 : -1) : 0;
 
     // Try primary axis first (horizontal preferred when both nonzero)
-    if (stepX != 0 && !TileMapIsSolid(map, e->tileX + stepX, e->tileY)) {
+    if (stepX != 0 && EnemyCanEnter(map, ow, selfIdx, e->tileX + stepX, e->tileY)) {
         e->targetTileX = e->tileX + stepX;
         e->targetTileY = e->tileY;
         e->dir         = DirFromDelta(stepX, 0);
@@ -86,7 +100,7 @@ static bool BeginStepToward(OverworldEnemy *e, const TileMap *map,
         e->moveFrames  = 0;
         return true;
     }
-    if (stepY != 0 && !TileMapIsSolid(map, e->tileX, e->tileY + stepY)) {
+    if (stepY != 0 && EnemyCanEnter(map, ow, selfIdx, e->tileX, e->tileY + stepY)) {
         e->targetTileX = e->tileX;
         e->targetTileY = e->tileY + stepY;
         e->dir         = DirFromDelta(0, stepY);
@@ -131,6 +145,8 @@ void EnemyInit(OverworldEnemy *e, int tileX, int tileY, int dir,
     e->dropItemPct    = 0;
     e->dropWeaponId   = -1;
     e->dropWeaponPct  = 0;
+    e->onWater        = false;
+    e->dryingFrames   = 0;
 }
 
 void EnemySetDrops(OverworldEnemy *e, int itemId, int itemPct,
@@ -152,7 +168,8 @@ void EnemySetPatrol(OverworldEnemy *e, int x0, int y0, int x1, int y1)
 }
 
 bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
-                 int playerTileX, int playerTileY, float dt)
+                 int playerTileX, int playerTileY, float dt,
+                 const struct OverworldState *ow, int selfIdx)
 {
     if (!e->active) return false;
 
@@ -160,10 +177,23 @@ bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
     if (e->moving) {
         e->moveFrames++;
         if (e->moveFrames >= ENEMY_MOVE_FRAMES) {
+            bool wasOnWater = e->onWater;
             e->tileX  = e->targetTileX;
             e->tileY  = e->targetTileY;
             e->moving = false;
+            e->onWater = TileMapIsWater(map, e->tileX, e->tileY);
+            // Shake off water when stepping from a water tile onto land.
+            if (wasOnWater && !e->onWater) e->dryingFrames = 24;
         }
+    } else {
+        e->onWater = TileMapIsWater(map, e->tileX, e->tileY);
+    }
+
+    // While drying, freeze AI progression — no new steps, no LoS advance,
+    // no wander/patrol timer. This mirrors the player's dryingFrames gate.
+    if (e->dryingFrames > 0) {
+        e->dryingFrames--;
+        return false;
     }
 
     // Check adjacency to player — this triggers battle
@@ -199,7 +229,7 @@ bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
                     for (int i = 0; i < 4; i++) {
                         int nx = e->tileX + DIR_DX[dirs[i]];
                         int ny = e->tileY + DIR_DY[dirs[i]];
-                        if (!TileMapIsSolid(map, nx, ny)) {
+                        if (EnemyCanEnter(map, ow, selfIdx, nx, ny)) {
                             e->targetTileX = nx;
                             e->targetTileY = ny;
                             e->dir         = dirs[i];
@@ -219,7 +249,7 @@ bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
                     tx = e->patrolX[e->patrolTarget];
                     ty = e->patrolY[e->patrolTarget];
                 }
-                BeginStepToward(e, map, tx, ty);
+                BeginStepToward(e, map, ow, selfIdx, tx, ty);
             }
             // BEHAVIOR_STAND: do nothing
         }
@@ -239,7 +269,7 @@ bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
             return true;
         }
         if (!e->moving) {
-            BeginStepToward(e, map, playerTileX, playerTileY);
+            BeginStepToward(e, map, ow, selfIdx, playerTileX, playerTileY);
         }
         break;
     }
@@ -258,16 +288,51 @@ void EnemyDraw(const OverworldEnemy *e)
     float fpx = (float)(e->tileX * tile) + (float)((e->targetTileX - e->tileX) * tile) * t;
     float fpy = (float)(e->tileY * tile) + (float)((e->targetTileY - e->tileY) * tile) * t;
 
+    // Drying shake: tiny horizontal jitter while the drying pause is playing.
+    if (e->dryingFrames > 0) {
+        fpx += sinf((float)e->dryingFrames * 0.9f) * 2.0f;
+    }
+
     float sz   = (float)tile;
     float cx   = fpx + sz * 0.5f;
     float top  = fpy;
 
-    // Palette
-    const Color skin    = (Color){255, 217,  15, 255};  // Simpsons yellow
-    const Color shirt   = (Color){ 30,  50, 110, 255};  // navy
-    const Color stripe  = (Color){235, 235, 235, 255};  // white stripe
-    const Color capTop  = (Color){245, 245, 245, 255};  // white cap
-    const Color capBand = (Color){ 20,  35,  80, 255};  // navy band
+    // Rank-specific palette + silhouette tweaks so the overworld mirrors the
+    // battle-screen distinctions (deckhand vs bosun vs captain).
+    Color shirt, stripe;
+    bool  hasStripes = true;
+    bool  hasBeard   = false;
+    enum { HAT_SAILOR_DOME, HAT_BEANIE, HAT_BILLED_CAP, HAT_CAPTAIN } hatStyle;
+    Color hatMain, hatBand;
+
+    switch (e->creatureId) {
+        case CREATURE_DECKHAND:
+        default:
+            shirt    = (Color){ 30,  50, 110, 255};
+            stripe   = (Color){235, 235, 235, 255};
+            hatStyle = HAT_BEANIE;
+            hatMain  = (Color){ 30,  50, 110, 255};
+            hatBand  = hatMain;
+            break;
+        case CREATURE_BOSUN:
+            shirt    = (Color){ 90, 110,  55, 255};   // olive
+            stripe   = (Color){200, 210, 170, 255};
+            hatStyle = HAT_BILLED_CAP;
+            hatMain  = (Color){ 55,  70,  40, 255};
+            hatBand  = (Color){ 35,  50,  25, 255};
+            break;
+        case CREATURE_CAPTAIN:
+            shirt      = (Color){ 30,  30,  50, 255};  // dark coat
+            stripe     = shirt;                         // no stripes
+            hasStripes = false;
+            hasBeard   = true;
+            hatStyle   = HAT_CAPTAIN;
+            hatMain    = (Color){ 15,  15,  25, 255};
+            hatBand    = (Color){220, 180,  60, 255};  // gold
+            break;
+    }
+
+    const Color skin    = (Color){255, 217,  15, 255};
     const Color dark    = (Color){ 20,  20,  30, 255};
     const Color scarf   = e->color;
 
@@ -277,8 +342,9 @@ void EnemyDraw(const OverworldEnemy *e)
     float capR   = headR + 1.0f;
     float capCy  = headCy - sz * 0.03f;
 
-    // Body (rounded rect, slightly overlaps chin)
-    float bodyW = sz * 0.68f;
+    // Captain is visibly bulkier than the deckhand
+    float bodyScale = (e->creatureId == CREATURE_CAPTAIN) ? 1.08f : 1.0f;
+    float bodyW = sz * 0.68f * bodyScale;
     float bodyX = cx - bodyW * 0.5f;
     float bodyY = headCy + headR * 0.40f;
     float bodyH = (top + sz - 1.0f) - bodyY;
@@ -286,25 +352,77 @@ void EnemyDraw(const OverworldEnemy *e)
 
     DrawRectangleRounded(body, 0.45f, 12, shirt);
 
-    // Horizontal sailor stripes across the shirt
-    for (int i = 1; i <= 3; i++) {
-        float sy = bodyY + bodyH * (float)i / 4.0f;
-        DrawRectangle((int)(bodyX + 3), (int)(sy - 1),
-                      (int)(bodyW - 6), 2, stripe);
+    if (hasStripes) {
+        for (int i = 1; i <= 3; i++) {
+            float sy = bodyY + bodyH * (float)i / 4.0f;
+            DrawRectangle((int)(bodyX + 3), (int)(sy - 1),
+                          (int)(bodyW - 6), 2, stripe);
+        }
     }
 
     // Scarf/collar — horizontal ellipse at the neckline, per-enemy tint
     DrawEllipse((int)cx, (int)bodyY, sz * 0.24f, sz * 0.06f, scarf);
 
-    // Head (yellow circle)
+    // Head
     DrawCircle((int)cx, (int)headCy, headR, skin);
 
-    // Cap dome — upper half circle sitting on the head
-    DrawCircleSector((Vector2){cx, capCy}, capR,
-                     180.0f, 360.0f, 20, capTop);
-    // Navy band across the base of the dome
-    DrawRectangle((int)(cx - capR), (int)capCy - 1,
-                  (int)(capR * 2.0f), (int)(sz * 0.05f), capBand);
+    // Beard arc under the chin for the captain
+    if (hasBeard) {
+        DrawCircleSector((Vector2){cx, headCy + headR * 0.15f},
+                         headR * 0.85f, 0, 180, 12,
+                         (Color){210, 210, 210, 255});
+    }
+
+    // Hat — style depends on rank
+    switch (hatStyle) {
+        case HAT_SAILOR_DOME:
+            DrawCircleSector((Vector2){cx, capCy}, capR,
+                             180.0f, 360.0f, 20, hatMain);
+            DrawRectangle((int)(cx - capR), (int)capCy - 1,
+                          (int)(capR * 2.0f), (int)(sz * 0.05f), hatBand);
+            break;
+        case HAT_BEANIE: {
+            // Flat rounded beanie sits low on the head
+            Rectangle hat = { cx - headR * 0.95f, capCy - sz * 0.04f,
+                              headR * 1.9f, sz * 0.14f };
+            DrawRectangleRounded(hat, 0.6f, 8, hatMain);
+        } break;
+        case HAT_BILLED_CAP: {
+            // Crown
+            Rectangle crown = { cx - capR, capCy - sz * 0.06f,
+                                capR * 2.0f, sz * 0.09f };
+            DrawRectangleRounded(crown, 0.4f, 8, hatMain);
+            // Bill in facing direction (only visible when facing down or side)
+            float bx = cx;
+            float by = capCy + sz * 0.03f;
+            if (e->dir == 1) {
+                DrawTriangle((Vector2){bx - capR, by},
+                             (Vector2){bx - capR - sz * 0.10f, by + sz * 0.03f},
+                             (Vector2){bx - capR, by + sz * 0.05f}, hatBand);
+            } else if (e->dir == 2) {
+                DrawTriangle((Vector2){bx + capR, by},
+                             (Vector2){bx + capR, by + sz * 0.05f},
+                             (Vector2){bx + capR + sz * 0.10f, by + sz * 0.03f}, hatBand);
+            } else {
+                // Facing down (or up): bill points forward
+                DrawTriangle((Vector2){bx - capR * 0.7f, by + sz * 0.02f},
+                             (Vector2){bx,               by + sz * 0.07f},
+                             (Vector2){bx + capR * 0.7f, by + sz * 0.02f}, hatBand);
+            }
+        } break;
+        case HAT_CAPTAIN: {
+            // Tall crown + wide brim, gold band along the bottom of the crown
+            Rectangle crown = { cx - capR, capCy - sz * 0.10f,
+                                capR * 2.0f, sz * 0.13f };
+            DrawRectangleRec(crown, hatMain);
+            Rectangle brim = { cx - capR - sz * 0.04f, capCy + sz * 0.02f,
+                               capR * 2.0f + sz * 0.08f, sz * 0.04f };
+            DrawRectangleRec(brim, hatMain);
+            DrawLineEx((Vector2){crown.x, crown.y + crown.height - 1},
+                       (Vector2){crown.x + crown.width, crown.y + crown.height - 1},
+                       2.0f, hatBand);
+        } break;
+    }
 
     // Slanted eyes — thin diagonal strokes (no sclera/pupil — just the slant)
     // Only visible when the sailor isn't facing away (up).
@@ -339,6 +457,37 @@ void EnemyDraw(const OverworldEnemy *e)
                    (Vector2){leftCx  + eyeLen*0.5f, eyeY + lDy1}, thick, dark);
         DrawLineEx((Vector2){rightCx - eyeLen*0.5f, eyeY + rDy0},
                    (Vector2){rightCx + eyeLen*0.5f, eyeY + rDy1}, thick, dark);
+    }
+
+    // Swimming: hide the legs with a water band + wake arcs. Drawn last so it
+    // layers over the body but under the alert marker.
+    if (e->onWater) {
+        float waterY = top + sz * 0.62f;
+        float waterH = sz * 0.38f;
+        DrawRectangle((int)fpx, (int)waterY, (int)sz, (int)waterH,
+                      (Color){ 40, 120, 185, 230});
+        float timeNow = (float)GetTime();
+        float wobble  = sinf(timeNow * 4.0f + (float)(e->tileX + e->tileY)) * 2.0f;
+        Color foam = (Color){220, 235, 250, 220};
+        DrawLineEx((Vector2){fpx + 4,          waterY + 4 + wobble},
+                   (Vector2){fpx + sz * 0.35f, waterY + 2 + wobble},
+                   2.0f, foam);
+        DrawLineEx((Vector2){fpx + sz * 0.65f, waterY + 2 - wobble},
+                   (Vector2){fpx + sz - 4,     waterY + 4 - wobble},
+                   2.0f, foam);
+    }
+
+    // Droplets popping off the head while drying off on land.
+    if (e->dryingFrames > 0) {
+        float tNorm = 1.0f - (float)e->dryingFrames / 24.0f;
+        Color drop = (Color){170, 220, 255, 230};
+        float baseX = cx;
+        float baseY = top + sz * 0.25f;
+        for (int k = -2; k <= 2; k += 2) {
+            float fx = baseX + k * 6.0f;
+            float fy = baseY - tNorm * 10.0f - (k * k) * 0.8f;
+            DrawCircle((int)fx, (int)fy, 2.0f, drop);
+        }
     }
 
     // "!" when alerted

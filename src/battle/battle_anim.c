@@ -11,6 +11,10 @@ void BattleAnimPlay(BattleAnim *a, BattleAnimType type, bool isEnemy, int idx)
     a->slideY        = 0.0f;
     a->alpha         = 1.0f;
     a->shakeOffset   = (Vector2){0, 0};
+    a->hasActor      = false;
+    a->actorIsEnemy  = false;
+    a->actorIdx      = -1;
+    a->actorSlideX   = 0.0f;
 
     switch (type) {
         case BANIM_HIT:   a->duration = 0.4f; break;
@@ -18,6 +22,17 @@ void BattleAnimPlay(BattleAnim *a, BattleAnimType type, bool isEnemy, int idx)
         case BANIM_SHAKE: a->duration = 0.25f; break;
         default:          a->duration = 0.0f; break;
     }
+}
+
+void BattleAnimPlayHitFrom(BattleAnim *a,
+                           bool actorIsEnemy, int actorIdx,
+                           bool targetIsEnemy, int targetIdx)
+{
+    BattleAnimPlay(a, BANIM_HIT, targetIsEnemy, targetIdx);
+    a->hasActor     = true;
+    a->actorIsEnemy = actorIsEnemy;
+    a->actorIdx     = actorIdx;
+    a->actorSlideX  = 0.0f;
 }
 
 void BattleAnimUpdate(BattleAnim *a, float dt)
@@ -34,6 +49,12 @@ void BattleAnimUpdate(BattleAnim *a, float dt)
         float intensity = (1.0f - t) * 6.0f;
         a->shakeOffset.x = ((float)GetRandomValue(-100, 100) / 100.0f) * intensity;
         a->shakeOffset.y = ((float)GetRandomValue(-100, 100) / 100.0f) * intensity;
+    } else if (a->type == BANIM_HIT && a->hasActor) {
+        // Arch: 0 -> peak -> 0 across the hit duration
+        float bump = sinf(t * PI);
+        float peak = 16.0f;
+        float dir  = a->actorIsEnemy ? -1.0f : 1.0f;
+        a->actorSlideX = bump * peak * dir;
     }
 
     if (a->timer >= a->duration) {

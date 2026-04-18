@@ -5,6 +5,11 @@
 #include "raylib.h"
 #include "tilemap.h"
 
+// Forward declaration — player.c queries the overworld for tile occupancy
+// (NPCs, other enemies) so it can block the next step without having to know
+// the full OverworldState layout here.
+struct OverworldState;
+
 //----------------------------------------------------------------------------------
 // Player - grid-locked tile movement with walk animation
 //----------------------------------------------------------------------------------
@@ -25,13 +30,16 @@ typedef struct Player {
     Texture2D atlas;      // 16x16 x 4dirs x 2frames layout (same as BuildPenguinAtlas)
     int       scale;
     bool      stepCompleted;  // true for one frame when a step finishes
+    bool      onWater;        // last-resolved tile is a water tile — draw as swimming
+    int       dryingFrames;   // >0 = paused after stepping from water onto land
+    int       turnDelayFrames;// >0 = facing just changed; hold through delay to commit to movement
 } Player;
 
 // Build the penguin atlas (shared with screen_gameplay.c logic, but local here)
 Texture2D PlayerBuildAtlas(void);
 
 void PlayerInit(Player *p, int startTileX, int startTileY);
-void PlayerUpdate(Player *p, const TileMap *m);
+void PlayerUpdate(Player *p, const TileMap *m, const struct OverworldState *ow);
 void PlayerDraw(const Player *p);
 void PlayerUnload(Player *p);
 

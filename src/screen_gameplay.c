@@ -69,20 +69,28 @@ void InitGameplayScreen(void)
     } else {
         // Returning from battle: reload textures, preserve all game state
         OverworldReloadResources(&gOverworld);
-        // Deactivate the enemy that was just defeated + roll drops
-        if (GetLastBattleResult() == BATTLE_VICTORY &&
-            gOverworld.pendingEnemyIdx >= 0 &&
-            gOverworld.pendingEnemyIdx < gOverworld.enemyCount) {
-            OverworldEnemy *e = &gOverworld.enemies[gOverworld.pendingEnemyIdx];
-            int pages = RollEnemyDrops(e, &gOverworld.party.inventory);
-            e->active = false;
-            if (pages > 0) {
-                const char *ptrs[DROP_MSG_PAGES];
-                for (int i = 0; i < pages; i++) ptrs[i] = gDropMsg[i];
-                DialogueBegin(&gOverworld.dialogue, ptrs, pages, 40.0f);
+        // Deactivate every enemy that was in the encounter + roll drops on each.
+        // Drops from the first enemy that produced any get narrated; the rest
+        // still land in the inventory silently so the player isn't buried in
+        // dialogue pages after a big group fight.
+        if (GetLastBattleResult() == BATTLE_VICTORY) {
+            int narratedPages = 0;
+            const char *ptrs[DROP_MSG_PAGES];
+            for (int k = 0; k < gOverworld.pendingEnemyCount; k++) {
+                int idx = gOverworld.pendingEnemyIdxs[k];
+                if (idx < 0 || idx >= gOverworld.enemyCount) continue;
+                OverworldEnemy *e = &gOverworld.enemies[idx];
+                int pages = RollEnemyDrops(e, &gOverworld.party.inventory);
+                e->active = false;
+                if (narratedPages == 0 && pages > 0) {
+                    narratedPages = pages;
+                    for (int i = 0; i < pages; i++) ptrs[i] = gDropMsg[i];
+                }
             }
+            if (narratedPages > 0)
+                DialogueBegin(&gOverworld.dialogue, ptrs, narratedPages, 40.0f);
         }
-        gOverworld.pendingEnemyIdx = -1;
+        gOverworld.pendingEnemyCount = 0;
     }
 }
 
@@ -92,13 +100,21 @@ void UpdateGameplayScreen(void)
 
     if (gOverworld.pendingBattle) {
         gOverworld.pendingBattle = false;
-        // Wire up the visible enemy to the battle screen before transitioning
-        int idx = gOverworld.pendingEnemyIdx;
-        if (idx >= 0 && idx < gOverworld.enemyCount) {
-            OverworldEnemy *e = &gOverworld.enemies[idx];
-            int ids[1]    = { e->creatureId };
-            int levels[1] = { e->level };
-            BattlePrepareEncounter(&gOverworld.party, ids, levels, 1);
+        // Wire up every queued enemy so group aggro → one multi-enemy battle.
+        int count = gOverworld.pendingEnemyCount;
+        if (count > 0) {
+            int ids[OVERWORLD_MAX_PENDING];
+            int levels[OVERWORLD_MAX_PENDING];
+            int n = 0;
+            for (int k = 0; k < count; k++) {
+                int idx = gOverworld.pendingEnemyIdxs[k];
+                if (idx < 0 || idx >= gOverworld.enemyCount) continue;
+                OverworldEnemy *e = &gOverworld.enemies[idx];
+                ids[n]    = e->creatureId;
+                levels[n] = e->level;
+                n++;
+            }
+            BattlePrepareEncounter(&gOverworld.party, ids, levels, n);
             BattleSetPreemptive(gOverworld.preemptiveAttack);
             gOverworld.preemptiveAttack = false;
         }

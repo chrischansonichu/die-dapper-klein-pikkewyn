@@ -9,6 +9,96 @@ static bool IsInteractPressed(void)
     return IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER);
 }
 
+bool OverworldIsTileOccupied(const OverworldState *ow, int x, int y, int ignoreEnemyIdx)
+{
+    // Player — include both current tile and the tile being stepped into.
+    if (ow->player.tileX == x && ow->player.tileY == y) return true;
+    if (ow->player.moving && ow->player.targetTileX == x && ow->player.targetTileY == y)
+        return true;
+    // NPCs
+    for (int i = 0; i < ow->npcCount; i++) {
+        const Npc *n = &ow->npcs[i];
+        if (!n->active) continue;
+        if (n->tileX == x && n->tileY == y) return true;
+    }
+    // Enemies
+    for (int i = 0; i < ow->enemyCount; i++) {
+        if (i == ignoreEnemyIdx) continue;
+        const OverworldEnemy *e = &ow->enemies[i];
+        if (!e->active) continue;
+        if (e->tileX == x && e->tileY == y) return true;
+        if (e->moving && e->targetTileX == x && e->targetTileY == y) return true;
+    }
+    return false;
+}
+
+static int CountDefeatedEnemies(const OverworldState *ow)
+{
+    int n = 0;
+    for (int i = 0; i < ow->enemyCount; i++)
+        if (!ow->enemies[i].active) n++;
+    return n;
+}
+
+static bool AllEnemiesDefeated(const OverworldState *ow)
+{
+    return ow->enemyCount > 0 && CountDefeatedEnemies(ow) == ow->enemyCount;
+}
+
+// Populate `pages` with dialogue appropriate to the NPC's current state.
+// Handles seal recruitment (requires one enemy defeated) and the elder's
+// level-complete gate. Returns the number of pages written.
+// If the interaction has a side effect (seal joins party), it is applied here.
+static int BuildNpcInteraction(OverworldState *ow, int npcIdx,
+                               const char **pages, char scratch[4][NPC_DIALOGUE_LEN])
+{
+    Npc *n = &ow->npcs[npcIdx];
+
+    if (n->type == NPC_SEAL) {
+        if (CountDefeatedEnemies(ow) < 1) {
+            snprintf(scratch[0], NPC_DIALOGUE_LEN,
+                     "Arf! Prove yourself first. Rough up one of those sailors and come back.");
+            pages[0] = scratch[0];
+            return 1;
+        }
+        // Recruit. Match seal's level to Jan's so XP split feels fair.
+        int janLevel = (ow->party.count > 0) ? ow->party.members[0].level : 1;
+        if (ow->party.count < PARTY_MAX) {
+            PartyAddMember(&ow->party, CREATURE_SEAL, janLevel);
+            n->active = false;
+            snprintf(scratch[0], NPC_DIALOGUE_LEN,
+                     "Arf! Let's teach those sailors a lesson together!");
+            snprintf(scratch[1], NPC_DIALOGUE_LEN,
+                     "The seal joins your party. (XP is now split evenly.)");
+            pages[0] = scratch[0];
+            pages[1] = scratch[1];
+            return 2;
+        }
+        snprintf(scratch[0], NPC_DIALOGUE_LEN, "Arf! Your party is full already.");
+        pages[0] = scratch[0];
+        return 1;
+    }
+
+    if (n->type == NPC_PENGUIN_ELDER && AllEnemiesDefeated(ow)) {
+        snprintf(scratch[0], NPC_DIALOGUE_LEN,
+                 "The dock is clear! You've done well, Jan.");
+        snprintf(scratch[1], NPC_DIALOGUE_LEN,
+                 "Rumor is more sailors are stalking the tidal pools further up the coast...");
+        snprintf(scratch[2], NPC_DIALOGUE_LEN,
+                 "(Next level coming soon.)");
+        pages[0] = scratch[0];
+        pages[1] = scratch[1];
+        pages[2] = scratch[2];
+        return 3;
+    }
+
+    // Default: use whatever dialogue was baked in at spawn
+    int count = n->dialogueCount;
+    for (int p = 0; p < count; p++)
+        pages[p] = n->dialogue[p];
+    return count;
+}
+
 // Returns the index of an active, idle (unalerted) enemy adjacent to the
 // player, or -1 if none. These enemies are vulnerable to a surprise attack.
 static int FindSurpriseTarget(const OverworldState *ow, int px, int py)
@@ -56,9 +146,10 @@ static void AddTestEnemies(OverworldState *ow)
     s2->wanderInterval = 110;
     EnemySetDrops(s2, ITEM_FRESH_FISH, 60, 2, 25);  // ShellThrow
 
-    // 2x WANDER sailors in the shallow water
+    // 2x WANDER sailors in the shallow water. One is a bosun — the water is
+    // where the tougher fights live; the dock is the starter zone.
     OverworldEnemy *w1 = &ow->enemies[ow->enemyCount++];
-    EnemyInit(w1, 6, 6, 0, BEHAVIOR_WANDER, 1, 2, 4, (Color){160, 80, 180, 255});
+    EnemyInit(w1, 6, 6, 0, BEHAVIOR_WANDER, 2, 3, 4, (Color){160, 80, 180, 255});
     w1->wanderInterval = 70;
     EnemySetDrops(w1, ITEM_KRILL_SNACK, 80, -1, 0);
 
@@ -67,9 +158,11 @@ static void AddTestEnemies(OverworldState *ow)
     w2->wanderInterval = 100;
     EnemySetDrops(w2, ITEM_SARDINE, 50, 1, 30);     // FishingHook
 
-    // 1x PATROL sailor along the far end of the dock (keeps spawn safe)
+    // 1x PATROL sailor along the far end of the dock (keeps spawn safe).
+    // Downgraded to a deckhand so the player can reasonably defeat one
+    // enemy and unlock the seal recruitment without grinding.
     OverworldEnemy *p1 = &ow->enemies[ow->enemyCount++];
-    EnemyInit(p1, 15, 13, 1, BEHAVIOR_PATROL, 2, 4, 6, (Color){220, 120, 40, 255});
+    EnemyInit(p1, 15, 13, 1, BEHAVIOR_PATROL, 1, 3, 6, (Color){220, 120, 40, 255});
     EnemySetPatrol(p1, 12, 13, 18, 13);
     EnemySetDrops(p1, ITEM_SARDINE, 70, 3, 35);     // SeaUrchinSpike
 }
@@ -105,9 +198,20 @@ void OverworldInit(OverworldState *ow)
     AddTestNpcs(ow);
     AddTestEnemies(ow);
 
-    ow->pendingBattle    = false;
-    ow->pendingEnemyIdx  = -1;
-    ow->preemptiveAttack = false;
+    ow->pendingBattle     = false;
+    ow->pendingEnemyCount = 0;
+    ow->preemptiveAttack  = false;
+}
+
+// Add an enemy index to the pending battle roster, ignoring duplicates and
+// the roster cap.
+static void QueueEnemyForBattle(OverworldState *ow, int idx)
+{
+    if (idx < 0 || idx >= ow->enemyCount) return;
+    for (int k = 0; k < ow->pendingEnemyCount; k++)
+        if (ow->pendingEnemyIdxs[k] == idx) return;
+    if (ow->pendingEnemyCount >= OVERWORLD_MAX_PENDING) return;
+    ow->pendingEnemyIdxs[ow->pendingEnemyCount++] = idx;
 }
 
 void OverworldUpdate(OverworldState *ow, float dt)
@@ -132,7 +236,7 @@ void OverworldUpdate(OverworldState *ow, float dt)
     }
 
     // Update player movement
-    PlayerUpdate(&ow->player, &ow->map);
+    PlayerUpdate(&ow->player, &ow->map, ow);
 
     // After step completes, check NPC interaction
     if (ow->player.stepCompleted) {
@@ -141,11 +245,12 @@ void OverworldUpdate(OverworldState *ow, float dt)
 
         if (IsInteractPressed()) {
             for (int i = 0; i < ow->npcCount; i++) {
-                if (NpcIsInteractable(&ow->npcs[i], tx, ty)) {
+                if (NpcIsInteractable(&ow->npcs[i], tx, ty, ow->player.dir)) {
+                    NpcTurnToFace(&ow->npcs[i], tx, ty);
                     const char *pages[NPC_MAX_DIALOGUE_PAGES];
-                    for (int p = 0; p < ow->npcs[i].dialogueCount; p++)
-                        pages[p] = ow->npcs[i].dialogue[p];
-                    DialogueBegin(&ow->dialogue, pages, ow->npcs[i].dialogueCount, 30.0f);
+                    char scratch[4][NPC_DIALOGUE_LEN];
+                    int count = BuildNpcInteraction(ow, i, pages, scratch);
+                    DialogueBegin(&ow->dialogue, pages, count, 30.0f);
                     return;
                 }
             }
@@ -159,11 +264,12 @@ void OverworldUpdate(OverworldState *ow, float dt)
 
         // NPCs take priority over enemies (dialogue is non-destructive)
         for (int i = 0; i < ow->npcCount; i++) {
-            if (NpcIsInteractable(&ow->npcs[i], tx, ty)) {
+            if (NpcIsInteractable(&ow->npcs[i], tx, ty, ow->player.dir)) {
+                NpcTurnToFace(&ow->npcs[i], tx, ty);
                 const char *pages[NPC_MAX_DIALOGUE_PAGES];
-                for (int p = 0; p < ow->npcs[i].dialogueCount; p++)
-                    pages[p] = ow->npcs[i].dialogue[p];
-                DialogueBegin(&ow->dialogue, pages, ow->npcs[i].dialogueCount, 30.0f);
+                char scratch[4][NPC_DIALOGUE_LEN];
+                int count = BuildNpcInteraction(ow, i, pages, scratch);
+                DialogueBegin(&ow->dialogue, pages, count, 30.0f);
                 return;
             }
         }
@@ -171,9 +277,9 @@ void OverworldUpdate(OverworldState *ow, float dt)
         // Surprise strike on an unaware adjacent enemy
         int surpriseIdx = FindSurpriseTarget(ow, tx, ty);
         if (surpriseIdx >= 0) {
-            ow->pendingBattle     = true;
-            ow->pendingEnemyIdx   = surpriseIdx;
-            ow->preemptiveAttack  = true;
+            ow->pendingBattle    = true;
+            ow->preemptiveAttack = true;
+            QueueEnemyForBattle(ow, surpriseIdx);
             return;
         }
     }
@@ -183,10 +289,19 @@ void OverworldUpdate(OverworldState *ow, float dt)
     int py = ow->player.tileY;
     for (int i = 0; i < ow->enemyCount; i++) {
         if (!ow->enemies[i].active) continue;
-        bool triggered = EnemyUpdate(&ow->enemies[i], &ow->map, px, py, dt);
+        bool triggered = EnemyUpdate(&ow->enemies[i], &ow->map, px, py, dt, ow, i);
         if (triggered && !ow->pendingBattle) {
-            ow->pendingBattle   = true;
-            ow->pendingEnemyIdx = i;
+            ow->pendingBattle = true;
+            QueueEnemyForBattle(ow, i);
+            // Pull any other enemy that's currently aware of the player into
+            // the same encounter so simultaneous aggro → one group battle.
+            for (int j = 0; j < ow->enemyCount; j++) {
+                if (j == i) continue;
+                const OverworldEnemy *e2 = &ow->enemies[j];
+                if (!e2->active) continue;
+                if (e2->aiState == ENEMY_CHASING || e2->aiState == ENEMY_ALERTED)
+                    QueueEnemyForBattle(ow, j);
+            }
         }
     }
 
@@ -218,10 +333,11 @@ void OverworldDraw(const OverworldState *ow)
         if (!ow->player.moving && !ow->dialogue.active) {
             int tilePixels = TILE_SIZE * TILE_SCALE;
             for (int i = 0; i < ow->npcCount; i++) {
-                if (NpcIsInteractable(&ow->npcs[i], ow->player.tileX, ow->player.tileY)) {
-                    int px = ow->npcs[i].tileX * tilePixels + tilePixels / 2 - 5;
-                    int py = ow->npcs[i].tileY * tilePixels - 16;
-                    DrawText("!", px, py, 20, YELLOW);
+                if (NpcIsInteractable(&ow->npcs[i], ow->player.tileX, ow->player.tileY, ow->player.dir)) {
+                    int px = ow->npcs[i].tileX * tilePixels + tilePixels / 2 - 6;
+                    int py = ow->npcs[i].tileY * tilePixels - 18;
+                    // Name the actual key so the player knows what to press.
+                    DrawText("Z", px, py, 20, YELLOW);
                 }
             }
             int surpriseIdx = FindSurpriseTarget(ow, ow->player.tileX, ow->player.tileY);

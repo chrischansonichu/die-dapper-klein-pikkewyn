@@ -63,7 +63,7 @@ int CalculateDamage(const Combatant *attacker, const Combatant *defender, const 
 
 int CombatantXpReward(const Combatant *c)
 {
-    return c->level * 15;
+    return c->level * 22;
 }
 
 bool CombatantAddXp(Combatant *c, int amount)

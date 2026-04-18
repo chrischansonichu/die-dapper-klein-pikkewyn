@@ -5,6 +5,10 @@
 #include "raylib.h"
 #include "tilemap.h"
 
+// Forward declaration — enemy.c queries the overworld for tile occupancy so
+// enemies don't walk onto the player, NPCs, or other enemies.
+struct OverworldState;
+
 //----------------------------------------------------------------------------------
 // OverworldEnemy - visible sailor enemies that patrol/stand/wander and engage
 // the player via line-of-sight (Pokemon trainer style).
@@ -58,6 +62,9 @@ typedef struct OverworldEnemy {
     int           dropItemPct;     // 0..100
     int           dropWeaponId;    // -1 = no weapon drop
     int           dropWeaponPct;   // 0..100
+
+    bool          onWater;         // current tile is water — draw as swimming
+    int           dryingFrames;    // >0 = paused after stepping from water onto land
 } OverworldEnemy;
 
 // Initialize a standing/wandering enemy.
@@ -75,8 +82,11 @@ void EnemySetDrops(OverworldEnemy *e, int itemId, int itemPct,
 
 // Update one enemy for this frame (dt in seconds).
 // Returns true if the enemy has just reached the player and a battle should start.
+// `selfIdx` is this enemy's index into ow->enemies so collision checks can
+// exclude its own tile.
 bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
-                 int playerTileX, int playerTileY, float dt);
+                 int playerTileX, int playerTileY, float dt,
+                 const struct OverworldState *ow, int selfIdx);
 
 // Draw inside BeginMode2D.
 void EnemyDraw(const OverworldEnemy *e);

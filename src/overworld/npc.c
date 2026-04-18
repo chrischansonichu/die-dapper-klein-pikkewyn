@@ -21,21 +21,29 @@ void NpcAddDialogue(Npc *n, const char *text)
     n->dialogueCount++;
 }
 
-bool NpcIsInteractable(const Npc *n, int playerTileX, int playerTileY)
+bool NpcIsInteractable(const Npc *n, int playerTileX, int playerTileY, int playerDir)
 {
     if (!n->active) return false;
-    int dx = playerTileX - n->tileX;
-    int dy = playerTileY - n->tileY;
-    // Must be in an adjacent tile
-    if ((dx == 0 && (dy == 1 || dy == -1)) ||
-        (dy == 0 && (dx == 1 || dx == -1))) {
-        // NPC must be facing toward the player
-        if (n->dir == 0 && dy == -1) return true; // NPC faces down, player is below
-        if (n->dir == 3 && dy ==  1) return true; // NPC faces up, player is above
-        if (n->dir == 2 && dx == -1) return true; // NPC faces right, player is to right
-        if (n->dir == 1 && dx ==  1) return true; // NPC faces left, player is to left
+    // The tile directly in front of the player (where they're looking).
+    int fx = playerTileX;
+    int fy = playerTileY;
+    switch (playerDir) {
+        case 0: fy += 1; break; // down
+        case 1: fx -= 1; break; // left
+        case 2: fx += 1; break; // right
+        case 3: fy -= 1; break; // up
     }
-    return false;
+    return (n->tileX == fx && n->tileY == fy);
+}
+
+void NpcTurnToFace(Npc *n, int tileX, int tileY)
+{
+    int dx = tileX - n->tileX;
+    int dy = tileY - n->tileY;
+    if (dx > 0)      n->dir = 2; // face right
+    else if (dx < 0) n->dir = 1; // face left
+    else if (dy > 0) n->dir = 0; // face down
+    else if (dy < 0) n->dir = 3; // face up
 }
 
 // Cream-bellied old penguin in a top hat
@@ -99,12 +107,12 @@ static void DrawPenguinElder(int px, int py, int sz, int dir)
                (Vector2){px + sz * 0.90f, py + sz * 0.92f}, 2.0f, orange);
 }
 
-// Chubby grey-blue seal with whiskers and flippers
+// Cape fur seal — warm brown with a lighter belly
 static void DrawSeal(int px, int py, int sz, int dir)
 {
-    const Color body  = (Color){125, 150, 180, 255};
-    const Color dark  = (Color){ 80, 100, 130, 255};
-    const Color belly = (Color){195, 205, 225, 255};
+    const Color body  = (Color){120,  80,  50, 255};   // warm brown
+    const Color dark  = (Color){ 70,  45,  25, 255};   // deep brown shadow
+    const Color belly = (Color){205, 170, 130, 255};   // tawny belly
 
     float cx = px + sz / 2.0f;
 
@@ -123,33 +131,35 @@ static void DrawSeal(int px, int py, int sz, int dir)
     DrawEllipse((int)(cx - sz * 0.18f), (int)(bodyCy + sz * 0.12f), sz * 0.10f, sz * 0.05f, dark);
     DrawEllipse((int)(cx + sz * 0.18f), (int)(bodyCy + sz * 0.12f), sz * 0.10f, sz * 0.05f, dark);
 
-    // Head (round, perched on front of body)
-    float headCx = cx + sz * 0.10f;
+    // Head sticks out well past the body on the facing side so the silhouette
+    // alone announces which way the seal is looking.
+    float side   = (dir == 1) ? -1.0f : 1.0f;
+    float headCx = cx + sz * 0.18f * side;
     float headCy = py + sz * 0.38f;
-    if (dir == 1) headCx = cx - sz * 0.10f;
     DrawCircle((int)headCx, (int)headCy, sz * 0.22f, body);
 
-    // Snout
-    float snoutDX = (dir == 1) ? -sz * 0.14f : sz * 0.14f;
-    DrawCircle((int)(headCx + snoutDX), (int)(headCy + sz * 0.06f), sz * 0.08f, belly);
-    DrawCircle((int)(headCx + snoutDX + (dir == 1 ? -2 : 2)), (int)(headCy + sz * 0.04f), 1, BLACK);
+    // Snout — wider triangle that unambiguously points forward
+    float sx  = headCx + sz * 0.14f * side;
+    float sy  = headCy + sz * 0.06f;
+    DrawCircle((int)sx, (int)sy, sz * 0.10f, belly);
+    DrawTriangle(
+        (Vector2){headCx + sz * 0.08f * side, headCy + sz * 0.00f},
+        (Vector2){headCx + sz * 0.08f * side, headCy + sz * 0.12f},
+        (Vector2){headCx + sz * 0.26f * side, headCy + sz * 0.06f}, belly);
+    DrawCircle((int)(sx + 2 * side), (int)(headCy + sz * 0.04f), 1, BLACK);
 
-    // Eyes
+    // Eyes clustered toward the facing side
     float eyeY = headCy - sz * 0.04f;
-    if (dir == 1) {
-        DrawCircle((int)(headCx - sz * 0.02f), (int)eyeY, 2, BLACK);
-        DrawCircle((int)(headCx - sz * 0.12f), (int)eyeY, 2, BLACK);
-    } else {
-        DrawCircle((int)(headCx + sz * 0.02f), (int)eyeY, 2, BLACK);
-        DrawCircle((int)(headCx + sz * 0.12f), (int)eyeY, 2, BLACK);
-    }
+    DrawCircle((int)(headCx + sz * 0.02f * side), (int)eyeY, 2, BLACK);
+    DrawCircle((int)(headCx + sz * 0.12f * side), (int)eyeY, 2, BLACK);
 
-    // Whiskers
-    float wX = headCx + (dir == 1 ? -sz * 0.14f : sz * 0.14f);
+    // Whiskers fan out from the snout
+    float wX = headCx + sz * 0.14f * side;
     float wY = headCy + sz * 0.08f;
     for (int i = -1; i <= 1; i++) {
-        float dx = (dir == 1) ? -sz * 0.10f : sz * 0.10f;
-        DrawLine((int)wX, (int)(wY + i * 2), (int)(wX + dx), (int)(wY + i * 2 + i), dark);
+        DrawLine((int)wX, (int)(wY + i * 2),
+                 (int)(wX + sz * 0.12f * side),
+                 (int)(wY + i * 2 + i), dark);
     }
 }
 

@@ -47,6 +47,7 @@ void TileMapSetTile(TileMap *m, int x, int y, int tileId);
 int  TileMapGetTile(const TileMap *m, int x, int y);
 bool TileMapIsSolid(const TileMap *m, int x, int y);
 bool TileMapIsEncounter(const TileMap *m, int x, int y);
+bool TileMapIsWater(const TileMap *m, int x, int y);
 void TileMapDraw(const TileMap *m, Camera2D cam);
 void TileMapUnload(TileMap *m);
 

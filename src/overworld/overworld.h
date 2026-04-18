@@ -18,6 +18,7 @@
 
 #define OVERWORLD_MAX_NPCS    16
 #define OVERWORLD_MAX_ENEMIES 16
+#define OVERWORLD_MAX_PENDING 4   // battle supports up to 4 enemies at once
 
 typedef struct OverworldState {
     TileMap       map;
@@ -29,7 +30,10 @@ typedef struct OverworldState {
 
     OverworldEnemy enemies[OVERWORLD_MAX_ENEMIES];
     int            enemyCount;
-    int            pendingEnemyIdx; // index of enemy that triggered current battle (-1=none)
+    // Indices of every enemy that should enter the next battle together.
+    // Filled when one or more enemies aggro simultaneously.
+    int            pendingEnemyIdxs[OVERWORLD_MAX_PENDING];
+    int            pendingEnemyCount;
 
     Party         party;
 
@@ -52,5 +56,10 @@ void OverworldReloadResources(OverworldState *ow);
 void OverworldUpdate(OverworldState *ow, float dt);
 void OverworldDraw(const OverworldState *ow);
 void OverworldUnload(OverworldState *ow);
+
+// True if tile (x, y) is occupied by the player, an NPC, or any active
+// enemy other than `ignoreEnemyIdx` (pass -1 to check all enemies). An
+// enemy mid-step claims both its current tile and its destination.
+bool OverworldIsTileOccupied(const OverworldState *ow, int x, int y, int ignoreEnemyIdx);
 
 #endif // OVERWORLD_H

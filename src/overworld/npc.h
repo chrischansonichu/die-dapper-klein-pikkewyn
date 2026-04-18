@@ -30,8 +30,11 @@ typedef struct Npc {
 
 void NpcInit(Npc *n, int tileX, int tileY, int dir, NpcType type);
 void NpcAddDialogue(Npc *n, const char *text);
-// Returns true if npc is adjacent to player and facing player
-bool NpcIsInteractable(const Npc *n, int playerTileX, int playerTileY);
+// Returns true if npc is on the tile directly in front of the player.
+// NPC facing doesn't matter — the player is the one initiating interaction.
+bool NpcIsInteractable(const Npc *n, int playerTileX, int playerTileY, int playerDir);
+// Snap NPC to face the given tile (used when the player starts a conversation).
+void NpcTurnToFace(Npc *n, int tileX, int tileY);
 void NpcDraw(const Npc *n, Camera2D cam);
 
 #endif // NPC_H

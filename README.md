@@ -1,6 +1,6 @@
 ## Die Dapper Klein Pikkewyn
 
-![Die Dapper Klein Pikkewyn](screenshots/screenshot000.png "Die Dapper Klein Pikkewyn")
+![Die Dapper Klein Pikkewyn](social-size.png "Die Dapper Klein Pikkewyn")
 
 ### Description
 

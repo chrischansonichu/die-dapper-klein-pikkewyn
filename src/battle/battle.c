@@ -1,4 +1,5 @@
 #include "battle.h"
+#include "battle_sprites.h"
 #include "../data/move_defs.h"
 #include "../data/item_defs.h"
 #include <string.h>
@@ -175,7 +176,8 @@ static void ExecuteAction(BattleContext *ctx)
         snprintf(ctx->narration, NARRATION_LEN,
                  "%s used %s! Dealt %d dmg. %s fainted!", actor->name, mv->name, dmg, target->name);
     } else {
-        BattleAnimPlay(&ctx->anim, BANIM_HIT, targetIsEnemy, ctx->targetEnemyIdx);
+        BattleAnimPlayHitFrom(&ctx->anim, te->isEnemy, te->idx,
+                              targetIsEnemy, ctx->targetEnemyIdx);
         snprintf(ctx->narration, NARRATION_LEN,
                  "%s used %s! Dealt %d dmg.", actor->name, mv->name, dmg);
     }
@@ -466,19 +468,27 @@ void BattleUpdate(BattleContext *ctx, float dt)
     case BS_ROUND_END:
         if (AllEnemiesFainted(ctx)) {
             if (!ctx->xpNarrationShown) {
-                // Award XP to all living party members
+                // Award XP to all living party members — split evenly so adding
+                // party members has a real cost per-member.
                 int totalXp = 0;
                 for (int i = 0; i < ctx->enemyCount; i++)
                     totalXp += CombatantXpReward(&ctx->enemies[i]);
+                int livingCount = 0;
+                for (int i = 0; i < ctx->party->count; i++)
+                    if (ctx->party->members[i].alive) livingCount++;
+                int xpPerMember = (livingCount > 0) ? (totalXp / livingCount) : totalXp;
                 bool levelUp = false;
                 for (int i = 0; i < ctx->party->count; i++)
                     if (ctx->party->members[i].alive)
-                        if (CombatantAddXp(&ctx->party->members[i], totalXp)) levelUp = true;
+                        if (CombatantAddXp(&ctx->party->members[i], xpPerMember)) levelUp = true;
+                const char *suffix = (livingCount > 1) ? " each" : "";
                 if (levelUp)
                     snprintf(ctx->narration, NARRATION_LEN,
-                             "Victory! +%d XP  LEVEL UP! HP restored!", totalXp);
+                             "Victory! +%d XP%s  LEVEL UP! HP restored!",
+                             xpPerMember, suffix);
                 else
-                    snprintf(ctx->narration, NARRATION_LEN, "Victory! +%d XP", totalXp);
+                    snprintf(ctx->narration, NARRATION_LEN,
+                             "Victory! +%d XP%s", xpPerMember, suffix);
                 ctx->xpNarrationShown = true;
                 ctx->state = BS_NARRATION;
             } else {
@@ -498,26 +508,22 @@ void BattleUpdate(BattleContext *ctx, float dt)
     }
 }
 
-// Draw a combatant sprite placeholder (colored box)
+// Draws sprite + name/HP overlays into the grid cell.
 static void DrawCombatantInCell(const Combatant *c, Rectangle r, bool isEnemy,
-                                 float alpha, float slideY, bool flashWhite)
+                                float alpha, float slideX, float slideY,
+                                bool flashWhite)
 {
-    Color baseColor = isEnemy ? (Color){200, 60, 60, 255} : (Color){60, 100, 200, 255};
-    if (flashWhite) baseColor = WHITE;
-    baseColor.a = (unsigned char)(baseColor.a * alpha);
+    DrawCombatantSprite(c->def->id, r, isEnemy, alpha, slideX, slideY, flashWhite);
 
-    DrawRectangle((int)r.x, (int)(r.y + slideY), (int)r.width, (int)r.height, baseColor);
-    DrawRectangleLines((int)r.x, (int)(r.y + slideY), (int)r.width, (int)r.height,
-                       (Color){255, 255, 255, (unsigned char)(180 * alpha)});
-
-    // Name label
+    // Name label (no slide — stays anchored to the cell so it doesn't dance)
     Color textColor = WHITE;
     textColor.a = (unsigned char)(255 * alpha);
-    DrawText(c->name, (int)r.x + 4, (int)(r.y + slideY) + 4, 11, textColor);
+    DrawText(c->name, (int)r.x + 4, (int)r.y + 4, 11, textColor);
 
-    // HP bar
+    // HP bar — also stays anchored to the cell
     float hpPct = (float)c->hp / (float)c->maxHp;
-    DrawRectangle((int)r.x + 2, (int)(r.y + slideY) + (int)r.height - 10,
+    if (hpPct < 0.0f) hpPct = 0.0f;
+    DrawRectangle((int)r.x + 2, (int)r.y + (int)r.height - 10,
                   (int)((r.width - 4) * hpPct), 6,
                   (Color){40, 200, 40, (unsigned char)(220 * alpha)});
 }
@@ -569,6 +575,7 @@ void BattleDraw(const BattleContext *ctx)
         Rectangle r = BattleGridCellRect(false, pos.col, pos.row);
         float alpha   = 1.0f;
         float slideY  = 0.0f;
+        float slideX  = 0.0f;
         bool  flash   = false;
 
         if (ctx->anim.active && !ctx->anim.targetIsEnemy && ctx->anim.targetIdx == i) {
@@ -576,8 +583,12 @@ void BattleDraw(const BattleContext *ctx)
             slideY = ctx->anim.slideY;
             flash  = BattleAnimIsFlashFrame(&ctx->anim);
         }
+        if (ctx->anim.active && ctx->anim.hasActor &&
+            !ctx->anim.actorIsEnemy && ctx->anim.actorIdx == i) {
+            slideX = ctx->anim.actorSlideX;
+        }
 
-        DrawCombatantInCell(c, r, false, alpha, slideY, flash);
+        DrawCombatantInCell(c, r, false, alpha, slideX, slideY, flash);
 
         // Highlight active player combatant
         bool isActive = !CurrentActorIsEnemy(ctx) && CurrentActorIdx(ctx) == i;
@@ -595,6 +606,7 @@ void BattleDraw(const BattleContext *ctx)
         Rectangle r = BattleGridCellRect(true, pos.col, pos.row);
         float alpha  = 1.0f;
         float slideY = 0.0f;
+        float slideX = 0.0f;
         bool  flash  = false;
 
         if (ctx->anim.active && ctx->anim.targetIsEnemy && ctx->anim.targetIdx == i) {
@@ -602,8 +614,12 @@ void BattleDraw(const BattleContext *ctx)
             slideY = ctx->anim.slideY;
             flash  = BattleAnimIsFlashFrame(&ctx->anim);
         }
+        if (ctx->anim.active && ctx->anim.hasActor &&
+            ctx->anim.actorIsEnemy && ctx->anim.actorIdx == i) {
+            slideX = ctx->anim.actorSlideX;
+        }
 
-        DrawCombatantInCell(c, r, true, alpha, slideY, flash);
+        DrawCombatantInCell(c, r, true, alpha, slideX, slideY, flash);
     }
 
     // Draw UI based on state

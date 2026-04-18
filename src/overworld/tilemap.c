@@ -1,5 +1,6 @@
 #include "tilemap.h"
 #include <string.h>
+#include <math.h>
 
 // Tile colors for the procedural tileset
 static const Color TILE_COLORS[TILE_COUNT] = {
@@ -126,6 +127,22 @@ bool TileMapIsEncounter(const TileMap *m, int x, int y)
     return (m->flags[y * m->width + x] & TILE_FLAG_ENCOUNTER) != 0;
 }
 
+bool TileMapIsWater(const TileMap *m, int x, int y)
+{
+    if (x < 0 || x >= m->width || y < 0 || y >= m->height) return false;
+    return (m->flags[y * m->width + x] & TILE_FLAG_WATER) != 0;
+}
+
+// Deterministic 0..1 hash for a (x, y) sand tile, used to place shells/speckles.
+static float SandHash(int x, int y, int salt)
+{
+    unsigned h = (unsigned)(x * 0x8da6b343u) ^ (unsigned)(y * 0xd8163841u) ^ (unsigned)(salt * 0xcb1ab31fu);
+    h ^= h >> 13;
+    h *= 0x5bd1e995u;
+    h ^= h >> 15;
+    return (float)(h & 0xFFFF) / 65535.0f;
+}
+
 void TileMapDraw(const TileMap *m, Camera2D cam)
 {
     // Only render tiles visible in the camera viewport
@@ -145,41 +162,124 @@ void TileMapDraw(const TileMap *m, Camera2D cam)
     if (lastCol  > m->width)  lastCol  = m->width;
     if (lastRow  > m->height) lastRow  = m->height;
 
-    // Animated water frame
-    int waterFrame = (int)(GetTime() * 8.0) % 4;
+    float time = (float)GetTime();
 
     BeginMode2D(cam);
+
+    // Pass 1 — base tiles
     for (int row = firstRow; row < lastRow; row++) {
         for (int col = firstCol; col < lastCol; col++) {
             int tileId = m->tiles[row * m->width + col];
 
-            // Source rect in tileset
             Rectangle src = {
                 (float)(tileId * TILE_SIZE), 0.0f,
                 (float)TILE_SIZE, (float)TILE_SIZE
             };
-
-            // For water tiles, shift source y slightly based on frame
-            // (simple shimmer: alternate between base color and slightly brighter)
-            if ((tileId == TILE_OCEAN || tileId == TILE_SHALLOW) && waterFrame % 2 == 1) {
-                // Draw with a slight color tint for shimmer
-            }
-
             Rectangle dst = {
                 (float)(col * TILE_SIZE * TILE_SCALE),
                 (float)(row * TILE_SIZE * TILE_SCALE),
                 (float)(TILE_SIZE * TILE_SCALE),
                 (float)(TILE_SIZE * TILE_SCALE)
             };
-
-            Color tint = WHITE;
-            // Water shimmer: alternate brightness
-            if ((tileId == TILE_OCEAN || tileId == TILE_SHALLOW) && waterFrame % 2 == 1)
-                tint = (Color){220, 230, 255, 255};
-
-            DrawTexturePro(m->tileset, src, dst, (Vector2){0, 0}, 0.0f, tint);
+            DrawTexturePro(m->tileset, src, dst, (Vector2){0, 0}, 0.0f, WHITE);
         }
     }
+
+    // Pass 2 — dynamic overlays (waves, sand detail). Kept separate so the
+    // animated elements never bleed under neighbouring tiles.
+    for (int row = firstRow; row < lastRow; row++) {
+        for (int col = firstCol; col < lastCol; col++) {
+            int tileId = m->tiles[row * m->width + col];
+            float tx = (float)(col * TILE_SIZE * TILE_SCALE);
+            float ty = (float)(row * TILE_SIZE * TILE_SCALE);
+
+            if (tileId == TILE_OCEAN || tileId == TILE_SHALLOW) {
+                // Three animated wave lines per tile. Each line slides
+                // horizontally on its own phase so the whole surface looks
+                // like it's moving rather than flashing.
+                Color crest = (tileId == TILE_OCEAN)
+                    ? (Color){ 90, 150, 220, 180}
+                    : (Color){170, 210, 240, 200};
+                float phase = (col * 0.6f) + (row * 0.3f);
+                for (int k = 0; k < 3; k++) {
+                    float yNorm = 0.25f + 0.25f * k;
+                    float slide = sinf(time * 1.6f + phase + k * 1.3f) * (tilePixels * 0.18f);
+                    float y = ty + tilePixels * yNorm;
+                    float x0 = tx + tilePixels * 0.15f + slide;
+                    float x1 = x0 + tilePixels * 0.35f;
+                    DrawLineEx((Vector2){x0, y}, (Vector2){x1, y}, 2.0f, crest);
+                }
+                // Occasional sparkle that blinks on slowly.
+                float sp = fmodf(time * 0.6f + (col * 13 + row * 7) * 0.1f, 3.0f);
+                if (sp < 0.25f) {
+                    float sx = tx + tilePixels * 0.2f + tilePixels * 0.5f * SandHash(col, row, 3);
+                    float sy = ty + tilePixels * 0.2f + tilePixels * 0.5f * SandHash(col, row, 4);
+                    DrawCircle((int)sx, (int)sy, 1.5f, (Color){230, 245, 255, 220});
+                }
+            }
+            else if (tileId == TILE_SAND) {
+                // Wet sand band along edges that touch water — darker, with a
+                // shifting foam line so the shore reads as moving.
+                bool waterN = TileMapIsWater(m, col, row - 1);
+                bool waterS = TileMapIsWater(m, col, row + 1);
+                bool waterE = TileMapIsWater(m, col + 1, row);
+                bool waterW = TileMapIsWater(m, col - 1, row);
+                Color wet = (Color){165, 140,  85, 180};
+                Color foam = (Color){245, 245, 230, 220};
+                float band = tilePixels * 0.22f;
+                float foamSlide = sinf(time * 2.2f + (col + row) * 0.7f) * (tilePixels * 0.12f);
+                if (waterN) {
+                    DrawRectangle((int)tx, (int)ty, (int)tilePixels, (int)band, wet);
+                    DrawLineEx((Vector2){tx + foamSlide, ty + band - 1},
+                               (Vector2){tx + tilePixels + foamSlide, ty + band - 1},
+                               2.0f, foam);
+                }
+                if (waterS) {
+                    DrawRectangle((int)tx, (int)(ty + tilePixels - band),
+                                  (int)tilePixels, (int)band, wet);
+                    DrawLineEx((Vector2){tx + foamSlide, ty + tilePixels - band + 1},
+                               (Vector2){tx + tilePixels + foamSlide, ty + tilePixels - band + 1},
+                               2.0f, foam);
+                }
+                if (waterE) {
+                    DrawRectangle((int)(tx + tilePixels - band), (int)ty,
+                                  (int)band, (int)tilePixels, wet);
+                }
+                if (waterW) {
+                    DrawRectangle((int)tx, (int)ty, (int)band, (int)tilePixels, wet);
+                }
+
+                // Scattered speckles + rare shells, deterministic per tile.
+                // Speckles: 6 little dots of slightly darker sand.
+                for (int k = 0; k < 6; k++) {
+                    float px = tx + tilePixels * SandHash(col, row, 10 + k);
+                    float py = ty + tilePixels * SandHash(col, row, 20 + k);
+                    Color speck = (SandHash(col, row, 30 + k) > 0.5f)
+                        ? (Color){185, 160, 105, 220}
+                        : (Color){235, 215, 165, 220};
+                    DrawRectangle((int)px, (int)py, 2, 2, speck);
+                }
+                // Shell: ~1 in 6 tiles gets a small white arc.
+                if (SandHash(col, row, 77) < 0.18f) {
+                    float shx = tx + tilePixels * (0.3f + 0.4f * SandHash(col, row, 78));
+                    float shy = ty + tilePixels * (0.4f + 0.4f * SandHash(col, row, 79));
+                    bool pink = SandHash(col, row, 80) > 0.5f;
+                    Color shellA = pink ? (Color){245, 220, 220, 255} : (Color){250, 245, 230, 255};
+                    Color shellB = pink ? (Color){200, 160, 170, 255} : (Color){190, 180, 150, 255};
+                    DrawCircleSector((Vector2){shx, shy}, 3.0f, 180.0f, 360.0f, 8, shellA);
+                    DrawLineEx((Vector2){shx - 3, shy}, (Vector2){shx + 3, shy}, 1.0f, shellB);
+                }
+                // Occasional seaweed clump: tiny green smudge on 1 in 10 tiles.
+                if (SandHash(col, row, 91) < 0.10f) {
+                    float gx = tx + tilePixels * (0.2f + 0.6f * SandHash(col, row, 92));
+                    float gy = ty + tilePixels * (0.6f + 0.3f * SandHash(col, row, 93));
+                    DrawEllipse((int)gx, (int)gy, 3.0f, 1.5f, (Color){ 80, 110,  60, 230});
+                    DrawEllipse((int)(gx + 2), (int)(gy - 1), 2.0f, 1.2f, (Color){ 60,  90,  50, 230});
+                }
+            }
+        }
+    }
+
     EndMode2D();
 }
 
