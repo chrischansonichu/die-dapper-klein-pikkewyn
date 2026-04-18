@@ -243,6 +243,30 @@ void BattleInit(BattleContext *ctx)
 
     SetupGridPositions(ctx);
     BuildTurnOrder(ctx);
+
+    // Pre-emptive surprise strike: Jan lands a free Tackle on the first enemy
+    // before the turn order begins. Narration is shown after the enter flash.
+    if (ctx->preemptiveAttack && ctx->party->count > 0 && ctx->enemyCount > 0) {
+        Combatant *jan    = &ctx->party->members[0];
+        Combatant *target = &ctx->enemies[0];
+        if (jan->alive && target->alive) {
+            const MoveDef *tackle = GetMoveDef(jan->moveIds[0]);
+            int dmg = CalculateDamage(jan, target, tackle);
+            target->hp -= dmg;
+            if (target->hp <= 0) {
+                target->hp    = 0;
+                target->alive = false;
+                BattleGridRemove(&ctx->grid, true, 0);
+                snprintf(ctx->narration, NARRATION_LEN,
+                         "Surprise strike! %s dealt %d and took down %s!",
+                         jan->name, dmg, target->name);
+            } else {
+                snprintf(ctx->narration, NARRATION_LEN,
+                         "Surprise strike! %s dealt %d damage to %s!",
+                         jan->name, dmg, target->name);
+            }
+        }
+    }
 }
 
 void BattleUpdate(BattleContext *ctx, float dt)
@@ -253,7 +277,18 @@ void BattleUpdate(BattleContext *ctx, float dt)
 
     case BS_ENTER:
         ctx->enterTimer += dt;
-        if (ctx->enterTimer >= 0.6f) ctx->state = BS_TURN_START;
+        if (ctx->enterTimer >= 0.6f) {
+            ctx->state = ctx->preemptiveAttack ? BS_PREEMPTIVE_NARRATION : BS_TURN_START;
+        }
+        break;
+
+    case BS_PREEMPTIVE_NARRATION:
+        if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
+            ctx->preemptiveAttack = false;
+            // If the surprise killed the only enemy, feed into the normal
+            // victory path (which handles XP / level-up narration).
+            ctx->state = AllEnemiesFainted(ctx) ? BS_ROUND_END : BS_TURN_START;
+        }
         break;
 
     case BS_TURN_START: {
@@ -566,6 +601,7 @@ void BattleDraw(const BattleContext *ctx)
         break; // nothing extra
 
     case BS_NARRATION:
+    case BS_PREEMPTIVE_NARRATION:
         BattleMenuDrawNarration(ctx->narration);
         break;
 

@@ -93,6 +93,9 @@ int  FinishBattleScreen(void);
 typedef struct Party Party;
 void BattlePrepareEncounter(Party *party, int enemyIds[], int enemyLevels[], int count);
 
+// Must be called AFTER BattlePrepareEncounter (which zeros the context)
+void BattleSetPreemptive(bool preemptive);
+
 // Result of the most recently completed battle (set by screen_battle.c)
 typedef enum BattleResult {
     BATTLE_ONGOING = 0,

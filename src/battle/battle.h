@@ -16,16 +16,17 @@
 #define NARRATION_LEN      256
 
 typedef enum BattleState {
-    BS_ENTER = 0,       // flash-in entrance animation
-    BS_TURN_START,      // determine whose turn, set up UI
-    BS_MOVE_PHASE,      // current combatant selects a cell to move to (or stay)
-    BS_ACTION_MENU,     // root menu: FIGHT / ITEM / SWITCH / PASS
-    BS_MOVE_SELECT,     // pick a move from the combatant's move list
-    BS_TARGET_SELECT,   // pick a target cell (ranged/AOE only)
-    BS_EXECUTE,         // resolve the action
-    BS_ANIM,            // play hit/faint animation
-    BS_NARRATION,       // show narration text, wait for Z
-    BS_ROUND_END,       // check win/lose
+    BS_ENTER = 0,            // flash-in entrance animation
+    BS_PREEMPTIVE_NARRATION, // "Surprise attack!" text, shown only if Jan struck first
+    BS_TURN_START,           // determine whose turn, set up UI
+    BS_MOVE_PHASE,           // current combatant selects a cell to move to (or stay)
+    BS_ACTION_MENU,          // root menu: FIGHT / ITEM / SWITCH / PASS
+    BS_MOVE_SELECT,          // pick a move from the combatant's move list
+    BS_TARGET_SELECT,        // pick a target cell (ranged/AOE only)
+    BS_EXECUTE,              // resolve the action
+    BS_ANIM,                 // play hit/faint animation
+    BS_NARRATION,            // show narration text, wait for Z
+    BS_ROUND_END,            // check win/lose
     BS_VICTORY,
     BS_DEFEAT,
     BS_FLEE,
@@ -70,6 +71,7 @@ typedef struct BattleContext {
     char            narration[NARRATION_LEN];
     float           enterTimer;
     bool            xpNarrationShown; // true after XP award narration displayed
+    bool            preemptiveAttack; // set by overworld; consumed by BattleInit
 
     // Background tint for the battle scene
     Color           bgColor;

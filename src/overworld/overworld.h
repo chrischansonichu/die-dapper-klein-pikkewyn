@@ -35,8 +35,10 @@ typedef struct OverworldState {
     // Dialogue
     DialogueBox   dialogue;
 
-    // Pending battle (set when an enemy reaches the player)
+    // Pending battle (set when an enemy reaches the player, or when Jan
+    // initiates a surprise strike on an unaware enemy)
     bool          pendingBattle;
+    bool          preemptiveAttack; // Jan struck first — grant a free Tackle
 } OverworldState;
 
 void OverworldInit(OverworldState *ow);

@@ -8,17 +8,35 @@ static bool IsInteractPressed(void)
     return IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER);
 }
 
+// Returns the index of an active, idle (unalerted) enemy adjacent to the
+// player, or -1 if none. These enemies are vulnerable to a surprise attack.
+static int FindSurpriseTarget(const OverworldState *ow, int px, int py)
+{
+    for (int i = 0; i < ow->enemyCount; i++) {
+        const OverworldEnemy *e = &ow->enemies[i];
+        if (!e->active) continue;
+        if (e->aiState != ENEMY_IDLE) continue;
+        int dx = e->tileX - px;
+        int dy = e->tileY - py;
+        if ((dx == 0 && (dy == 1 || dy == -1)) ||
+            (dy == 0 && (dx == 1 || dx == -1))) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 static void AddTestNpcs(OverworldState *ow)
 {
     // Friendly penguin elder on the dock
     Npc *elder = &ow->npcs[ow->npcCount++];
-    NpcInit(elder, 8, 13, 0, (Color){200, 200, 100, 255});
+    NpcInit(elder, 8, 13, 0, NPC_PENGUIN_ELDER);
     NpcAddDialogue(elder, "Jan! The sailors have taken all the fish!");
     NpcAddDialogue(elder, "You must fight them off. Be brave, little one.");
 
     // Seal ally on the beach
     Npc *seal = &ow->npcs[ow->npcCount++];
-    NpcInit(seal, 12, 14, 3, (Color){100, 130, 160, 255});
+    NpcInit(seal, 14, 15, 3, NPC_SEAL);
     NpcAddDialogue(seal, "Arf! I can help you fight. Come find me when ready.");
 }
 
@@ -44,10 +62,10 @@ static void AddTestEnemies(OverworldState *ow)
     EnemyInit(w2, 16, 8, 2, BEHAVIOR_WANDER, 2, 4, 4, (Color){180, 60, 140, 255});
     w2->wanderInterval = 100;
 
-    // 1x PATROL sailor along the dock edge (x=6..18, y=13)
+    // 1x PATROL sailor along the far end of the dock (keeps spawn safe)
     OverworldEnemy *p1 = &ow->enemies[ow->enemyCount++];
-    EnemyInit(p1, 6, 13, 2, BEHAVIOR_PATROL, 2, 4, 6, (Color){220, 120, 40, 255});
-    EnemySetPatrol(p1, 6, 13, 18, 13);
+    EnemyInit(p1, 15, 13, 1, BEHAVIOR_PATROL, 2, 4, 6, (Color){220, 120, 40, 255});
+    EnemySetPatrol(p1, 12, 13, 18, 13);
 }
 
 void OverworldInit(OverworldState *ow)
@@ -76,8 +94,9 @@ void OverworldInit(OverworldState *ow)
     AddTestNpcs(ow);
     AddTestEnemies(ow);
 
-    ow->pendingBattle   = false;
-    ow->pendingEnemyIdx = -1;
+    ow->pendingBattle    = false;
+    ow->pendingEnemyIdx  = -1;
+    ow->preemptiveAttack = false;
 }
 
 void OverworldUpdate(OverworldState *ow, float dt)
@@ -111,10 +130,12 @@ void OverworldUpdate(OverworldState *ow, float dt)
         }
     }
 
-    // Non-step: check interact key for adjacent NPCs
+    // Non-step: check interact key for adjacent NPCs or surprise attacks
     if (IsInteractPressed() && !ow->player.moving) {
         int tx = ow->player.tileX;
         int ty = ow->player.tileY;
+
+        // NPCs take priority over enemies (dialogue is non-destructive)
         for (int i = 0; i < ow->npcCount; i++) {
             if (NpcIsInteractable(&ow->npcs[i], tx, ty)) {
                 const char *pages[NPC_MAX_DIALOGUE_PAGES];
@@ -123,6 +144,15 @@ void OverworldUpdate(OverworldState *ow, float dt)
                 DialogueBegin(&ow->dialogue, pages, ow->npcs[i].dialogueCount, 30.0f);
                 return;
             }
+        }
+
+        // Surprise strike on an unaware adjacent enemy
+        int surpriseIdx = FindSurpriseTarget(ow, tx, ty);
+        if (surpriseIdx >= 0) {
+            ow->pendingBattle     = true;
+            ow->pendingEnemyIdx   = surpriseIdx;
+            ow->preemptiveAttack  = true;
+            return;
         }
     }
 
@@ -162,15 +192,22 @@ void OverworldDraw(const OverworldState *ow)
         // Draw player
         PlayerDraw(&ow->player);
 
-        // Interact prompt (show "!" above nearest interactable NPC)
+        // Interact prompts: "!" above interactable NPCs and unaware enemies
         if (!ow->player.moving && !ow->dialogue.active) {
+            int tilePixels = TILE_SIZE * TILE_SCALE;
             for (int i = 0; i < ow->npcCount; i++) {
                 if (NpcIsInteractable(&ow->npcs[i], ow->player.tileX, ow->player.tileY)) {
-                    int tilePixels = TILE_SIZE * TILE_SCALE;
                     int px = ow->npcs[i].tileX * tilePixels + tilePixels / 2 - 5;
                     int py = ow->npcs[i].tileY * tilePixels - 16;
                     DrawText("!", px, py, 20, YELLOW);
                 }
+            }
+            int surpriseIdx = FindSurpriseTarget(ow, ow->player.tileX, ow->player.tileY);
+            if (surpriseIdx >= 0) {
+                const OverworldEnemy *e = &ow->enemies[surpriseIdx];
+                int px = e->tileX * tilePixels + tilePixels / 2 - 6;
+                int py = e->tileY * tilePixels - 20;
+                DrawText("Z!", px, py, 18, (Color){255, 180, 60, 255});
             }
         }
     EndMode2D();

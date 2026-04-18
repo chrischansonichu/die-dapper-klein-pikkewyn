@@ -30,6 +30,11 @@ BattleResult GetLastBattleResult(void)
     return gLastResult;
 }
 
+void BattleSetPreemptive(bool preemptive)
+{
+    gBattleCtx.preemptiveAttack = preemptive;
+}
+
 //----------------------------------------------------------------------------------
 // Battle Screen Functions
 //----------------------------------------------------------------------------------
