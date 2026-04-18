@@ -1,6 +1,8 @@
 ## Die Dapper Klein Pikkewyn
 
-![Die Dapper Klein Pikkewyn](screenshots/screenshot000.png "Die Dapper Klein Pikkewyn")
+![Die Dapper Klein Pikkewyn](screenshots/screenshot001.png "Die Dapper Klein Pikkewyn")
+![Battle Screen](screenshots/screenshot002.png "Battle screen")
+![Level completion](screenshots/screenshot003.png "Level completion")
 
 ### Description
 
