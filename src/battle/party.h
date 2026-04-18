@@ -2,6 +2,7 @@
 #define PARTY_H
 
 #include "combatant.h"
+#include "inventory.h"
 
 //----------------------------------------------------------------------------------
 // Party - the player's group of combatants
@@ -13,6 +14,7 @@ typedef struct Party {
     Combatant members[PARTY_MAX];
     int       count;
     int       activeIndex;   // who is currently acting in battle
+    Inventory inventory;     // shared bag (items + unequipped weapons)
 } Party;
 
 void PartyInit(Party *p);

@@ -1,5 +1,6 @@
 #include "battle.h"
 #include "../data/move_defs.h"
+#include "../data/item_defs.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -351,11 +352,37 @@ void BattleUpdate(BattleContext *ctx, float dt)
     case BS_ACTION_MENU: {
         int action = BattleMenuUpdateRoot(&ctx->menu);
         if (action == BMENU_FIGHT)  ctx->state = BS_MOVE_SELECT;
+        if (action == BMENU_ITEM) {
+            ctx->menu.itemCursor = 0;
+            ctx->state = BS_ITEM_SELECT;
+        }
         if (action == BMENU_PASS) { ctx->selectedMove = -1; ctx->state = BS_EXECUTE; }
-        if (action == BMENU_ITEM || action == BMENU_SWITCH) {
+        if (action == BMENU_SWITCH) {
             // Stub: not yet implemented, treat as PASS
             ctx->selectedMove = -1;
             ctx->state = BS_EXECUTE;
+        }
+        break;
+    }
+
+    case BS_ITEM_SELECT: {
+        int sel = BattleMenuUpdateItemSelect(&ctx->menu, ctx->party->inventory.itemCount);
+        if (sel == -2) { ctx->state = BS_ACTION_MENU; break; }
+        if (sel >= 0) {
+            Combatant *actor = GetCurrentActor(ctx);
+            if (!actor) break;
+            const ItemStack *stk = &ctx->party->inventory.items[sel];
+            const ItemDef   *it  = GetItemDef(stk->itemId);
+            int healed = 0;
+            if (it->effect == ITEM_EFFECT_HEAL)       healed = CombatantHeal(actor, it->amount);
+            else if (it->effect == ITEM_EFFECT_HEAL_FULL) healed = CombatantHeal(actor, actor->maxHp);
+            snprintf(ctx->narration, NARRATION_LEN,
+                     "%s ate %s and recovered %d HP!", actor->name, it->name, healed);
+            InventoryConsumeItem(&ctx->party->inventory, sel);
+            // Consume turn (no damage anim needed)
+            ctx->selectedMove   = -1;
+            ctx->targetEnemyIdx = -1;
+            ctx->state = BS_NARRATION;
         }
         break;
     }
@@ -367,8 +394,18 @@ void BattleUpdate(BattleContext *ctx, float dt)
         if (sel >= 0) {
             // Ignore selection if move is broken
             if (actor->moveDurability[sel] == 0) break;
+            const MoveDef *mvCheck = GetMoveDef(actor->moveIds[sel]);
+            // Enforce MELEE range: actor must be in their front column
+            if (mvCheck->range == RANGE_MELEE) {
+                GridPos ap;
+                bool isEn = CurrentActorIsEnemy(ctx);
+                if (BattleGridFind(&ctx->grid, isEn, CurrentActorIdx(ctx), &ap)) {
+                    int frontCol = isEn ? 0 : GRID_COLS - 1;
+                    if (ap.col != frontCol) break; // silently reject — "TOO FAR" shown in UI
+                }
+            }
             ctx->selectedMove = sel;
-            const MoveDef *mv = GetMoveDef(actor->moveIds[sel]);
+            const MoveDef *mv = mvCheck;
 
             // Count living enemies to decide if target selection is needed
             int liveCount = 0;
@@ -493,18 +530,28 @@ void BattleDraw(const BattleContext *ctx)
     // Draw a horizon line
     DrawLine(0, 240, GetScreenWidth(), 240, (Color){40, 60, 120, 255});
 
-    // Grid cells
+    // Grid cells — front columns tinted to show the melee "combat zone"
+    int playerFrontCol = GRID_COLS - 1; // rightmost col is player's front
+    int enemyFrontCol  = 0;             // leftmost col is enemy's front
     for (int c = 0; c < GRID_COLS; c++) {
         for (int r = 0; r < GRID_ROWS; r++) {
             // Player grid
             Rectangle pr = BattleGridCellRect(false, c, r);
-            DrawRectangleRec(pr, (Color){20, 30, 70, 200});
-            DrawRectangleLinesEx(pr, 1, (Color){50, 70, 140, 255});
+            Color pFill = (c == playerFrontCol) ? (Color){40, 60, 110, 220}
+                                                : (Color){20, 30, 70, 200};
+            Color pLine = (c == playerFrontCol) ? (Color){120, 160, 240, 255}
+                                                : (Color){50, 70, 140, 255};
+            DrawRectangleRec(pr, pFill);
+            DrawRectangleLinesEx(pr, 1, pLine);
 
             // Enemy grid
             Rectangle er = BattleGridCellRect(true, c, r);
-            DrawRectangleRec(er, (Color){70, 20, 20, 200});
-            DrawRectangleLinesEx(er, 1, (Color){140, 50, 50, 255});
+            Color eFill = (c == enemyFrontCol) ? (Color){110, 40, 40, 220}
+                                               : (Color){70, 20, 20, 200};
+            Color eLine = (c == enemyFrontCol) ? (Color){240, 120, 120, 255}
+                                               : (Color){140, 50, 50, 255};
+            DrawRectangleRec(er, eFill);
+            DrawRectangleLinesEx(er, 1, eLine);
         }
     }
 
@@ -578,8 +625,20 @@ void BattleDraw(const BattleContext *ctx)
         BattleMenuDrawRoot(&ctx->menu);
         break;
 
-    case BS_MOVE_SELECT:
-        BattleMenuDrawMoveSelect(&ctx->menu, GetCurrentActor((BattleContext *)ctx));
+    case BS_MOVE_SELECT: {
+        GridPos ap;
+        bool isEn = CurrentActorIsEnemy(ctx);
+        bool inFront = false;
+        if (BattleGridFind(&((BattleContext *)ctx)->grid, isEn, CurrentActorIdx(ctx), &ap)) {
+            int frontCol = isEn ? 0 : GRID_COLS - 1;
+            inFront = (ap.col == frontCol);
+        }
+        BattleMenuDrawMoveSelect(&ctx->menu, GetCurrentActor((BattleContext *)ctx), inFront);
+        break;
+    }
+
+    case BS_ITEM_SELECT:
+        BattleMenuDrawItemSelect(&ctx->menu, &ctx->party->inventory);
         break;
 
     case BS_TARGET_SELECT: {
@@ -617,9 +676,34 @@ void BattleDraw(const BattleContext *ctx)
         break;
     }
 
-    // Column labels
+    // Side headers
     DrawText("YOUR SIDE", 40, 55, 14, (Color){100, 140, 220, 255});
     DrawText("ENEMIES",  430, 55, 14, (Color){220, 100, 100, 255});
+
+    // Row-under-grid orientation hints
+    // Player grid: BACK | MID | FRONT→  (front is rightmost column)
+    // Enemy grid:  ←FRONT | MID | BACK  (front is leftmost column)
+    {
+        Rectangle pc0 = BattleGridCellRect(false, 0, GRID_ROWS - 1);
+        Rectangle pc2 = BattleGridCellRect(false, GRID_COLS - 1, GRID_ROWS - 1);
+        int labelY = (int)(pc0.y + pc0.height + 4);
+        DrawText("BACK",   (int)pc0.x + 8, labelY, 10, (Color){120, 140, 180, 200});
+        DrawText("FRONT>", (int)pc2.x + 2, labelY, 10, (Color){220, 220, 120, 255});
+
+        Rectangle ec0 = BattleGridCellRect(true, 0, GRID_ROWS - 1);
+        Rectangle ec2 = BattleGridCellRect(true, GRID_COLS - 1, GRID_ROWS - 1);
+        DrawText("<FRONT", (int)ec0.x + 2, labelY, 10, (Color){220, 220, 120, 255});
+        DrawText("BACK",   (int)ec2.x + 8, labelY, 10, (Color){180, 140, 140, 200});
+    }
+
+    // Center "facing" arrow between the two grids
+    {
+        Rectangle pFront = BattleGridCellRect(false, GRID_COLS - 1, 1);
+        Rectangle eFront = BattleGridCellRect(true, 0, 1);
+        int ax = (int)((pFront.x + pFront.width + eFront.x) / 2);
+        int ay = (int)(pFront.y + pFront.height / 2) - 8;
+        DrawText("><", ax - 10, ay, 20, (Color){220, 220, 120, 255});
+    }
 }
 
 void BattleUnload(BattleContext *ctx)

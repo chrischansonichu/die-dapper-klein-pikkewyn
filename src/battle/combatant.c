@@ -90,6 +90,54 @@ bool CombatantAddXp(Combatant *c, int amount)
     return false;
 }
 
+int CombatantWeaponCount(const Combatant *c)
+{
+    int n = 0;
+    for (int i = 0; i < c->moveCount; i++) {
+        if (c->moveIds[i] < 0) continue;
+        if (GetMoveDef(c->moveIds[i])->isWeapon) n++;
+    }
+    return n;
+}
+
+bool CombatantEquipWeapon(Combatant *c, int moveId, int durability)
+{
+    if (c->moveCount >= CREATURE_MAX_MOVES) return false;
+    c->moveIds[c->moveCount]        = moveId;
+    c->moveDurability[c->moveCount] = durability;
+    c->moveCount++;
+    return true;
+}
+
+bool CombatantUnequipWeapon(Combatant *c, int slot, int *outMoveId, int *outDurability)
+{
+    if (slot < 0 || slot >= c->moveCount) return false;
+    if (c->moveIds[slot] < 0) return false;
+    if (!GetMoveDef(c->moveIds[slot])->isWeapon) return false;
+
+    *outMoveId     = c->moveIds[slot];
+    *outDurability = c->moveDurability[slot];
+
+    // Shift remaining slots down to keep moveIds/moveDurability compact
+    for (int i = slot; i < c->moveCount - 1; i++) {
+        c->moveIds[i]        = c->moveIds[i + 1];
+        c->moveDurability[i] = c->moveDurability[i + 1];
+    }
+    c->moveCount--;
+    c->moveIds[c->moveCount]        = -1;
+    c->moveDurability[c->moveCount] = -1;
+    return true;
+}
+
+int CombatantHeal(Combatant *c, int amount)
+{
+    if (!c->alive || amount <= 0) return 0;
+    int before = c->hp;
+    c->hp += amount;
+    if (c->hp > c->maxHp) c->hp = c->maxHp;
+    return c->hp - before;
+}
+
 void ApplyStatusMove(Combatant *targets[], int count, const MoveDef *move, bool isEnemy)
 {
     (void)isEnemy;

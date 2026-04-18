@@ -1,4 +1,5 @@
 #include "overworld.h"
+#include "../data/item_defs.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -48,24 +49,29 @@ static void AddTestEnemies(OverworldState *ow)
     OverworldEnemy *s1 = &ow->enemies[ow->enemyCount++];
     EnemyInit(s1, 10, 11, 0, BEHAVIOR_STAND, 1, 3, 5, (Color){200, 60, 60, 255});
     s1->wanderInterval = 90;
+    EnemySetDrops(s1, ITEM_KRILL_SNACK, 70, -1, 0);
 
     OverworldEnemy *s2 = &ow->enemies[ow->enemyCount++];
     EnemyInit(s2, 14, 10, 0, BEHAVIOR_STAND, 1, 3, 5, (Color){200, 80, 50, 255});
     s2->wanderInterval = 110;
+    EnemySetDrops(s2, ITEM_FRESH_FISH, 60, 2, 25);  // ShellThrow
 
     // 2x WANDER sailors in the shallow water
     OverworldEnemy *w1 = &ow->enemies[ow->enemyCount++];
     EnemyInit(w1, 6, 6, 0, BEHAVIOR_WANDER, 1, 2, 4, (Color){160, 80, 180, 255});
     w1->wanderInterval = 70;
+    EnemySetDrops(w1, ITEM_KRILL_SNACK, 80, -1, 0);
 
     OverworldEnemy *w2 = &ow->enemies[ow->enemyCount++];
     EnemyInit(w2, 16, 8, 2, BEHAVIOR_WANDER, 2, 4, 4, (Color){180, 60, 140, 255});
     w2->wanderInterval = 100;
+    EnemySetDrops(w2, ITEM_SARDINE, 50, 1, 30);     // FishingHook
 
     // 1x PATROL sailor along the far end of the dock (keeps spawn safe)
     OverworldEnemy *p1 = &ow->enemies[ow->enemyCount++];
     EnemyInit(p1, 15, 13, 1, BEHAVIOR_PATROL, 2, 4, 6, (Color){220, 120, 40, 255});
     EnemySetPatrol(p1, 12, 13, 18, 13);
+    EnemySetDrops(p1, ITEM_SARDINE, 70, 3, 35);     // SeaUrchinSpike
 }
 
 void OverworldInit(OverworldState *ow)
@@ -79,9 +85,14 @@ void OverworldInit(OverworldState *ow)
     // Spawn player on the beach
     PlayerInit(&ow->player, 8, 14);
 
-    // Party: Jan starts alone
+    // Party: Jan starts alone with a couple starter snacks
     PartyInit(&ow->party);
     PartyAddMember(&ow->party, CREATURE_JAN, 5);
+    InventoryAddItem(&ow->party.inventory, ITEM_KRILL_SNACK, 2);
+    InventoryAddItem(&ow->party.inventory, ITEM_FRESH_FISH, 1);
+
+    // Inventory overlay closed on start
+    InventoryUIInit(&ow->invUi);
 
     // Camera
     int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;
@@ -102,6 +113,17 @@ void OverworldInit(OverworldState *ow)
 void OverworldUpdate(OverworldState *ow, float dt)
 {
     (void)dt;
+
+    // Inventory overlay captures all input while open
+    if (ow->invUi.active) {
+        InventoryUIUpdate(&ow->invUi, &ow->party);
+        return;
+    }
+    // Open inventory with I (only while not moving / no dialogue)
+    if (IsKeyPressed(KEY_I) && !ow->dialogue.active && !ow->player.moving) {
+        InventoryUIOpen(&ow->invUi);
+        return;
+    }
 
     // If dialogue is active, update it and skip overworld input
     if (ow->dialogue.active) {
@@ -232,11 +254,16 @@ void OverworldDraw(const OverworldState *ow)
     }
 
     // Controls hint
-    DrawText("Arrows: Move | Z: Interact", 8, GetScreenHeight() - 22, 14, (Color){150, 150, 150, 200});
+    DrawText("Arrows: Move | Z: Interact | I: Inventory", 8, GetScreenHeight() - 22, 14, (Color){150, 150, 150, 200});
 
     // Dialogue overlay
     if (ow->dialogue.active) {
         DialogueDraw(&ow->dialogue);
+    }
+
+    // Inventory overlay
+    if (ow->invUi.active) {
+        InventoryUIDraw(&ow->invUi, &ow->party);
     }
 }
 

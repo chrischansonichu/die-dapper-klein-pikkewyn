@@ -6,6 +6,7 @@ void PartyInit(Party *p)
     memset(p, 0, sizeof(Party));
     p->count       = 0;
     p->activeIndex = 0;
+    InventoryInit(&p->inventory);
 }
 
 void PartyAddMember(Party *p, int creatureId, int level)

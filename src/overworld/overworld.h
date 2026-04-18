@@ -10,6 +10,7 @@
 #include "../battle/party.h"
 #include "../systems/camera_system.h"
 #include "../systems/dialogue.h"
+#include "inventory_ui.h"
 
 //----------------------------------------------------------------------------------
 // OverworldState - the complete overworld subsystem
@@ -34,6 +35,9 @@ typedef struct OverworldState {
 
     // Dialogue
     DialogueBox   dialogue;
+
+    // Inventory overlay
+    InventoryUI   invUi;
 
     // Pending battle (set when an enemy reaches the player, or when Jan
     // initiates a surprise strike on an unaware enemy)

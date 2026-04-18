@@ -9,6 +9,11 @@
 #include "screens.h"
 #include "overworld/overworld.h"
 #include "overworld/enemy.h"
+#include "battle/inventory.h"
+#include "data/item_defs.h"
+#include "data/move_defs.h"
+#include <stdio.h>
+#include <string.h>
 
 //----------------------------------------------------------------------------------
 // Module Variables Definition (local)
@@ -17,9 +22,38 @@ static int  finishScreen  = 0;
 static bool gInitialized  = false;  // false until first OverworldInit
 static OverworldState gOverworld = {0};
 
+// Persistent storage for the drop dialogue pages — DialogueBegin keeps pointers
+// into these buffers, so they must outlive the call.
+#define DROP_MSG_PAGES 2
+#define DROP_MSG_LEN   160
+static char gDropMsg[DROP_MSG_PAGES][DROP_MSG_LEN];
+
 //----------------------------------------------------------------------------------
 // Gameplay Screen Functions Definition
 //----------------------------------------------------------------------------------
+
+// Roll drops on the defeated enemy, append to inventory, and prepare a dialogue
+// describing what was picked up. Returns number of dialogue pages populated.
+static int RollEnemyDrops(OverworldEnemy *e, Inventory *inv)
+{
+    int pages = 0;
+    if (e->dropItemId >= 0 && GetRandomValue(1, 100) <= e->dropItemPct) {
+        const ItemDef *it = GetItemDef(e->dropItemId);
+        if (InventoryAddItem(inv, e->dropItemId, 1)) {
+            snprintf(gDropMsg[pages], DROP_MSG_LEN, "Got %s!", it->name);
+            pages++;
+        }
+    }
+    if (e->dropWeaponId >= 0 && GetRandomValue(1, 100) <= e->dropWeaponPct && pages < DROP_MSG_PAGES) {
+        const MoveDef *mv = GetMoveDef(e->dropWeaponId);
+        if (mv->isWeapon && InventoryAddWeapon(inv, e->dropWeaponId, mv->defaultDurability)) {
+            snprintf(gDropMsg[pages], DROP_MSG_LEN,
+                     "Picked up a %s! (open inventory with I to equip)", mv->name);
+            pages++;
+        }
+    }
+    return pages;
+}
 
 void InitGameplayScreen(void)
 {
@@ -35,11 +69,18 @@ void InitGameplayScreen(void)
     } else {
         // Returning from battle: reload textures, preserve all game state
         OverworldReloadResources(&gOverworld);
-        // Deactivate the enemy that was just defeated
+        // Deactivate the enemy that was just defeated + roll drops
         if (GetLastBattleResult() == BATTLE_VICTORY &&
             gOverworld.pendingEnemyIdx >= 0 &&
             gOverworld.pendingEnemyIdx < gOverworld.enemyCount) {
-            gOverworld.enemies[gOverworld.pendingEnemyIdx].active = false;
+            OverworldEnemy *e = &gOverworld.enemies[gOverworld.pendingEnemyIdx];
+            int pages = RollEnemyDrops(e, &gOverworld.party.inventory);
+            e->active = false;
+            if (pages > 0) {
+                const char *ptrs[DROP_MSG_PAGES];
+                for (int i = 0; i < pages; i++) ptrs[i] = gDropMsg[i];
+                DialogueBegin(&gOverworld.dialogue, ptrs, pages, 40.0f);
+            }
         }
         gOverworld.pendingEnemyIdx = -1;
     }

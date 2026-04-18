@@ -22,6 +22,7 @@ typedef enum BattleState {
     BS_MOVE_PHASE,           // current combatant selects a cell to move to (or stay)
     BS_ACTION_MENU,          // root menu: FIGHT / ITEM / SWITCH / PASS
     BS_MOVE_SELECT,          // pick a move from the combatant's move list
+    BS_ITEM_SELECT,          // pick a consumable from the party inventory
     BS_TARGET_SELECT,        // pick a target cell (ranged/AOE only)
     BS_EXECUTE,              // resolve the action
     BS_ANIM,                 // play hit/faint animation

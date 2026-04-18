@@ -39,4 +39,18 @@ void ApplyStatusMove(Combatant *targets[], int count, const MoveDef *move, bool 
 int  CombatantXpReward(const Combatant *c);
 bool CombatantAddXp(Combatant *c, int amount);  // returns true if leveled up
 
+// Count currently-equipped weapon moves (scans moveIds for isWeapon==true)
+int  CombatantWeaponCount(const Combatant *c);
+
+// Equip a weapon into an empty move slot. Returns true if added.
+// If slots are full (CREATURE_MAX_MOVES reached) returns false and leaves c unchanged.
+bool CombatantEquipWeapon(Combatant *c, int moveId, int durability);
+
+// Unequip the weapon at moveIds[slot]. Writes the displaced weapon into *out
+// (moveId + remaining durability). Returns false if slot isn't a weapon.
+bool CombatantUnequipWeapon(Combatant *c, int slot, int *outMoveId, int *outDurability);
+
+// Apply a healing amount to c->hp, capped at c->maxHp. Returns actual HP restored.
+int  CombatantHeal(Combatant *c, int amount);
+
 #endif // COMBATANT_H

@@ -1,6 +1,8 @@
 #ifndef MOVE_DEFS_H
 #define MOVE_DEFS_H
 
+#include <stdbool.h>
+
 //----------------------------------------------------------------------------------
 // Move definitions - static data table for all attacks/abilities
 //----------------------------------------------------------------------------------
@@ -23,6 +25,7 @@ typedef struct MoveDef {
     int       power;             // damage base; 0 = status move
     MoveRange range;
     int       defaultDurability; // -1 = unlimited; >0 = uses before broken
+    bool      isWeapon;          // true = equippable weapon (swappable); false = innate move
 } MoveDef;
 
 // Forward declaration - defined in move_defs.c

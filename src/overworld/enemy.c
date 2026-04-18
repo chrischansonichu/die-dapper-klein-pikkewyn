@@ -127,6 +127,19 @@ void EnemyInit(OverworldEnemy *e, int tileX, int tileY, int dir,
     e->targetTileX    = tileX;
     e->targetTileY    = tileY;
     e->alertTimer     = 0.0f;
+    e->dropItemId     = -1;
+    e->dropItemPct    = 0;
+    e->dropWeaponId   = -1;
+    e->dropWeaponPct  = 0;
+}
+
+void EnemySetDrops(OverworldEnemy *e, int itemId, int itemPct,
+                   int weaponId, int weaponPct)
+{
+    e->dropItemId    = itemId;
+    e->dropItemPct   = itemPct;
+    e->dropWeaponId  = weaponId;
+    e->dropWeaponPct = weaponPct;
 }
 
 void EnemySetPatrol(OverworldEnemy *e, int x0, int y0, int x1, int y1)

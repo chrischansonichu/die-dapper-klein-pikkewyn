@@ -1,0 +1,43 @@
+#ifndef INVENTORY_UI_H
+#define INVENTORY_UI_H
+
+#include <stdbool.h>
+#include "../battle/party.h"
+
+//----------------------------------------------------------------------------------
+// InventoryUI - overlay for viewing and managing the party inventory outside battle
+//----------------------------------------------------------------------------------
+
+typedef enum InventoryTab {
+    INV_TAB_ITEMS = 0,
+    INV_TAB_WEAPONS,
+    INV_TAB_COUNT,
+} InventoryTab;
+
+typedef struct InventoryUI {
+    bool         active;
+    InventoryTab tab;
+    int          cursor;        // row within the current tab
+    // For weapons tab, the cursor also navigates between equipped slots of the party leader.
+    // equippedFocus == true means cursor is on an equipped slot (0..leader.moveCount-1);
+    // false means cursor is in the bag list.
+    bool         equippedFocus;
+    char         status[128];   // last action message, e.g. "Ate Fresh Fish +30 HP"
+} InventoryUI;
+
+void InventoryUIInit(InventoryUI *ui);
+
+// Returns true if UI just opened or was already open. Should be checked each frame
+// before processing overworld input.
+bool InventoryUIIsOpen(const InventoryUI *ui);
+
+void InventoryUIOpen(InventoryUI *ui);
+void InventoryUIClose(InventoryUI *ui);
+
+// Update overlay. Consumes input when active. Returns true if still open after update.
+bool InventoryUIUpdate(InventoryUI *ui, Party *party);
+
+// Draw overlay (screen space, call after world draw).
+void InventoryUIDraw(const InventoryUI *ui, const Party *party);
+
+#endif // INVENTORY_UI_H

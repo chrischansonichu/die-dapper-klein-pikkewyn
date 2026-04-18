@@ -52,6 +52,12 @@ typedef struct OverworldEnemy {
 
     // Alert countdown
     float         alertTimer;
+
+    // Drops on defeat. Both are optional; set via EnemySetDrops.
+    int           dropItemId;      // -1 = no item drop
+    int           dropItemPct;     // 0..100
+    int           dropWeaponId;    // -1 = no weapon drop
+    int           dropWeaponPct;   // 0..100
 } OverworldEnemy;
 
 // Initialize a standing/wandering enemy.
@@ -62,6 +68,10 @@ void EnemyInit(OverworldEnemy *e, int tileX, int tileY, int dir,
 
 // Set patrol waypoints (only meaningful for BEHAVIOR_PATROL).
 void EnemySetPatrol(OverworldEnemy *e, int x0, int y0, int x1, int y1);
+
+// Set drops for this enemy. Pass -1 for either ID to disable that drop.
+void EnemySetDrops(OverworldEnemy *e, int itemId, int itemPct,
+                   int weaponId, int weaponPct);
 
 // Update one enemy for this frame (dt in seconds).
 // Returns true if the enemy has just reached the player and a battle should start.
