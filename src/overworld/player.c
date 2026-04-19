@@ -5,69 +5,6 @@
 static const int DIR_DX[4] = {  0, -1,  1,  0 };
 static const int DIR_DY[4] = {  1,  0,  0, -1 };
 
-// Reuse penguin pixel art builder from screen_gameplay.c approach
-static Image BuildPenguinImage(int TILE, int FRAMES)
-{
-    const int W = TILE * FRAMES, H = TILE * 4;
-    Image img = GenImageColor(W, H, (Color){0, 0, 0, 0});
-
-    for (int row = 0; row < 4; ++row) {
-        for (int f = 0; f < FRAMES; ++f) {
-            const int ox = f * TILE;
-            const int oy = row * TILE;
-
-            for (int y = 2; y < TILE - 1; ++y)
-                for (int x = 3; x < TILE - 3; ++x)
-                    ImageDrawPixel(&img, ox + x, oy + y, BLACK);
-
-            for (int y = 4; y < TILE - 3; ++y)
-                for (int x = 5; x < TILE - 5; ++x)
-                    ImageDrawPixel(&img, ox + x, oy + y, WHITE);
-
-            for (int y = 2; y < 6; ++y)
-                for (int x = 4; x < TILE - 4; ++x)
-                    ImageDrawPixel(&img, ox + x, oy + y, BLACK);
-
-            // Row 3 is the back of the head — no eyes, no beak on the face.
-            // A small black crown patch extends over the white belly so the
-            // silhouette reads as looking away.
-            if (row == 3) {
-                for (int y = 4; y < 9; ++y)
-                    for (int x = 5; x < TILE - 5; ++x)
-                        ImageDrawPixel(&img, ox + x, oy + y, BLACK);
-            } else {
-                const int eyeY = 4;
-                const int eyeL = (row == 1) ? 5 : (row == 2) ? 7 : 6;
-                const int eyeR = (row == 1) ? 8 : (row == 2) ? 10 : 9;
-                ImageDrawPixel(&img, ox + eyeL, oy + eyeY, WHITE);
-                ImageDrawPixel(&img, ox + eyeR, oy + eyeY, WHITE);
-
-                const int beakX = (row == 1) ? 4 : (row == 2) ? 11 : 7;
-                for (int bx = 0; bx < 2; ++bx)
-                    for (int by = 0; by < 2; ++by)
-                        ImageDrawPixel(&img, ox + beakX + bx, oy + 6 + by, ORANGE);
-            }
-
-            ImageDrawPixel(&img, ox + 3, oy + 8, BLACK);
-            ImageDrawPixel(&img, ox + 12, oy + 8, BLACK);
-
-            const int footOffset = (f == 0) ? 0 : 1;
-            ImageDrawPixel(&img, ox + 6 - footOffset, oy + 13, ORANGE);
-            ImageDrawPixel(&img, ox + 9 + footOffset, oy + 13, ORANGE);
-        }
-    }
-    return img;
-}
-
-Texture2D PlayerBuildAtlas(void)
-{
-    Image img = BuildPenguinImage(16, 2);
-    Texture2D t = LoadTextureFromImage(img);
-    UnloadImage(img);
-    SetTextureFilter(t, TEXTURE_FILTER_POINT);
-    return t;
-}
-
 void PlayerInit(Player *p, int startTileX, int startTileY)
 {
     p->tileX        = startTileX;
@@ -85,7 +22,6 @@ void PlayerInit(Player *p, int startTileX, int startTileY)
     p->onWater        = false;
     p->dryingFrames   = 0;
     p->turnDelayFrames = 0;
-    p->atlas        = PlayerBuildAtlas();
 }
 
 // Map current key state to a direction index (0=down 1=left 2=right 3=up),
@@ -174,6 +110,88 @@ void PlayerUpdate(Player *p, const TileMap *m, const struct OverworldState *ow)
     }
 }
 
+// Rounded procedural Jan — same visual language as DrawPenguinElder and
+// DrawSeal (rounded rectangles, circles, triangles; no pixel-art, no hard
+// outlines). Facing direction drives eye-pupil offset + beak rotation +
+// foot step; no atlas needed.
+static void DrawJanRounded(float px, float py, float sz, int dir, int frame)
+{
+    const Color black  = (Color){ 25,  25,  30, 255};
+    const Color cream  = (Color){235, 215, 160, 255};
+    const Color orange = (Color){255, 160,  40, 255};
+
+    float cx = px + sz * 0.5f;
+
+    // Body (rounded black rectangle) — leaves room for the head/beak up top
+    // and feet at the bottom.
+    Rectangle body = { px + sz * 0.18f, py + sz * 0.22f,
+                       sz * 0.64f, sz * 0.66f };
+    DrawRectangleRounded(body, 0.55f, 14, black);
+
+    // Cream belly — only visible from the front or in profile. Hidden
+    // when Jan is facing away so the back of him reads as solid black.
+    if (dir != 3) {
+        Rectangle belly = { px + sz * 0.30f, py + sz * 0.40f,
+                            sz * 0.40f, sz * 0.44f };
+        DrawRectangleRounded(belly, 0.6f, 12, cream);
+    }
+
+    // Eyes — white with a black pupil that shifts by facing direction.
+    float eyeY   = py + sz * 0.36f;
+    float eyeLX  = cx - sz * 0.13f;
+    float eyeRX  = cx + sz * 0.13f;
+    float pupilDX = 0.0f, pupilDY = 0.0f;
+    if (dir == 0) pupilDY =  1.0f;
+    if (dir == 3) pupilDY = -1.0f;
+    if (dir == 1) pupilDX = -1.0f;
+    if (dir == 2) pupilDX =  1.0f;
+
+    if (dir != 3) {
+        DrawCircle((int)eyeLX, (int)eyeY, sz * 0.06f, WHITE);
+        DrawCircle((int)eyeRX, (int)eyeY, sz * 0.06f, WHITE);
+        DrawCircle((int)(eyeLX + pupilDX), (int)(eyeY + pupilDY),
+                   sz * 0.03f, black);
+        DrawCircle((int)(eyeRX + pupilDX), (int)(eyeY + pupilDY),
+                   sz * 0.03f, black);
+    }
+
+    // Orange beak — triangle rotated to point in the facing direction.
+    // Back-facing (dir 3) hides the beak so the silhouette reads as
+    // looking away; the feet below stay visible as a facing cue.
+    float bx = cx;
+    float by = py + sz * 0.50f;
+    float reach = sz * 0.14f;
+    float halfW = sz * 0.08f;
+    switch (dir) {
+        case 0: // down
+            DrawTriangle((Vector2){bx - halfW, by},
+                         (Vector2){bx,         by + reach},
+                         (Vector2){bx + halfW, by}, orange);
+            break;
+        case 1: // left
+            DrawTriangle((Vector2){bx,         by - halfW},
+                         (Vector2){bx - reach, by},
+                         (Vector2){bx,         by + halfW}, orange);
+            break;
+        case 2: // right
+            DrawTriangle((Vector2){bx,         by - halfW},
+                         (Vector2){bx,         by + halfW},
+                         (Vector2){bx + reach, by}, orange);
+            break;
+        case 3: break;  // back view: no beak
+    }
+
+    // Orange feet — walking animation shifts the feet apart on frame 1.
+    float footY     = py + sz * 0.88f;
+    float footW     = sz * 0.14f;
+    float footH     = sz * 0.08f;
+    float footShift = (frame == 1) ? sz * 0.03f : 0.0f;
+    DrawRectangle((int)(px + sz * 0.30f - footShift), (int)footY,
+                  (int)footW, (int)footH, orange);
+    DrawRectangle((int)(px + sz * 0.56f + footShift), (int)footY,
+                  (int)footW, (int)footH, orange);
+}
+
 void PlayerDraw(const Player *p)
 {
     int tilePixels = TILE_SIZE * TILE_SCALE;
@@ -189,110 +207,53 @@ void PlayerDraw(const Player *p)
         px += sinf(phase) * 2.0f;
     }
 
-    Rectangle src = {
-        (float)(p->animFrame * 16),
-        (float)(p->dir * 16),
-        16.0f, 16.0f
-    };
-    Rectangle dst = {
-        px, py,
-        (float)(16 * p->scale),
-        (float)(16 * p->scale)
-    };
+    float sz = (float)tilePixels;
+    float cx = px + sz * 0.5f;
 
-    // Swimming: draw a water ripple ellipse behind the body and clip the
-    // lower half of the sprite by drawing a water-colored band over it so
-    // only head+shoulders are visible.
+    // Water ripple ellipse behind the body while swimming.
     if (p->onWater) {
-        float rx = dst.x + dst.width * 0.5f;
-        float ry = dst.y + dst.height * 0.70f;
-        DrawEllipse((int)rx, (int)ry, dst.width * 0.45f, dst.height * 0.14f,
+        float rx = cx;
+        float ry = py + sz * 0.80f;
+        DrawEllipse((int)rx, (int)ry, sz * 0.45f, sz * 0.14f,
                     (Color){ 30, 110, 170, 160});
     }
 
-    DrawTexturePro(p->atlas, src, dst, (Vector2){0, 0}, 0.0f, WHITE);
+    DrawJanRounded(px, py, sz, p->dir, p->animFrame);
 
+    // Swimming: water line over the legs + two animated wake arcs.
     if (p->onWater) {
-        // Water line that hides the legs/feet.
-        float waterY = dst.y + dst.height * 0.66f;
-        float waterH = dst.height * 0.34f;
-        DrawRectangle((int)dst.x, (int)waterY,
-                      (int)dst.width, (int)waterH,
+        float waterY = py + sz * 0.66f;
+        float waterH = sz * 0.34f;
+        DrawRectangle((int)px, (int)waterY, (int)sz, (int)waterH,
                       (Color){ 40, 120, 185, 230});
-        // Two animated wake arcs behind the swimmer.
         float time = (float)GetTime();
         float wobble = sinf(time * 4.0f) * 2.0f;
         Color foam = (Color){220, 235, 250, 220};
-        DrawLineEx((Vector2){dst.x + 2,                  waterY + 4 + wobble},
-                   (Vector2){dst.x + dst.width * 0.35f,  waterY + 2 + wobble},
+        DrawLineEx((Vector2){px + 2,              waterY + 4 + wobble},
+                   (Vector2){px + sz * 0.35f,     waterY + 2 + wobble},
                    2.0f, foam);
-        DrawLineEx((Vector2){dst.x + dst.width * 0.65f,  waterY + 2 - wobble},
-                   (Vector2){dst.x + dst.width - 2,      waterY + 4 - wobble},
+        DrawLineEx((Vector2){px + sz * 0.65f,     waterY + 2 - wobble},
+                   (Vector2){px + sz - 2,         waterY + 4 - wobble},
                    2.0f, foam);
     }
 
-    // Droplets popping off the head while drying off on land.
+    // Drying droplets popping off the head.
     if (p->dryingFrames > 0) {
         float tNorm = 1.0f - (float)p->dryingFrames / 24.0f;
         Color drop = (Color){170, 220, 255, 230};
-        float baseX = dst.x + dst.width * 0.5f;
-        float baseY = dst.y + dst.height * 0.25f;
+        float baseX = cx;
+        float baseY = py + sz * 0.25f;
         for (int k = -2; k <= 2; k += 2) {
             float fx = baseX + k * 6.0f;
             float fy = baseY - tNorm * 10.0f - (k * k) * 0.8f;
             DrawCircle((int)fx, (int)fy, 2.0f, drop);
         }
     }
-
-    // Facing-direction beak overlay: the pixel-art atlas only shifts the beak
-    // by 1 source px, which reads as 3 rendered px — too subtle for the player
-    // to tell which way they're facing at a glance. Draw a clearly rotated
-    // triangle on top, sized so it's visible from across the screen.
-    const Color beakColor = (Color){255, 150, 30, 255};
-    float cx = dst.x + dst.width  * 0.5f;
-    float cy = dst.y + dst.height * 0.50f;
-    float reach = dst.width * 0.22f;   // how far the tip pokes from center
-    float halfW = dst.width * 0.10f;   // half-width of the base
-
-    Vector2 tip, a, b;
-    switch (p->dir) {
-        case 0: // facing down — beak points toward camera
-            tip = (Vector2){cx,           cy + reach};
-            a   = (Vector2){cx - halfW,   cy};
-            b   = (Vector2){cx + halfW,   cy};
-            DrawTriangle(a, tip, b, beakColor);
-            break;
-        case 3: { // facing up — back of the penguin. No beak; two orange
-                  // foot nubs at the bottom so the silhouette is unambiguous.
-            float footY = dst.y + dst.height * 0.90f;
-            float footH = dst.height * 0.08f;
-            float footW = dst.width  * 0.12f;
-            DrawRectangle((int)(cx - footW * 1.6f), (int)footY,
-                          (int)footW, (int)footH, beakColor);
-            DrawRectangle((int)(cx + footW * 0.6f), (int)footY,
-                          (int)footW, (int)footH, beakColor);
-        } break;
-        case 1: // facing left
-            tip = (Vector2){cx - reach,   cy};
-            a   = (Vector2){cx,           cy - halfW};
-            b   = (Vector2){cx,           cy + halfW};
-            DrawTriangle(tip, b, a, beakColor);
-            break;
-        case 2: // facing right
-            tip = (Vector2){cx + reach,   cy};
-            a   = (Vector2){cx,           cy - halfW};
-            b   = (Vector2){cx,           cy + halfW};
-            DrawTriangle(a, b, tip, beakColor);
-            break;
-    }
 }
 
 void PlayerUnload(Player *p)
 {
-    if (p->atlas.id) {
-        UnloadTexture(p->atlas);
-        p->atlas.id = 0;
-    }
+    (void)p;
 }
 
 Vector2 PlayerPixelPos(const Player *p)

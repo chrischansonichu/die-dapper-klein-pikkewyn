@@ -1,4 +1,5 @@
 #include "overworld.h"
+#include "enemy_sprites.h"
 #include "../data/item_defs.h"
 #include <string.h>
 #include <stdio.h>
@@ -388,7 +389,7 @@ void OverworldReloadResources(OverworldState *ow)
     // Rebuild only the textures that were freed by OverworldUnload.
     // All game state (party HP/XP, player position, enemy state) is untouched.
     ow->map.tileset  = TilesetBuild();
-    ow->player.atlas = PlayerBuildAtlas();
+    EnemySpritesReload();
 
     // Restore camera to current player position
     int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;
@@ -400,4 +401,5 @@ void OverworldUnload(OverworldState *ow)
 {
     TileMapUnload(&ow->map);
     PlayerUnload(&ow->player);
+    EnemySpritesUnload();
 }

@@ -1,5 +1,6 @@
 #include "battle_sprites.h"
 #include "../data/creature_defs.h"
+#include "../overworld/enemy_sprites.h"
 
 // Tint helper: multiplies alpha, or replaces with white when flashing. All
 // per-creature draw helpers funnel colors through this so the flash frame
@@ -65,125 +66,36 @@ static void DrawJanSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
                   (int)(sz * 0.14f), (int)(sz * 0.08f), orange);
 }
 
-// ----- Generic sailor body ------------------------------------------------
-// Shared silhouette primitive so deckhand/bosun/captain look like members of
-// the same species. Each rank just calls this with its own palette + hat fn.
-static void DrawSailorBody(float px, float py, float sz, bool faceLeft,
-                           Color shirt, Color skin, Color pants,
-                           float alpha, bool flash)
+// ----- Shared sailor (procedural rounded) -------------------------------
+// Delegates to the overworld's procedural sailor — same rounded visual
+// language as the Elder Penguin / Seal. Facing-row is picked by `faceLeft`
+// (enemies on the right of the screen face left toward Jan). `flash`
+// tints the whole sprite white for the hit-frame flicker.
+static void DrawSailorFromAtlas(int creatureId, Rectangle r, bool faceLeft,
+                                float alpha, bool flash)
 {
-    Color shirtT = Tint(shirt, alpha, flash);
-    Color skinT  = Tint(skin,  alpha, flash);
-    Color pantsT = Tint(pants, alpha, flash);
-    Color blk    = Tint((Color){25, 25, 30, 255}, alpha, flash);
-
-    float cx = px + sz / 2.0f;
-
-    // Pants
-    DrawRectangle((int)(px + sz * 0.32f), (int)(py + sz * 0.72f),
-                  (int)(sz * 0.36f), (int)(sz * 0.20f), pantsT);
-    // Shoes
-    DrawRectangle((int)(px + sz * 0.28f), (int)(py + sz * 0.90f),
-                  (int)(sz * 0.18f), (int)(sz * 0.06f), blk);
-    DrawRectangle((int)(px + sz * 0.54f), (int)(py + sz * 0.90f),
-                  (int)(sz * 0.18f), (int)(sz * 0.06f), blk);
-    // Torso (shirt)
-    Rectangle torso = { px + sz * 0.26f, py + sz * 0.42f, sz * 0.48f, sz * 0.34f };
-    DrawRectangleRounded(torso, 0.25f, 8, shirtT);
-    // Arms
-    DrawRectangleRounded((Rectangle){px + sz * 0.16f, py + sz * 0.44f,
-                                     sz * 0.14f, sz * 0.28f}, 0.5f, 6, shirtT);
-    DrawRectangleRounded((Rectangle){px + sz * 0.70f, py + sz * 0.44f,
-                                     sz * 0.14f, sz * 0.28f}, 0.5f, 6, shirtT);
-    // Head
-    DrawCircle((int)cx, (int)(py + sz * 0.30f), sz * 0.17f, skinT);
-    // Eyes
-    float eyeY = py + sz * 0.28f;
-    float eyeDX = faceLeft ? -sz * 0.05f : sz * 0.05f;
-    DrawCircle((int)(cx + eyeDX - sz * 0.04f), (int)eyeY, 1.5f, blk);
-    DrawCircle((int)(cx + eyeDX + sz * 0.04f), (int)eyeY, 1.5f, blk);
+    int dir   = faceLeft ? 1 : 2;
+    // Idle sway in battle — both combatants subtly shift at ~1.8 Hz.
+    int frame = ((int)(GetTime() * 1.8)) & 1;
+    EnemySpritesDrawSailor(creatureId, r, dir, frame, alpha, flash);
 }
 
 // ----- Deckhand ----------------------------------------------------------
 static void DrawDeckhandSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
 {
-    float sz = r.height * 0.85f;        // smaller
-    float px = r.x + (r.width - sz) / 2.0f;
-    float py = r.y + (r.height - sz);
-
-    DrawSailorBody(px, py, sz, faceLeft,
-                   (Color){ 40,  60, 140, 255},   // navy shirt
-                   (Color){220, 190, 160, 255},   // skin
-                   (Color){ 30,  40,  70, 255},   // dark pants
-                   alpha, flash);
-
-    // Beanie: small rounded rect
-    Color beanie = Tint((Color){ 30,  50, 110, 255}, alpha, flash);
-    float cx = px + sz / 2.0f;
-    Rectangle hat = { cx - sz * 0.18f, py + sz * 0.14f, sz * 0.36f, sz * 0.12f };
-    DrawRectangleRounded(hat, 0.6f, 6, beanie);
+    DrawSailorFromAtlas(CREATURE_DECKHAND, r, faceLeft, alpha, flash);
 }
 
 // ----- Bosun -------------------------------------------------------------
 static void DrawBosunSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
 {
-    float sz = r.height;                // medium
-    float px = r.x + (r.width - sz) / 2.0f;
-    float py = r.y;
-
-    DrawSailorBody(px, py, sz, faceLeft,
-                   (Color){ 80, 100,  60, 255},   // olive shirt
-                   (Color){210, 180, 150, 255},
-                   (Color){ 45,  55,  35, 255},
-                   alpha, flash);
-
-    // Cap + bill (bill flips with facing)
-    Color cap = Tint((Color){ 55,  70,  40, 255}, alpha, flash);
-    float cx = px + sz / 2.0f;
-    Rectangle crown = { cx - sz * 0.20f, py + sz * 0.12f, sz * 0.40f, sz * 0.12f };
-    DrawRectangleRec(crown, cap);
-    if (faceLeft) {
-        DrawTriangle((Vector2){cx - sz * 0.20f, py + sz * 0.22f},
-                     (Vector2){cx - sz * 0.34f, py + sz * 0.26f},
-                     (Vector2){cx - sz * 0.20f, py + sz * 0.26f}, cap);
-    } else {
-        DrawTriangle((Vector2){cx + sz * 0.20f, py + sz * 0.22f},
-                     (Vector2){cx + sz * 0.20f, py + sz * 0.26f},
-                     (Vector2){cx + sz * 0.34f, py + sz * 0.26f}, cap);
-    }
+    DrawSailorFromAtlas(CREATURE_BOSUN, r, faceLeft, alpha, flash);
 }
 
 // ----- Captain -----------------------------------------------------------
 static void DrawCaptainSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
 {
-    float sz = r.height * 1.05f;       // biggest (slightly overflows)
-    float px = r.x + (r.width - sz) / 2.0f;
-    float py = r.y - sz * 0.05f;
-
-    DrawSailorBody(px, py, sz, faceLeft,
-                   (Color){ 30,  30,  50, 255},   // dark coat
-                   (Color){215, 180, 150, 255},
-                   (Color){ 20,  20,  35, 255},
-                   alpha, flash);
-
-    // Beard (light grey arc under chin)
-    Color beard = Tint((Color){200, 200, 200, 255}, alpha, flash);
-    float cx = px + sz / 2.0f;
-    DrawCircleSector((Vector2){cx, py + sz * 0.34f},
-                     sz * 0.18f, 0, 180, 12, beard);
-
-    // Captain hat
-    Color hat  = Tint((Color){ 15,  15,  25, 255}, alpha, flash);
-    Color gold = Tint((Color){220, 180,  60, 255}, alpha, flash);
-    Rectangle crown = { cx - sz * 0.22f, py + sz * 0.08f, sz * 0.44f, sz * 0.12f };
-    DrawRectangleRec(crown, hat);
-    // Brim (wider, sits just below crown)
-    Rectangle brim = { cx - sz * 0.26f, py + sz * 0.19f, sz * 0.52f, sz * 0.04f };
-    DrawRectangleRec(brim, hat);
-    // Gold band
-    DrawLineEx((Vector2){crown.x, crown.y + crown.height - 1},
-               (Vector2){crown.x + crown.width, crown.y + crown.height - 1},
-               2.0f, gold);
+    DrawSailorFromAtlas(CREATURE_CAPTAIN, r, faceLeft, alpha, flash);
 }
 
 // ----- Seal --------------------------------------------------------------

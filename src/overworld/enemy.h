@@ -54,6 +54,10 @@ typedef struct OverworldEnemy {
     int           moveFrames;
     int           targetTileX, targetTileY;
 
+    // Walk-cycle animation frame (0 or 1). Advances while moving.
+    int           animFrame;
+    float         animT;
+
     // Alert countdown
     float         alertTimer;
 

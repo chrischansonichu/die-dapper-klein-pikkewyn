@@ -1,4 +1,5 @@
 #include "enemy.h"
+#include "enemy_sprites.h"
 #include "overworld.h"
 #include "../data/creature_defs.h"
 #include <stdlib.h>  // abs
@@ -140,6 +141,8 @@ void EnemyInit(OverworldEnemy *e, int tileX, int tileY, int dir,
     e->moveFrames     = 0;
     e->targetTileX    = tileX;
     e->targetTileY    = tileY;
+    e->animFrame      = 0;
+    e->animT          = 0.0f;
     e->alertTimer     = 0.0f;
     e->dropItemId     = -1;
     e->dropItemPct    = 0;
@@ -176,6 +179,9 @@ bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
     // Advance tile-step animation
     if (e->moving) {
         e->moveFrames++;
+        // Walk cycle: two frames per step (foot-swap halfway through).
+        e->animT += 8.0f / 60.0f;
+        e->animFrame = ((int)e->animT) % 2;
         if (e->moveFrames >= ENEMY_MOVE_FRAMES) {
             bool wasOnWater = e->onWater;
             e->tileX  = e->targetTileX;
@@ -186,7 +192,9 @@ bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
             if (wasOnWater && !e->onWater) e->dryingFrames = 24;
         }
     } else {
-        e->onWater = TileMapIsWater(map, e->tileX, e->tileY);
+        e->onWater   = TileMapIsWater(map, e->tileX, e->tileY);
+        e->animFrame = 0;
+        e->animT     = 0.0f;
     }
 
     // While drying, freeze AI progression — no new steps, no LoS advance,
@@ -297,167 +305,11 @@ void EnemyDraw(const OverworldEnemy *e)
     float cx   = fpx + sz * 0.5f;
     float top  = fpy;
 
-    // Rank-specific palette + silhouette tweaks so the overworld mirrors the
-    // battle-screen distinctions (deckhand vs bosun vs captain).
-    Color shirt, stripe;
-    bool  hasStripes = true;
-    bool  hasBeard   = false;
-    enum { HAT_SAILOR_DOME, HAT_BEANIE, HAT_BILLED_CAP, HAT_CAPTAIN } hatStyle;
-    Color hatMain, hatBand;
-
-    switch (e->creatureId) {
-        case CREATURE_DECKHAND:
-        default:
-            shirt    = (Color){ 30,  50, 110, 255};
-            stripe   = (Color){235, 235, 235, 255};
-            hatStyle = HAT_BEANIE;
-            hatMain  = (Color){ 30,  50, 110, 255};
-            hatBand  = hatMain;
-            break;
-        case CREATURE_BOSUN:
-            shirt    = (Color){ 90, 110,  55, 255};   // olive
-            stripe   = (Color){200, 210, 170, 255};
-            hatStyle = HAT_BILLED_CAP;
-            hatMain  = (Color){ 55,  70,  40, 255};
-            hatBand  = (Color){ 35,  50,  25, 255};
-            break;
-        case CREATURE_CAPTAIN:
-            shirt      = (Color){ 30,  30,  50, 255};  // dark coat
-            stripe     = shirt;                         // no stripes
-            hasStripes = false;
-            hasBeard   = true;
-            hatStyle   = HAT_CAPTAIN;
-            hatMain    = (Color){ 15,  15,  25, 255};
-            hatBand    = (Color){220, 180,  60, 255};  // gold
-            break;
-    }
-
-    const Color skin    = (Color){255, 217,  15, 255};
-    const Color dark    = (Color){ 20,  20,  30, 255};
-    const Color scarf   = e->color;
-
-    // Anchors
-    float headCy = top + sz * 0.42f;
-    float headR  = sz * 0.24f;
-    float capR   = headR + 1.0f;
-    float capCy  = headCy - sz * 0.03f;
-
-    // Captain is visibly bulkier than the deckhand
-    float bodyScale = (e->creatureId == CREATURE_CAPTAIN) ? 1.08f : 1.0f;
-    float bodyW = sz * 0.68f * bodyScale;
-    float bodyX = cx - bodyW * 0.5f;
-    float bodyY = headCy + headR * 0.40f;
-    float bodyH = (top + sz - 1.0f) - bodyY;
-    Rectangle body = { bodyX, bodyY, bodyW, bodyH };
-
-    DrawRectangleRounded(body, 0.45f, 12, shirt);
-
-    if (hasStripes) {
-        for (int i = 1; i <= 3; i++) {
-            float sy = bodyY + bodyH * (float)i / 4.0f;
-            DrawRectangle((int)(bodyX + 3), (int)(sy - 1),
-                          (int)(bodyW - 6), 2, stripe);
-        }
-    }
-
-    // Scarf/collar — horizontal ellipse at the neckline, per-enemy tint
-    DrawEllipse((int)cx, (int)bodyY, sz * 0.24f, sz * 0.06f, scarf);
-
-    // Head
-    DrawCircle((int)cx, (int)headCy, headR, skin);
-
-    // Beard arc under the chin for the captain
-    if (hasBeard) {
-        DrawCircleSector((Vector2){cx, headCy + headR * 0.15f},
-                         headR * 0.85f, 0, 180, 12,
-                         (Color){210, 210, 210, 255});
-    }
-
-    // Hat — style depends on rank
-    switch (hatStyle) {
-        case HAT_SAILOR_DOME:
-            DrawCircleSector((Vector2){cx, capCy}, capR,
-                             180.0f, 360.0f, 20, hatMain);
-            DrawRectangle((int)(cx - capR), (int)capCy - 1,
-                          (int)(capR * 2.0f), (int)(sz * 0.05f), hatBand);
-            break;
-        case HAT_BEANIE: {
-            // Flat rounded beanie sits low on the head
-            Rectangle hat = { cx - headR * 0.95f, capCy - sz * 0.04f,
-                              headR * 1.9f, sz * 0.14f };
-            DrawRectangleRounded(hat, 0.6f, 8, hatMain);
-        } break;
-        case HAT_BILLED_CAP: {
-            // Crown
-            Rectangle crown = { cx - capR, capCy - sz * 0.06f,
-                                capR * 2.0f, sz * 0.09f };
-            DrawRectangleRounded(crown, 0.4f, 8, hatMain);
-            // Bill in facing direction (only visible when facing down or side)
-            float bx = cx;
-            float by = capCy + sz * 0.03f;
-            if (e->dir == 1) {
-                DrawTriangle((Vector2){bx - capR, by},
-                             (Vector2){bx - capR - sz * 0.10f, by + sz * 0.03f},
-                             (Vector2){bx - capR, by + sz * 0.05f}, hatBand);
-            } else if (e->dir == 2) {
-                DrawTriangle((Vector2){bx + capR, by},
-                             (Vector2){bx + capR, by + sz * 0.05f},
-                             (Vector2){bx + capR + sz * 0.10f, by + sz * 0.03f}, hatBand);
-            } else {
-                // Facing down (or up): bill points forward
-                DrawTriangle((Vector2){bx - capR * 0.7f, by + sz * 0.02f},
-                             (Vector2){bx,               by + sz * 0.07f},
-                             (Vector2){bx + capR * 0.7f, by + sz * 0.02f}, hatBand);
-            }
-        } break;
-        case HAT_CAPTAIN: {
-            // Tall crown + wide brim, gold band along the bottom of the crown
-            Rectangle crown = { cx - capR, capCy - sz * 0.10f,
-                                capR * 2.0f, sz * 0.13f };
-            DrawRectangleRec(crown, hatMain);
-            Rectangle brim = { cx - capR - sz * 0.04f, capCy + sz * 0.02f,
-                               capR * 2.0f + sz * 0.08f, sz * 0.04f };
-            DrawRectangleRec(brim, hatMain);
-            DrawLineEx((Vector2){crown.x, crown.y + crown.height - 1},
-                       (Vector2){crown.x + crown.width, crown.y + crown.height - 1},
-                       2.0f, hatBand);
-        } break;
-    }
-
-    // Slanted eyes — thin diagonal strokes (no sclera/pupil — just the slant)
-    // Only visible when the sailor isn't facing away (up).
-    if (e->dir != 3) {
-        float eyeY   = headCy + sz * 0.02f;
-        float eyeLen = sz * 0.14f;
-        float slant  = sz * 0.04f;
-        float thick  = 2.5f;
-        float sep    = headR * 0.55f;
-
-        float leftCx  = cx - sep;
-        float rightCx = cx + sep;
-        if (e->dir == 1) { leftCx = cx - sep*1.55f; rightCx = cx - sep*0.35f; }
-        if (e->dir == 2) { leftCx = cx + sep*0.35f; rightCx = cx + sep*1.55f; }
-
-        // Endpoint dy pairs (0=left end, 1=right end), positive = lower on screen.
-        // Down-facing: outer corners up (left eye \ , right eye /).
-        // Side-facing: both eyes slant the same way so the whole face reads as tilted.
-        float lDy0, lDy1, rDy0, rDy1;
-        if (e->dir == 0) {
-            lDy0 = -slant; lDy1 =  slant;   // \ (left-end up, right-end down)
-            rDy0 =  slant; rDy1 = -slant;   // / (left-end down, right-end up)
-        } else if (e->dir == 1) {
-            lDy0 = -slant; lDy1 =  slant;
-            rDy0 = -slant; rDy1 =  slant;
-        } else { // dir == 2
-            lDy0 =  slant; lDy1 = -slant;
-            rDy0 =  slant; rDy1 = -slant;
-        }
-
-        DrawLineEx((Vector2){leftCx  - eyeLen*0.5f, eyeY + lDy0},
-                   (Vector2){leftCx  + eyeLen*0.5f, eyeY + lDy1}, thick, dark);
-        DrawLineEx((Vector2){rightCx - eyeLen*0.5f, eyeY + rDy0},
-                   (Vector2){rightCx + eyeLen*0.5f, eyeY + rDy1}, thick, dark);
-    }
+    // Procedural rounded sailor — same visual family as the Elder Penguin
+    // and Seal (DrawRectangleRounded / DrawCircle / DrawTriangle).
+    Rectangle dst = { fpx, top, sz, sz };
+    EnemySpritesDrawSailor(e->creatureId, dst, e->dir, e->animFrame,
+                           1.0f, false);
 
     // Swimming: hide the legs with a water band + wake arcs. Drawn last so it
     // layers over the body but under the alert marker.
