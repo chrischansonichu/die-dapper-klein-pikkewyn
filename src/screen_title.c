@@ -25,12 +25,14 @@
 
 #include "raylib.h"
 #include "screens.h"
+#include <math.h>
 
 //----------------------------------------------------------------------------------
 // Module Variables Definition (local)
 //----------------------------------------------------------------------------------
 static int framesCounter = 0;
 static int finishScreen = 0;
+static Texture2D titleArt = {0};
 
 //----------------------------------------------------------------------------------
 // Title Screen Functions Definition
@@ -38,9 +40,10 @@ static int finishScreen = 0;
 
 // Title Screen Initialization logic
 void InitTitleScreen(void) {
-    // TODO: Initialize TITLE screen variables here!
     framesCounter = 0;
     finishScreen = 0;
+    // Full illustration (logo + subtitle + art) — buttons overlay the bottom.
+    titleArt = LoadTexture("resources/title.png");
 }
 
 // Title Screen Update logic
@@ -59,15 +62,17 @@ void DrawButton(const char *text, const int buttonNumber, const int finScreen) {
     const int W = GetScreenWidth();
     const int H = GetScreenHeight();
     const int btnW = W / 6;
-    const int btnH = H / 6;
+    const int btnH = H / 10;
     const int gap = (W - 3 * btnW) / 4; // = W/8 when divisible
-    const int bottomRow = (int) (H * 0.75f); // top of the row
+    // Sit the buttons near the bottom so they overlay the art rather than
+    // covering the central penguin.
+    const int bottomRow = (int) (H * 0.82f);
 
     int posX = gap;
     if (buttonNumber > 0) {
         posX = posX + buttonNumber * (btnW + gap);
     }
-    const int thisFontSize = font.baseSize * 2.0f;
+    const int thisFontSize = (int)(font.baseSize * 2.0f);
 
     const int textWidth = MeasureText(text, thisFontSize);
     const int textHeight = thisFontSize;
@@ -78,10 +83,15 @@ void DrawButton(const char *text, const int buttonNumber, const int finScreen) {
     const Rectangle rect = {(float) posX, (float) bottomRow, (float) btnW, (float) btnH};
     const bool hovered = CheckCollisionPointRec(mouse, rect);
 
-    const Color border = hovered ? RAYWHITE : DARKGREEN;
+    // Semi-transparent plate so the button reads over the illustration.
+    const Color plate  = hovered ? (Color){ 20,  20,  25, 210 }
+                                 : (Color){  0,   0,   0, 170 };
+    const Color border = hovered ? RAYWHITE : (Color){230, 210, 140, 255};
+    const Color label  = hovered ? RAYWHITE : (Color){240, 225, 170, 255};
 
+    DrawRectangleRec(rect, plate);
     DrawRectangleLinesEx(rect, 3, border);
-    DrawText(text, textX, textY, thisFontSize, border);
+    DrawText(text, textX, textY, thisFontSize, label);
     if (hovered && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
         finishScreen = finScreen;
     }
@@ -92,19 +102,25 @@ void DrawTitleScreen(void) {
     const int W = GetScreenWidth();
     const int H = GetScreenHeight();
 
-    // Bg + title
-    DrawRectangleGradientV(0, 0, W, H, SKYBLUE, BLUE);
-    const Vector2 pos = {20, 10};
-    DrawTextEx(font, "Die Dapper Klein Pikkewyn", pos, font.baseSize * 3.0f, 4, DARKGREEN);
-    const char *subTitle = "Die storie van Jan de Pikkewyn";
-    const int subTitleFontSize = 20;
-    const int subTitleTextWidth = MeasureText(subTitle, subTitleFontSize);
-    const int textX = 0 + (W - subTitleTextWidth) / 2;
-    const int textY = 0 + (H - subTitleFontSize) / 2;
+    // Background: scale the illustration to cover the screen while keeping
+    // its aspect ratio. The image already contains the title and subtitle,
+    // so no separate text is drawn on top.
+    if (titleArt.id != 0) {
+        const float srcW = (float)titleArt.width;
+        const float srcH = (float)titleArt.height;
+        const float scale = fmaxf((float)W / srcW, (float)H / srcH);
+        const float dstW = srcW * scale;
+        const float dstH = srcH * scale;
+        const Rectangle src = { 0, 0, srcW, srcH };
+        const Rectangle dst = { ((float)W - dstW) * 0.5f,
+                                ((float)H - dstH) * 0.5f,
+                                dstW, dstH };
+        DrawTexturePro(titleArt, src, dst, (Vector2){0, 0}, 0.0f, WHITE);
+    } else {
+        DrawRectangleGradientV(0, 0, W, H, SKYBLUE, BLUE);
+    }
 
-    DrawText(subTitle, textX, textY, subTitleFontSize, DARKGREEN);
-
-    // Buttons (each W/6 wide, equally spaced, centered)
+    // Buttons (each W/6 wide, equally spaced, overlaid on the lower strip)
     DrawButton("New", 0, 2);
     DrawButton("Load", 1, 2); // TODO add load screen
     DrawButton("Options", 2, 1);
@@ -112,7 +128,10 @@ void DrawTitleScreen(void) {
 
 // Title Screen Unload logic
 void UnloadTitleScreen(void) {
-    // TODO: Unload TITLE screen variables here!
+    if (titleArt.id != 0) {
+        UnloadTexture(titleArt);
+        titleArt.id = 0;
+    }
 }
 
 // Title Screen should finish?
