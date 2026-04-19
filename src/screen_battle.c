@@ -50,9 +50,9 @@ void UpdateBattleScreen(void)
     BattleUpdate(&gBattleCtx, GetFrameTime());
 
     int result = BattleFinished(&gBattleCtx);
-    if (result == 1) { gLastResult = BATTLE_VICTORY; finishScreen = 1; }  // → overworld
+    if (result == 1) { gLastResult = BATTLE_VICTORY; finishScreen = 1; }  // → field
     if (result == 2) { gLastResult = BATTLE_DEFEAT;  finishScreen = 2; }  // → ending
-    if (result == 3) { gLastResult = BATTLE_FLED;    finishScreen = 1; }  // → overworld
+    if (result == 3) { gLastResult = BATTLE_FLED;    finishScreen = 1; }  // → field
 }
 
 void DrawBattleScreen(void)

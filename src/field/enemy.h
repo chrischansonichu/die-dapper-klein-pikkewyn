@@ -5,12 +5,12 @@
 #include "raylib.h"
 #include "tilemap.h"
 
-// Forward declaration — enemy.c queries the overworld for tile occupancy so
+// Forward declaration — enemy.c queries the field for tile occupancy so
 // enemies don't walk onto the player, NPCs, or other enemies.
-struct OverworldState;
+struct FieldState;
 
 //----------------------------------------------------------------------------------
-// OverworldEnemy - visible sailor enemies that patrol/stand/wander and engage
+// FieldEnemy - visible sailor enemies that patrol/stand/wander and engage
 // the player via line-of-sight (Pokemon trainer style).
 //----------------------------------------------------------------------------------
 
@@ -29,7 +29,7 @@ typedef enum EnemyAiState {
     ENEMY_CHASING,   // walking toward player tile-by-tile
 } EnemyAiState;
 
-typedef struct OverworldEnemy {
+typedef struct FieldEnemy {
     int           tileX, tileY;
     int           dir;          // 0=down 1=left 2=right 3=up
     EnemyBehavior behavior;
@@ -69,30 +69,30 @@ typedef struct OverworldEnemy {
 
     bool          onWater;         // current tile is water — draw as swimming
     int           dryingFrames;    // >0 = paused after stepping from water onto land
-} OverworldEnemy;
+} FieldEnemy;
 
 // Initialize a standing/wandering enemy.
 // For patrol enemies, call EnemySetPatrol afterward.
-void EnemyInit(OverworldEnemy *e, int tileX, int tileY, int dir,
+void EnemyInit(FieldEnemy *e, int tileX, int tileY, int dir,
                EnemyBehavior behavior, int creatureId, int level,
                int losRange, Color color);
 
 // Set patrol waypoints (only meaningful for BEHAVIOR_PATROL).
-void EnemySetPatrol(OverworldEnemy *e, int x0, int y0, int x1, int y1);
+void EnemySetPatrol(FieldEnemy *e, int x0, int y0, int x1, int y1);
 
 // Set drops for this enemy. Pass -1 for either ID to disable that drop.
-void EnemySetDrops(OverworldEnemy *e, int itemId, int itemPct,
+void EnemySetDrops(FieldEnemy *e, int itemId, int itemPct,
                    int weaponId, int weaponPct);
 
 // Update one enemy for this frame (dt in seconds).
 // Returns true if the enemy has just reached the player and a battle should start.
 // `selfIdx` is this enemy's index into ow->enemies so collision checks can
 // exclude its own tile.
-bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
+bool EnemyUpdate(FieldEnemy *e, const TileMap *map,
                  int playerTileX, int playerTileY, float dt,
-                 const struct OverworldState *ow, int selfIdx);
+                 const struct FieldState *ow, int selfIdx);
 
 // Draw inside BeginMode2D.
-void EnemyDraw(const OverworldEnemy *e);
+void EnemyDraw(const FieldEnemy *e);
 
 #endif // ENEMY_H

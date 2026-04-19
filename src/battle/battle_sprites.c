@@ -1,6 +1,6 @@
 #include "battle_sprites.h"
 #include "../data/creature_defs.h"
-#include "../overworld/enemy_sprites.h"
+#include "../field/enemy_sprites.h"
 
 // Tint helper: multiplies alpha, or replaces with white when flashing. All
 // per-creature draw helpers funnel colors through this so the flash frame
@@ -13,7 +13,7 @@ static Color Tint(Color c, float alpha, bool flash)
 }
 
 // ----- Jan the Penguin ----------------------------------------------------
-// Same primitives as the overworld elder penguin (rounded body, cream belly,
+// Same primitives as the field elder penguin (rounded body, cream belly,
 // orange beak triangle, orange feet) but battle-scaled and without hat/cane.
 // The beak always points toward the opponent.
 static void DrawJanSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
@@ -67,7 +67,7 @@ static void DrawJanSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
 }
 
 // ----- Shared sailor (procedural rounded) -------------------------------
-// Delegates to the overworld's procedural sailor — same rounded visual
+// Delegates to the field's procedural sailor — same rounded visual
 // language as the Elder Penguin / Seal. Facing-row is picked by `faceLeft`
 // (enemies on the right of the screen face left toward Jan). `flash`
 // tints the whole sprite white for the hit-frame flicker.
@@ -99,7 +99,7 @@ static void DrawCaptainSprite(Rectangle r, bool faceLeft, float alpha, bool flas
 }
 
 // ----- Seal --------------------------------------------------------------
-// Reuses the ellipse silhouette from the overworld DrawSeal, but battle-scaled
+// Reuses the ellipse silhouette from the field DrawSeal, but battle-scaled
 // and oriented by isEnemy (player-side seal would face right if ever recruited).
 static void DrawSealSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
 {
@@ -130,7 +130,7 @@ static void DrawSealSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
     DrawEllipse((int)(cx - sz * 0.18f), (int)(bodyCy + sz * 0.12f), sz * 0.10f, sz * 0.05f, dark);
     DrawEllipse((int)(cx + sz * 0.18f), (int)(bodyCy + sz * 0.12f), sz * 0.10f, sz * 0.05f, dark);
 
-    // Head offset toward facing direction (exaggerated vs overworld)
+    // Head offset toward facing direction (exaggerated vs field)
     float headSide = faceLeft ? -1.0f : +1.0f;
     float headCx = cx + sz * 0.18f * headSide;
     float headCy = py + sz * 0.38f;

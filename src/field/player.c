@@ -1,5 +1,5 @@
 #include "player.h"
-#include "overworld.h"
+#include "field.h"
 #include <math.h>
 
 static const int DIR_DX[4] = {  0, -1,  1,  0 };
@@ -45,7 +45,7 @@ static int ResolvePressedDir(void)
     return d;
 }
 
-void PlayerUpdate(Player *p, const TileMap *m, const struct OverworldState *ow)
+void PlayerUpdate(Player *p, const TileMap *m, const struct FieldState *f)
 {
     p->stepCompleted = false;
 
@@ -74,7 +74,7 @@ void PlayerUpdate(Player *p, const TileMap *m, const struct OverworldState *ow)
             int nx = p->tileX + DIR_DX[heldDir];
             int ny = p->tileY + DIR_DY[heldDir];
             bool blocked = TileMapIsSolid(m, nx, ny) ||
-                           (ow && OverworldIsTileOccupied(ow, nx, ny, -1));
+                           (f && FieldIsTileOccupied(f, nx, ny, -1));
             if (!blocked) {
                 p->targetTileX = nx;
                 p->targetTileY = ny;

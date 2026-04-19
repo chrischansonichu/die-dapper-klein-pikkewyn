@@ -11,7 +11,7 @@
 //
 // All coordinates inside DrawSailor are fractions of `sz` (the shorter
 // side of the bounding rect), so the same code scales from a 48px
-// overworld tile up to an 80-100px battle cell without distortion.
+// field tile up to an 80-100px battle cell without distortion.
 //----------------------------------------------------------------------------------
 
 // Multiply alpha, or replace with white for the hit-frame flash.

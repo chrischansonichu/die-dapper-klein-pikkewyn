@@ -5,10 +5,10 @@
 #include "raylib.h"
 #include "tilemap.h"
 
-// Forward declaration — player.c queries the overworld for tile occupancy
+// Forward declaration — player.c queries the field for tile occupancy
 // (NPCs, other enemies) so it can block the next step without having to know
-// the full OverworldState layout here.
-struct OverworldState;
+// the full FieldState layout here.
+struct FieldState;
 
 //----------------------------------------------------------------------------------
 // Player - grid-locked tile movement with walk animation
@@ -35,7 +35,7 @@ typedef struct Player {
 } Player;
 
 void PlayerInit(Player *p, int startTileX, int startTileY);
-void PlayerUpdate(Player *p, const TileMap *m, const struct OverworldState *ow);
+void PlayerUpdate(Player *p, const TileMap *m, const struct FieldState *f);
 void PlayerDraw(const Player *p);
 void PlayerUnload(Player *p);
 

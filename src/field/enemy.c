@@ -1,6 +1,6 @@
 #include "enemy.h"
 #include "enemy_sprites.h"
-#include "overworld.h"
+#include "field.h"
 #include "../data/creature_defs.h"
 #include <stdlib.h>  // abs
 #include <math.h>
@@ -23,7 +23,7 @@ static int DirFromDelta(int dx, int dy)
 // Cast a ray from (ex, ey) in direction dir for up to range tiles.
 // Returns true if the player tile is visible (not blocked by a solid tile).
 // If visible, sets *facingDir to the direction the enemy should face.
-static bool CheckLoS(const OverworldEnemy *e, const TileMap *map,
+static bool CheckLoS(const FieldEnemy *e, const TileMap *map,
                      int playerTileX, int playerTileY,
                      int fromDir, int *facingDir)
 {
@@ -45,7 +45,7 @@ static bool CheckLoS(const OverworldEnemy *e, const TileMap *map,
 
 // Returns true if the enemy can see the player from its current position.
 // If true, sets e->dir to face the player.
-static bool EnemyCheckLoS(OverworldEnemy *e, const TileMap *map,
+static bool EnemyCheckLoS(FieldEnemy *e, const TileMap *map,
                            int playerTileX, int playerTileY)
 {
     int facingDir = e->dir;
@@ -69,19 +69,19 @@ static bool EnemyCheckLoS(OverworldEnemy *e, const TileMap *map,
 
 // A tile is walkable for this enemy if it isn't solid and no other character
 // currently claims it. The enemy's own position is excluded via selfIdx.
-static bool EnemyCanEnter(const TileMap *map, const struct OverworldState *ow,
+static bool EnemyCanEnter(const TileMap *map, const struct FieldState *f,
                            int selfIdx, int x, int y)
 {
     if (TileMapIsSolid(map, x, y)) return false;
-    if (ow && OverworldIsTileOccupied(ow, x, y, selfIdx)) return false;
+    if (f && FieldIsTileOccupied(f, x, y, selfIdx)) return false;
     return true;
 }
 
 // Try to start one tile-step from (tileX, tileY) toward (targetX, targetY).
 // Prefers the dominant axis; falls back to the other.
 // Returns true if a step was initiated.
-static bool BeginStepToward(OverworldEnemy *e, const TileMap *map,
-                             const struct OverworldState *ow, int selfIdx,
+static bool BeginStepToward(FieldEnemy *e, const TileMap *map,
+                             const struct FieldState *f, int selfIdx,
                              int targetX, int targetY)
 {
     int dx = targetX - e->tileX;
@@ -93,7 +93,7 @@ static bool BeginStepToward(OverworldEnemy *e, const TileMap *map,
     int stepY = (dy != 0) ? (dy > 0 ? 1 : -1) : 0;
 
     // Try primary axis first (horizontal preferred when both nonzero)
-    if (stepX != 0 && EnemyCanEnter(map, ow, selfIdx, e->tileX + stepX, e->tileY)) {
+    if (stepX != 0 && EnemyCanEnter(map, f,selfIdx, e->tileX + stepX, e->tileY)) {
         e->targetTileX = e->tileX + stepX;
         e->targetTileY = e->tileY;
         e->dir         = DirFromDelta(stepX, 0);
@@ -101,7 +101,7 @@ static bool BeginStepToward(OverworldEnemy *e, const TileMap *map,
         e->moveFrames  = 0;
         return true;
     }
-    if (stepY != 0 && EnemyCanEnter(map, ow, selfIdx, e->tileX, e->tileY + stepY)) {
+    if (stepY != 0 && EnemyCanEnter(map, f,selfIdx, e->tileX, e->tileY + stepY)) {
         e->targetTileX = e->tileX;
         e->targetTileY = e->tileY + stepY;
         e->dir         = DirFromDelta(0, stepY);
@@ -116,7 +116,7 @@ static bool BeginStepToward(OverworldEnemy *e, const TileMap *map,
 // Public API
 //----------------------------------------------------------------------------------
 
-void EnemyInit(OverworldEnemy *e, int tileX, int tileY, int dir,
+void EnemyInit(FieldEnemy *e, int tileX, int tileY, int dir,
                EnemyBehavior behavior, int creatureId, int level,
                int losRange, Color color)
 {
@@ -152,7 +152,7 @@ void EnemyInit(OverworldEnemy *e, int tileX, int tileY, int dir,
     e->dryingFrames   = 0;
 }
 
-void EnemySetDrops(OverworldEnemy *e, int itemId, int itemPct,
+void EnemySetDrops(FieldEnemy *e, int itemId, int itemPct,
                    int weaponId, int weaponPct)
 {
     e->dropItemId    = itemId;
@@ -161,7 +161,7 @@ void EnemySetDrops(OverworldEnemy *e, int itemId, int itemPct,
     e->dropWeaponPct = weaponPct;
 }
 
-void EnemySetPatrol(OverworldEnemy *e, int x0, int y0, int x1, int y1)
+void EnemySetPatrol(FieldEnemy *e, int x0, int y0, int x1, int y1)
 {
     e->patrolX[0] = x0;
     e->patrolY[0] = y0;
@@ -170,9 +170,9 @@ void EnemySetPatrol(OverworldEnemy *e, int x0, int y0, int x1, int y1)
     e->patrolTarget = 1;
 }
 
-bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
+bool EnemyUpdate(FieldEnemy *e, const TileMap *map,
                  int playerTileX, int playerTileY, float dt,
-                 const struct OverworldState *ow, int selfIdx)
+                 const struct FieldState *f, int selfIdx)
 {
     if (!e->active) return false;
 
@@ -237,7 +237,7 @@ bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
                     for (int i = 0; i < 4; i++) {
                         int nx = e->tileX + DIR_DX[dirs[i]];
                         int ny = e->tileY + DIR_DY[dirs[i]];
-                        if (EnemyCanEnter(map, ow, selfIdx, nx, ny)) {
+                        if (EnemyCanEnter(map, f,selfIdx, nx, ny)) {
                             e->targetTileX = nx;
                             e->targetTileY = ny;
                             e->dir         = dirs[i];
@@ -257,7 +257,7 @@ bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
                     tx = e->patrolX[e->patrolTarget];
                     ty = e->patrolY[e->patrolTarget];
                 }
-                BeginStepToward(e, map, ow, selfIdx, tx, ty);
+                BeginStepToward(e, map, f,selfIdx, tx, ty);
             }
             // BEHAVIOR_STAND: do nothing
         }
@@ -277,7 +277,7 @@ bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
             return true;
         }
         if (!e->moving) {
-            BeginStepToward(e, map, ow, selfIdx, playerTileX, playerTileY);
+            BeginStepToward(e, map, f,selfIdx, playerTileX, playerTileY);
         }
         break;
     }
@@ -285,7 +285,7 @@ bool EnemyUpdate(OverworldEnemy *e, const TileMap *map,
     return false;
 }
 
-void EnemyDraw(const OverworldEnemy *e)
+void EnemyDraw(const FieldEnemy *e)
 {
     if (!e->active) return;
 

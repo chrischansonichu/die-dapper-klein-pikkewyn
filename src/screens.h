@@ -88,7 +88,7 @@ void DrawBattleScreen(void);
 void UnloadBattleScreen(void);
 int  FinishBattleScreen(void);
 
-// Called by the overworld before transitioning to BATTLE.
+// Called by the field before transitioning to BATTLE.
 // Forward-declares Party to avoid including battle headers here.
 typedef struct Party Party;
 void BattlePrepareEncounter(Party *party, int enemyIds[], int enemyLevels[], int count);

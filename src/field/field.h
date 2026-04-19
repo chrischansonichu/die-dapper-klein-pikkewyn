@@ -1,5 +1,5 @@
-#ifndef OVERWORLD_H
-#define OVERWORLD_H
+#ifndef FIELD_H
+#define FIELD_H
 
 #include <stdbool.h>
 #include "raylib.h"
@@ -13,27 +13,27 @@
 #include "inventory_ui.h"
 
 //----------------------------------------------------------------------------------
-// OverworldState - the complete overworld subsystem
+// FieldState - the complete tile-walking field subsystem (hub, dungeons, etc.)
 //----------------------------------------------------------------------------------
 
-#define OVERWORLD_MAX_NPCS    16
-#define OVERWORLD_MAX_ENEMIES 16
-#define OVERWORLD_MAX_PENDING 4   // battle supports up to 4 enemies at once
+#define FIELD_MAX_NPCS    16
+#define FIELD_MAX_ENEMIES 16
+#define FIELD_MAX_PENDING 4   // battle supports up to 4 enemies at once
 
-typedef struct OverworldState {
+typedef struct FieldState {
     TileMap       map;
     Player        player;
     Camera2D      camera;
 
-    Npc           npcs[OVERWORLD_MAX_NPCS];
+    Npc           npcs[FIELD_MAX_NPCS];
     int           npcCount;
 
-    OverworldEnemy enemies[OVERWORLD_MAX_ENEMIES];
-    int            enemyCount;
+    FieldEnemy    enemies[FIELD_MAX_ENEMIES];
+    int           enemyCount;
     // Indices of every enemy that should enter the next battle together.
     // Filled when one or more enemies aggro simultaneously.
-    int            pendingEnemyIdxs[OVERWORLD_MAX_PENDING];
-    int            pendingEnemyCount;
+    int           pendingEnemyIdxs[FIELD_MAX_PENDING];
+    int           pendingEnemyCount;
 
     Party         party;
 
@@ -47,19 +47,19 @@ typedef struct OverworldState {
     // initiates a surprise strike on an unaware enemy)
     bool          pendingBattle;
     bool          preemptiveAttack; // Jan struck first — grant a free Tackle
-} OverworldState;
+} FieldState;
 
-void OverworldInit(OverworldState *ow);
+void FieldInit(FieldState *f);
 // Reload GPU resources (textures) without touching game state.
-// Call this instead of OverworldInit when returning from battle.
-void OverworldReloadResources(OverworldState *ow);
-void OverworldUpdate(OverworldState *ow, float dt);
-void OverworldDraw(const OverworldState *ow);
-void OverworldUnload(OverworldState *ow);
+// Call this instead of FieldInit when returning from battle.
+void FieldReloadResources(FieldState *f);
+void FieldUpdate(FieldState *f, float dt);
+void FieldDraw(const FieldState *f);
+void FieldUnload(FieldState *f);
 
 // True if tile (x, y) is occupied by the player, an NPC, or any active
 // enemy other than `ignoreEnemyIdx` (pass -1 to check all enemies). An
 // enemy mid-step claims both its current tile and its destination.
-bool OverworldIsTileOccupied(const OverworldState *ow, int x, int y, int ignoreEnemyIdx);
+bool FieldIsTileOccupied(const FieldState *f, int x, int y, int ignoreEnemyIdx);
 
-#endif // OVERWORLD_H
+#endif // FIELD_H

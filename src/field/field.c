@@ -1,4 +1,4 @@
-#include "overworld.h"
+#include "field.h"
 #include "enemy_sprites.h"
 #include "../data/item_defs.h"
 #include <string.h>
@@ -10,7 +10,7 @@ static bool IsInteractPressed(void)
     return IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER);
 }
 
-bool OverworldIsTileOccupied(const OverworldState *ow, int x, int y, int ignoreEnemyIdx)
+bool FieldIsTileOccupied(const FieldState *ow, int x, int y, int ignoreEnemyIdx)
 {
     // Player — include both current tile and the tile being stepped into.
     if (ow->player.tileX == x && ow->player.tileY == y) return true;
@@ -25,7 +25,7 @@ bool OverworldIsTileOccupied(const OverworldState *ow, int x, int y, int ignoreE
     // Enemies
     for (int i = 0; i < ow->enemyCount; i++) {
         if (i == ignoreEnemyIdx) continue;
-        const OverworldEnemy *e = &ow->enemies[i];
+        const FieldEnemy *e = &ow->enemies[i];
         if (!e->active) continue;
         if (e->tileX == x && e->tileY == y) return true;
         if (e->moving && e->targetTileX == x && e->targetTileY == y) return true;
@@ -33,7 +33,7 @@ bool OverworldIsTileOccupied(const OverworldState *ow, int x, int y, int ignoreE
     return false;
 }
 
-static int CountDefeatedEnemies(const OverworldState *ow)
+static int CountDefeatedEnemies(const FieldState *ow)
 {
     int n = 0;
     for (int i = 0; i < ow->enemyCount; i++)
@@ -41,7 +41,7 @@ static int CountDefeatedEnemies(const OverworldState *ow)
     return n;
 }
 
-static bool AllEnemiesDefeated(const OverworldState *ow)
+static bool AllEnemiesDefeated(const FieldState *ow)
 {
     return ow->enemyCount > 0 && CountDefeatedEnemies(ow) == ow->enemyCount;
 }
@@ -50,7 +50,7 @@ static bool AllEnemiesDefeated(const OverworldState *ow)
 // Handles seal recruitment (requires one enemy defeated) and the elder's
 // level-complete gate. Returns the number of pages written.
 // If the interaction has a side effect (seal joins party), it is applied here.
-static int BuildNpcInteraction(OverworldState *ow, int npcIdx,
+static int BuildNpcInteraction(FieldState *ow, int npcIdx,
                                const char **pages, char scratch[4][NPC_DIALOGUE_LEN])
 {
     Npc *n = &ow->npcs[npcIdx];
@@ -102,10 +102,10 @@ static int BuildNpcInteraction(OverworldState *ow, int npcIdx,
 
 // Returns the index of an active, idle (unalerted) enemy adjacent to the
 // player, or -1 if none. These enemies are vulnerable to a surprise attack.
-static int FindSurpriseTarget(const OverworldState *ow, int px, int py)
+static int FindSurpriseTarget(const FieldState *ow, int px, int py)
 {
     for (int i = 0; i < ow->enemyCount; i++) {
-        const OverworldEnemy *e = &ow->enemies[i];
+        const FieldEnemy *e = &ow->enemies[i];
         if (!e->active) continue;
         if (e->aiState != ENEMY_IDLE) continue;
         int dx = e->tileX - px;
@@ -118,7 +118,7 @@ static int FindSurpriseTarget(const OverworldState *ow, int px, int py)
     return -1;
 }
 
-static void AddTestNpcs(OverworldState *ow)
+static void AddTestNpcs(FieldState *ow)
 {
     // Friendly penguin elder on the dock
     Npc *elder = &ow->npcs[ow->npcCount++];
@@ -132,29 +132,29 @@ static void AddTestNpcs(OverworldState *ow)
     NpcAddDialogue(seal, "Arf! I can help you fight. Come find me when ready.");
 }
 
-static void AddTestEnemies(OverworldState *ow)
+static void AddTestEnemies(FieldState *ow)
 {
     ow->enemyCount = 0;
 
     // 2x STAND sailors on the dock, facing down (toward player spawn at y=14)
-    OverworldEnemy *s1 = &ow->enemies[ow->enemyCount++];
+    FieldEnemy *s1 = &ow->enemies[ow->enemyCount++];
     EnemyInit(s1, 10, 11, 0, BEHAVIOR_STAND, 1, 3, 5, (Color){200, 60, 60, 255});
     s1->wanderInterval = 90;
     EnemySetDrops(s1, ITEM_KRILL_SNACK, 70, -1, 0);
 
-    OverworldEnemy *s2 = &ow->enemies[ow->enemyCount++];
+    FieldEnemy *s2 = &ow->enemies[ow->enemyCount++];
     EnemyInit(s2, 14, 10, 0, BEHAVIOR_STAND, 1, 3, 5, (Color){200, 80, 50, 255});
     s2->wanderInterval = 110;
     EnemySetDrops(s2, ITEM_FRESH_FISH, 60, 2, 25);  // ShellThrow
 
     // 2x WANDER sailors in the shallow water. One is a bosun — the water is
     // where the tougher fights live; the dock is the starter zone.
-    OverworldEnemy *w1 = &ow->enemies[ow->enemyCount++];
+    FieldEnemy *w1 = &ow->enemies[ow->enemyCount++];
     EnemyInit(w1, 6, 6, 0, BEHAVIOR_WANDER, 2, 3, 4, (Color){160, 80, 180, 255});
     w1->wanderInterval = 70;
     EnemySetDrops(w1, ITEM_KRILL_SNACK, 80, -1, 0);
 
-    OverworldEnemy *w2 = &ow->enemies[ow->enemyCount++];
+    FieldEnemy *w2 = &ow->enemies[ow->enemyCount++];
     EnemyInit(w2, 16, 8, 2, BEHAVIOR_WANDER, 2, 4, 4, (Color){180, 60, 140, 255});
     w2->wanderInterval = 100;
     EnemySetDrops(w2, ITEM_SARDINE, 50, 1, 30);     // FishingHook
@@ -162,15 +162,15 @@ static void AddTestEnemies(OverworldState *ow)
     // 1x PATROL sailor along the far end of the dock (keeps spawn safe).
     // Downgraded to a deckhand so the player can reasonably defeat one
     // enemy and unlock the seal recruitment without grinding.
-    OverworldEnemy *p1 = &ow->enemies[ow->enemyCount++];
+    FieldEnemy *p1 = &ow->enemies[ow->enemyCount++];
     EnemyInit(p1, 15, 13, 1, BEHAVIOR_PATROL, 1, 3, 6, (Color){220, 120, 40, 255});
     EnemySetPatrol(p1, 12, 13, 18, 13);
     EnemySetDrops(p1, ITEM_SARDINE, 70, 3, 35);     // SeaUrchinSpike
 }
 
-void OverworldInit(OverworldState *ow)
+void FieldInit(FieldState *ow)
 {
-    memset(ow, 0, sizeof(OverworldState));
+    memset(ow, 0, sizeof(FieldState));
 
     // Build map
     TileMapBuildTestMap(&ow->map);
@@ -206,16 +206,16 @@ void OverworldInit(OverworldState *ow)
 
 // Add an enemy index to the pending battle roster, ignoring duplicates and
 // the roster cap.
-static void QueueEnemyForBattle(OverworldState *ow, int idx)
+static void QueueEnemyForBattle(FieldState *ow, int idx)
 {
     if (idx < 0 || idx >= ow->enemyCount) return;
     for (int k = 0; k < ow->pendingEnemyCount; k++)
         if (ow->pendingEnemyIdxs[k] == idx) return;
-    if (ow->pendingEnemyCount >= OVERWORLD_MAX_PENDING) return;
+    if (ow->pendingEnemyCount >= FIELD_MAX_PENDING) return;
     ow->pendingEnemyIdxs[ow->pendingEnemyCount++] = idx;
 }
 
-void OverworldUpdate(OverworldState *ow, float dt)
+void FieldUpdate(FieldState *ow, float dt)
 {
     (void)dt;
 
@@ -230,7 +230,7 @@ void OverworldUpdate(OverworldState *ow, float dt)
         return;
     }
 
-    // If dialogue is active, update it and skip overworld input
+    // If dialogue is active, update it and skip field input
     if (ow->dialogue.active) {
         DialogueUpdate(&ow->dialogue, dt);
         return;
@@ -298,7 +298,7 @@ void OverworldUpdate(OverworldState *ow, float dt)
             // the same encounter so simultaneous aggro → one group battle.
             for (int j = 0; j < ow->enemyCount; j++) {
                 if (j == i) continue;
-                const OverworldEnemy *e2 = &ow->enemies[j];
+                const FieldEnemy *e2 = &ow->enemies[j];
                 if (!e2->active) continue;
                 if (e2->aiState == ENEMY_CHASING || e2->aiState == ENEMY_ALERTED)
                     QueueEnemyForBattle(ow, j);
@@ -312,7 +312,7 @@ void OverworldUpdate(OverworldState *ow, float dt)
     CameraUpdate(&ow->camera, PlayerPixelPos(&ow->player), mapPixW, mapPixH);
 }
 
-void OverworldDraw(const OverworldState *ow)
+void FieldDraw(const FieldState *ow)
 {
     // Draw tilemap (handles BeginMode2D / EndMode2D internally)
     TileMapDraw(&ow->map, ow->camera);
@@ -343,7 +343,7 @@ void OverworldDraw(const OverworldState *ow)
             }
             int surpriseIdx = FindSurpriseTarget(ow, ow->player.tileX, ow->player.tileY);
             if (surpriseIdx >= 0) {
-                const OverworldEnemy *e = &ow->enemies[surpriseIdx];
+                const FieldEnemy *e = &ow->enemies[surpriseIdx];
                 int px = e->tileX * tilePixels + tilePixels / 2 - 6;
                 int py = e->tileY * tilePixels - 20;
                 DrawText("Z!", px, py, 18, (Color){255, 180, 60, 255});
@@ -384,9 +384,9 @@ void OverworldDraw(const OverworldState *ow)
     }
 }
 
-void OverworldReloadResources(OverworldState *ow)
+void FieldReloadResources(FieldState *ow)
 {
-    // Rebuild only the textures that were freed by OverworldUnload.
+    // Rebuild only the textures that were freed by FieldUnload.
     // All game state (party HP/XP, player position, enemy state) is untouched.
     ow->map.tileset  = TilesetBuild();
     EnemySpritesReload();
@@ -397,7 +397,7 @@ void OverworldReloadResources(OverworldState *ow)
     CameraUpdate(&ow->camera, PlayerPixelPos(&ow->player), mapPixW, mapPixH);
 }
 
-void OverworldUnload(OverworldState *ow)
+void FieldUnload(FieldState *ow)
 {
     TileMapUnload(&ow->map);
     PlayerUnload(&ow->player);

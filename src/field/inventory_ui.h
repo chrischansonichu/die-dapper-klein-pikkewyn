@@ -28,7 +28,7 @@ typedef struct InventoryUI {
 void InventoryUIInit(InventoryUI *ui);
 
 // Returns true if UI just opened or was already open. Should be checked each frame
-// before processing overworld input.
+// before processing field input.
 bool InventoryUIIsOpen(const InventoryUI *ui);
 
 void InventoryUIOpen(InventoryUI *ui);

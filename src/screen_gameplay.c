@@ -1,14 +1,14 @@
 /**********************************************************************************************
 *
-*   Die Dapper Klein Pikkewyn - Gameplay Screen (Overworld)
-*   Hosts the tile-based overworld with player movement, NPCs, and encounter triggers.
+*   Die Dapper Klein Pikkewyn - Gameplay Screen (Field)
+*   Hosts the tile-based field with player movement, NPCs, and encounter triggers.
 *
 **********************************************************************************************/
 
 #include "raylib.h"
 #include "screens.h"
-#include "overworld/overworld.h"
-#include "overworld/enemy.h"
+#include "field/field.h"
+#include "field/enemy.h"
 #include "battle/inventory.h"
 #include "data/item_defs.h"
 #include "data/move_defs.h"
@@ -19,8 +19,8 @@
 // Module Variables Definition (local)
 //----------------------------------------------------------------------------------
 static int  finishScreen  = 0;
-static bool gInitialized  = false;  // false until first OverworldInit
-static OverworldState gOverworld = {0};
+static bool gInitialized  = false;  // false until first FieldInit
+static FieldState gField = {0};
 
 // Persistent storage for the drop dialogue pages — DialogueBegin keeps pointers
 // into these buffers, so they must outlive the call.
@@ -34,7 +34,7 @@ static char gDropMsg[DROP_MSG_PAGES][DROP_MSG_LEN];
 
 // Roll drops on the defeated enemy, append to inventory, and prepare a dialogue
 // describing what was picked up. Returns number of dialogue pages populated.
-static int RollEnemyDrops(OverworldEnemy *e, Inventory *inv)
+static int RollEnemyDrops(FieldEnemy *e, Inventory *inv)
 {
     int pages = 0;
     if (e->dropItemId >= 0 && GetRandomValue(1, 100) <= e->dropItemPct) {
@@ -59,16 +59,16 @@ void InitGameplayScreen(void)
 {
     finishScreen = 0;
     // A defeat sends us through ENDING back to TITLE; starting a new game
-    // from there must wipe the prior run, not reload its overworld state.
+    // from there must wipe the prior run, not reload its field state.
     if (GetLastBattleResult() == BATTLE_DEFEAT) {
         gInitialized = false;
     }
     if (!gInitialized) {
-        OverworldInit(&gOverworld);
+        FieldInit(&gField);
         gInitialized = true;
     } else {
         // Returning from battle: reload textures, preserve all game state
-        OverworldReloadResources(&gOverworld);
+        FieldReloadResources(&gField);
         // Deactivate every enemy that was in the encounter + roll drops on each.
         // Drops from the first enemy that produced any get narrated; the rest
         // still land in the inventory silently so the player isn't buried in
@@ -76,11 +76,11 @@ void InitGameplayScreen(void)
         if (GetLastBattleResult() == BATTLE_VICTORY) {
             int narratedPages = 0;
             const char *ptrs[DROP_MSG_PAGES];
-            for (int k = 0; k < gOverworld.pendingEnemyCount; k++) {
-                int idx = gOverworld.pendingEnemyIdxs[k];
-                if (idx < 0 || idx >= gOverworld.enemyCount) continue;
-                OverworldEnemy *e = &gOverworld.enemies[idx];
-                int pages = RollEnemyDrops(e, &gOverworld.party.inventory);
+            for (int k = 0; k < gField.pendingEnemyCount; k++) {
+                int idx = gField.pendingEnemyIdxs[k];
+                if (idx < 0 || idx >= gField.enemyCount) continue;
+                FieldEnemy *e = &gField.enemies[idx];
+                int pages = RollEnemyDrops(e, &gField.party.inventory);
                 e->active = false;
                 if (narratedPages == 0 && pages > 0) {
                     narratedPages = pages;
@@ -88,35 +88,35 @@ void InitGameplayScreen(void)
                 }
             }
             if (narratedPages > 0)
-                DialogueBegin(&gOverworld.dialogue, ptrs, narratedPages, 40.0f);
+                DialogueBegin(&gField.dialogue, ptrs, narratedPages, 40.0f);
         }
-        gOverworld.pendingEnemyCount = 0;
+        gField.pendingEnemyCount = 0;
     }
 }
 
 void UpdateGameplayScreen(void)
 {
-    OverworldUpdate(&gOverworld, GetFrameTime());
+    FieldUpdate(&gField, GetFrameTime());
 
-    if (gOverworld.pendingBattle) {
-        gOverworld.pendingBattle = false;
+    if (gField.pendingBattle) {
+        gField.pendingBattle = false;
         // Wire up every queued enemy so group aggro → one multi-enemy battle.
-        int count = gOverworld.pendingEnemyCount;
+        int count = gField.pendingEnemyCount;
         if (count > 0) {
-            int ids[OVERWORLD_MAX_PENDING];
-            int levels[OVERWORLD_MAX_PENDING];
+            int ids[FIELD_MAX_PENDING];
+            int levels[FIELD_MAX_PENDING];
             int n = 0;
             for (int k = 0; k < count; k++) {
-                int idx = gOverworld.pendingEnemyIdxs[k];
-                if (idx < 0 || idx >= gOverworld.enemyCount) continue;
-                OverworldEnemy *e = &gOverworld.enemies[idx];
+                int idx = gField.pendingEnemyIdxs[k];
+                if (idx < 0 || idx >= gField.enemyCount) continue;
+                FieldEnemy *e = &gField.enemies[idx];
                 ids[n]    = e->creatureId;
                 levels[n] = e->level;
                 n++;
             }
-            BattlePrepareEncounter(&gOverworld.party, ids, levels, n);
-            BattleSetPreemptive(gOverworld.preemptiveAttack);
-            gOverworld.preemptiveAttack = false;
+            BattlePrepareEncounter(&gField.party, ids, levels, n);
+            BattleSetPreemptive(gField.preemptiveAttack);
+            gField.preemptiveAttack = false;
         }
         finishScreen = 2; // → BATTLE
     }
@@ -124,12 +124,12 @@ void UpdateGameplayScreen(void)
 
 void DrawGameplayScreen(void)
 {
-    OverworldDraw(&gOverworld);
+    FieldDraw(&gField);
 }
 
 void UnloadGameplayScreen(void)
 {
-    OverworldUnload(&gOverworld);
+    FieldUnload(&gField);
 }
 
 int FinishGameplayScreen(void)

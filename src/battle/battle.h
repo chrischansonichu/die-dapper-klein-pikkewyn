@@ -72,14 +72,14 @@ typedef struct BattleContext {
     char            narration[NARRATION_LEN];
     float           enterTimer;
     bool            xpNarrationShown; // true after XP award narration displayed
-    bool            preemptiveAttack; // set by overworld; consumed by BattleInit
+    bool            preemptiveAttack; // set by field; consumed by BattleInit
 
     // Background tint for the battle scene
     Color           bgColor;
 } BattleContext;
 
 // Set the pending context before transitioning to BATTLE screen
-// (called by overworld just before screen switch)
+// (called by field just before screen switch)
 void BattleSetPending(BattleContext *ctx, Party *party,
                       int enemyIds[], int enemyLevels[], int enemyCount);
 
