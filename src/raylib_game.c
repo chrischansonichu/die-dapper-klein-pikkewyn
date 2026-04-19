@@ -63,6 +63,11 @@ int main(void)
 
     InitAudioDevice();      // Initialize audio device
 
+    // Resolve resource paths relative to the executable so `./game` and
+    // double-clicking both work. Without this, LoadTexture/LoadFont/LoadSound
+    // fail silently whenever the cwd isn't the binary's directory.
+    ChangeDirectory(GetApplicationDirectory());
+
     // Load global data (assets that must be available in all screens, i.e. font)
     font = LoadFont("resources/mecha.png");
     //music = LoadMusicStream("resources/ambient.ogg"); // TODO: Load music
@@ -73,7 +78,7 @@ int main(void)
 
     // Setup and init first screen
     currentScreen = TITLE;
-    InitLogoScreen();
+    InitTitleScreen();
 
 #if defined(PLATFORM_WEB)
     emscripten_set_main_loop(UpdateDrawFrame, 60, 1);
