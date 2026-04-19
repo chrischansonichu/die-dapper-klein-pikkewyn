@@ -7,10 +7,13 @@
 #include "player.h"
 #include "npc.h"
 #include "enemy.h"
-#include "../battle/party.h"
 #include "../systems/camera_system.h"
 #include "../systems/dialogue.h"
 #include "inventory_ui.h"
+
+// Forward declaration — field.c reads/writes the persistent party + inventory
+// through this pointer; ownership lives in screen_gameplay.c.
+struct GameState;
 
 //----------------------------------------------------------------------------------
 // FieldState - the complete tile-walking field subsystem (hub, dungeons, etc.)
@@ -35,7 +38,8 @@ typedef struct FieldState {
     int           pendingEnemyIdxs[FIELD_MAX_PENDING];
     int           pendingEnemyCount;
 
-    Party         party;
+    // Borrowed pointer to the persistent game state (party, inventory, ...).
+    struct GameState *gs;
 
     // Dialogue
     DialogueBox   dialogue;
@@ -49,7 +53,7 @@ typedef struct FieldState {
     bool          preemptiveAttack; // Jan struck first — grant a free Tackle
 } FieldState;
 
-void FieldInit(FieldState *f);
+void FieldInit(FieldState *f, struct GameState *gs);
 // Reload GPU resources (textures) without touching game state.
 // Call this instead of FieldInit when returning from battle.
 void FieldReloadResources(FieldState *f);

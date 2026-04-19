@@ -9,6 +9,7 @@
 #include "screens.h"
 #include "field/field.h"
 #include "field/enemy.h"
+#include "state/game_state.h"
 #include "battle/inventory.h"
 #include "data/item_defs.h"
 #include "data/move_defs.h"
@@ -20,6 +21,7 @@
 //----------------------------------------------------------------------------------
 static int  finishScreen  = 0;
 static bool gInitialized  = false;  // false until first FieldInit
+static GameState gGameState = {0};
 static FieldState gField = {0};
 
 // Persistent storage for the drop dialogue pages — DialogueBegin keeps pointers
@@ -64,7 +66,8 @@ void InitGameplayScreen(void)
         gInitialized = false;
     }
     if (!gInitialized) {
-        FieldInit(&gField);
+        GameStateInit(&gGameState);
+        FieldInit(&gField, &gGameState);
         gInitialized = true;
     } else {
         // Returning from battle: reload textures, preserve all game state
@@ -80,7 +83,7 @@ void InitGameplayScreen(void)
                 int idx = gField.pendingEnemyIdxs[k];
                 if (idx < 0 || idx >= gField.enemyCount) continue;
                 FieldEnemy *e = &gField.enemies[idx];
-                int pages = RollEnemyDrops(e, &gField.party.inventory);
+                int pages = RollEnemyDrops(e, &gGameState.party.inventory);
                 e->active = false;
                 if (narratedPages == 0 && pages > 0) {
                     narratedPages = pages;
@@ -114,7 +117,7 @@ void UpdateGameplayScreen(void)
                 levels[n] = e->level;
                 n++;
             }
-            BattlePrepareEncounter(&gField.party, ids, levels, n);
+            BattlePrepareEncounter(&gGameState.party, ids, levels, n);
             BattleSetPreemptive(gField.preemptiveAttack);
             gField.preemptiveAttack = false;
         }

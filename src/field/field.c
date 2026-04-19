@@ -1,5 +1,6 @@
 #include "field.h"
 #include "enemy_sprites.h"
+#include "../state/game_state.h"
 #include "../data/item_defs.h"
 #include <string.h>
 #include <stdio.h>
@@ -63,9 +64,9 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
             return 1;
         }
         // Recruit. Match seal's level to Jan's so XP split feels fair.
-        int janLevel = (ow->party.count > 0) ? ow->party.members[0].level : 1;
-        if (ow->party.count < PARTY_MAX) {
-            PartyAddMember(&ow->party, CREATURE_SEAL, janLevel);
+        int janLevel = (ow->gs->party.count > 0) ? ow->gs->party.members[0].level : 1;
+        if (ow->gs->party.count < PARTY_MAX) {
+            PartyAddMember(&ow->gs->party, CREATURE_SEAL, janLevel);
             n->active = false;
             snprintf(scratch[0], NPC_DIALOGUE_LEN,
                      "Arf! Let's teach those sailors a lesson together!");
@@ -168,9 +169,10 @@ static void AddTestEnemies(FieldState *ow)
     EnemySetDrops(p1, ITEM_SARDINE, 70, 3, 35);     // SeaUrchinSpike
 }
 
-void FieldInit(FieldState *ow)
+void FieldInit(FieldState *ow, GameState *gs)
 {
     memset(ow, 0, sizeof(FieldState));
+    ow->gs = gs;
 
     // Build map
     TileMapBuildTestMap(&ow->map);
@@ -178,12 +180,6 @@ void FieldInit(FieldState *ow)
 
     // Spawn player on the beach
     PlayerInit(&ow->player, 8, 14);
-
-    // Party: Jan starts alone with a couple starter snacks
-    PartyInit(&ow->party);
-    PartyAddMember(&ow->party, CREATURE_JAN, 5);
-    InventoryAddItem(&ow->party.inventory, ITEM_KRILL_SNACK, 2);
-    InventoryAddItem(&ow->party.inventory, ITEM_FRESH_FISH, 1);
 
     // Inventory overlay closed on start
     InventoryUIInit(&ow->invUi);
@@ -221,7 +217,7 @@ void FieldUpdate(FieldState *ow, float dt)
 
     // Inventory overlay captures all input while open
     if (ow->invUi.active) {
-        InventoryUIUpdate(&ow->invUi, &ow->party);
+        InventoryUIUpdate(&ow->invUi, &ow->gs->party);
         return;
     }
     // Open inventory with I (only while not moving / no dialogue)
@@ -352,8 +348,8 @@ void FieldDraw(const FieldState *ow)
     EndMode2D();
 
     // HUD (screen space)
-    if (ow->party.count > 0) {
-        const Combatant *jan = &ow->party.members[0];
+    if (ow->gs->party.count > 0) {
+        const Combatant *jan = &ow->gs->party.members[0];
         DrawRectangle(8, 8, 160, 52, (Color){10, 10, 30, 180});
         DrawRectangleLines(8, 8, 160, 52, (Color){80, 80, 140, 255});
         DrawText(jan->name, 14, 12, 14, WHITE);
@@ -380,7 +376,7 @@ void FieldDraw(const FieldState *ow)
 
     // Inventory overlay
     if (ow->invUi.active) {
-        InventoryUIDraw(&ow->invUi, &ow->party);
+        InventoryUIDraw(&ow->invUi, &ow->gs->party);
     }
 }
 
