@@ -38,7 +38,34 @@ PROJECT_SOURCE_FILES  ?= \
     screen_title.c \
     screen_options.c \
     screen_gameplay.c \
-    screen_ending.c
+    screen_ending.c \
+    screen_battle.c \
+    battle/battle.c \
+    battle/battle_anim.c \
+    battle/battle_grid.c \
+    battle/battle_menu.c \
+    battle/battle_sprites.c \
+    battle/combatant.c \
+    battle/inventory.c \
+    battle/party.c \
+    data/creature_defs.c \
+    data/item_defs.c \
+    data/move_defs.c \
+    data/room_templates.c \
+    field/enemy.c \
+    field/enemy_sprites.c \
+    field/field.c \
+    field/inventory_ui.c \
+    field/map_authored.c \
+    field/map_dungeon_proc.c \
+    field/map_source.c \
+    field/npc.c \
+    field/player.c \
+    field/stats_ui.c \
+    field/tilemap.c \
+    state/game_state.c \
+    systems/camera_system.c \
+    systems/dialogue.c
 
 # raylib library variables
 RAYLIB_SRC_PATH       ?= ../../raylib/src
@@ -391,30 +418,32 @@ clean_shell_sh:
 ifeq ($(PLATFORM),PLATFORM_DESKTOP)
     ifeq ($(PLATFORM_OS),LINUX)
 		find . -type f -executable -delete
-		rm -fv *.o
+		find . -name '*.o' -delete
     endif
     ifeq ($(PLATFORM_OS),OSX)
 		#find . -type f -perm +ugo+x -delete
-		rm -f *.o
+		find . -name '*.o' -delete
     endif
 endif
 ifeq ($(PLATFORM),PLATFORM_RPI)
 	find . -type f -executable -delete
-	rm -fv *.o
+	find . -name '*.o' -delete
 endif
 ifeq ($(PLATFORM),PLATFORM_DRM)
 	find . -type f -executable -delete
-	rm -fv *.o
+	find . -name '*.o' -delete
 endif
 ifeq ($(PLATFORM),PLATFORM_WEB)
     ifeq ($(PLATFORM_OS),LINUX)
-		rm -fv *.o $(PROJECT_NAME).data $(PROJECT_NAME).html $(PROJECT_NAME).js $(PROJECT_NAME).wasm
+		find . -name '*.o' -delete
+		rm -fv $(PROJECT_NAME).data $(PROJECT_NAME).html $(PROJECT_NAME).js $(PROJECT_NAME).wasm
     endif
     ifeq ($(PLATFORM_OS),OSX)
-		rm -f *.o $(PROJECT_NAME).data $(PROJECT_NAME).html $(PROJECT_NAME).js $(PROJECT_NAME).wasm
+		find . -name '*.o' -delete
+		rm -f $(PROJECT_NAME).data $(PROJECT_NAME).html $(PROJECT_NAME).js $(PROJECT_NAME).wasm
     endif
 endif
 
 clean_shell_cmd: SHELL=cmd
 clean_shell_cmd:
-	del *.o *.exe $(PROJECT_NAME).data $(PROJECT_NAME).html $(PROJECT_NAME).js $(PROJECT_NAME).wasm /s
+	del *.o battle\*.o data\*.o field\*.o state\*.o *.exe $(PROJECT_NAME).data $(PROJECT_NAME).html $(PROJECT_NAME).js $(PROJECT_NAME).wasm /s

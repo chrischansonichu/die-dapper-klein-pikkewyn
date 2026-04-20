@@ -58,7 +58,7 @@ void UpdateTitleScreen(void) {
     }
 }
 
-void DrawButton(const char *text, const int buttonNumber, const int finScreen) {
+void DrawButton(const char *text, const int buttonNumber, const int finScreen, bool enabled) {
     const int W = GetScreenWidth();
     const int H = GetScreenHeight();
     const int btnW = W / 6;
@@ -81,13 +81,24 @@ void DrawButton(const char *text, const int buttonNumber, const int finScreen) {
     const int textY = bottomRow + (btnH - textHeight) / 2;
     const Vector2 mouse = GetMousePosition();
     const Rectangle rect = {(float) posX, (float) bottomRow, (float) btnW, (float) btnH};
-    const bool hovered = CheckCollisionPointRec(mouse, rect);
+    const bool hovered = enabled && CheckCollisionPointRec(mouse, rect);
 
     // Semi-transparent plate so the button reads over the illustration.
-    const Color plate  = hovered ? (Color){ 20,  20,  25, 210 }
-                                 : (Color){  0,   0,   0, 170 };
-    const Color border = hovered ? RAYWHITE : (Color){230, 210, 140, 255};
-    const Color label  = hovered ? RAYWHITE : (Color){240, 225, 170, 255};
+    // Disabled buttons keep their footprint but render washed out and eat no clicks.
+    Color plate, border, label;
+    if (!enabled) {
+        plate  = (Color){  0,   0,   0, 120 };
+        border = (Color){120, 110,  80, 200 };
+        label  = (Color){160, 150, 120, 200 };
+    } else if (hovered) {
+        plate  = (Color){ 20,  20,  25, 210 };
+        border = RAYWHITE;
+        label  = RAYWHITE;
+    } else {
+        plate  = (Color){  0,   0,   0, 170 };
+        border = (Color){230, 210, 140, 255};
+        label  = (Color){240, 225, 170, 255};
+    }
 
     DrawRectangleRec(rect, plate);
     DrawRectangleLinesEx(rect, 3, border);
@@ -120,10 +131,12 @@ void DrawTitleScreen(void) {
         DrawRectangleGradientV(0, 0, W, H, SKYBLUE, BLUE);
     }
 
-    // Buttons (each W/6 wide, equally spaced, overlaid on the lower strip)
-    DrawButton("New", 0, 2);
-    DrawButton("Load", 1, 2); // TODO add load screen
-    DrawButton("Options", 2, 1);
+    // Buttons (each W/6 wide, equally spaced, overlaid on the lower strip).
+    // Options is stubbed (leads to a blank page with no way out), so it's
+    // rendered disabled until that screen exists.
+    DrawButton("New", 0, 2, true);
+    DrawButton("Load", 1, 2, true); // TODO add load screen
+    DrawButton("Options", 2, 1, false);
 }
 
 // Title Screen Unload logic
