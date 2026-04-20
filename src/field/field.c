@@ -58,9 +58,9 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
     Npc *n = &ow->npcs[npcIdx];
 
     if (n->type == NPC_SEAL) {
-        if (CountDefeatedEnemies(ow) < 1) {
+        if (NpcCurrentlyCaptive(n, ow->enemies, ow->enemyCount)) {
             snprintf(scratch[0], NPC_DIALOGUE_LEN,
-                     "Arf! Prove yourself first. Rough up one of those sailors and come back.");
+                     "...mmph! (He's tied up. Defeat the sailors guarding him!)");
             pages[0] = scratch[0];
             return 1;
         }
@@ -70,7 +70,7 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
             PartyAddMember(&ow->gs->party, CREATURE_SEAL, janLevel);
             n->active = false;
             snprintf(scratch[0], NPC_DIALOGUE_LEN,
-                     "Arf! Let's teach those sailors a lesson together!");
+                     "Arf! Thanks for the rescue — let's teach them a lesson!");
             snprintf(scratch[1], NPC_DIALOGUE_LEN,
                      "The seal joins your party. (XP is now split evenly.)");
             pages[0] = scratch[0];
@@ -348,8 +348,11 @@ void FieldDraw(const FieldState *ow)
             EnemyDraw(&ow->enemies[i]);
 
         // Draw NPCs
-        for (int i = 0; i < ow->npcCount; i++)
+        for (int i = 0; i < ow->npcCount; i++) {
             NpcDraw(&ow->npcs[i], ow->camera);
+            if (NpcCurrentlyCaptive(&ow->npcs[i], ow->enemies, ow->enemyCount))
+                NpcDrawCaptiveOverlay(&ow->npcs[i]);
+        }
 
         // Draw player
         PlayerDraw(&ow->player);

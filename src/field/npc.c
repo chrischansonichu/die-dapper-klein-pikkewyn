@@ -1,4 +1,5 @@
 #include "npc.h"
+#include "enemy.h"
 #include <string.h>
 
 void NpcInit(Npc *n, int tileX, int tileY, int dir, NpcType type)
@@ -11,6 +12,31 @@ void NpcInit(Npc *n, int tileX, int tileY, int dir, NpcType type)
     n->dialogueCount = 0;
     for (int i = 0; i < NPC_MAX_DIALOGUE_PAGES; i++)
         n->dialogue[i][0] = '\0';
+    n->isCaptive   = false;
+    n->captorCount = 0;
+    n->captorIdxs[0] = -1;
+    n->captorIdxs[1] = -1;
+}
+
+void NpcSetCaptors(Npc *n, int enemyIdx0, int enemyIdx1)
+{
+    n->isCaptive     = true;
+    n->captorCount   = 0;
+    n->captorIdxs[0] = -1;
+    n->captorIdxs[1] = -1;
+    if (enemyIdx0 >= 0) n->captorIdxs[n->captorCount++] = enemyIdx0;
+    if (enemyIdx1 >= 0) n->captorIdxs[n->captorCount++] = enemyIdx1;
+}
+
+bool NpcCurrentlyCaptive(const Npc *n, const struct FieldEnemy *enemies, int enemyCount)
+{
+    if (!n->isCaptive || n->captorCount == 0) return false;
+    for (int i = 0; i < n->captorCount; i++) {
+        int ei = n->captorIdxs[i];
+        if (ei < 0 || ei >= enemyCount) continue;
+        if (enemies[ei].active) return true;
+    }
+    return false;
 }
 
 void NpcAddDialogue(Npc *n, const char *text)
@@ -176,5 +202,37 @@ void NpcDraw(const Npc *n, Camera2D cam)
     switch (n->type) {
         case NPC_PENGUIN_ELDER: DrawPenguinElder(px, py, sz, n->dir); break;
         case NPC_SEAL:          DrawSeal(px, py, sz, n->dir);         break;
+    }
+}
+
+void NpcDrawCaptiveOverlay(const Npc *n)
+{
+    if (!n->active) return;
+
+    int tilePixels = TILE_SIZE * TILE_SCALE;
+    int px = n->tileX * tilePixels;
+    int py = n->tileY * tilePixels;
+    int sz = NPC_SPRITE_SIZE * TILE_SCALE;
+
+    // Rope: two warm-brown diagonals crossing the body + a knot at the X.
+    const Color rope = (Color){130,  85,  45, 235};
+    float thick = 2.0f * TILE_SCALE;
+    float x0 = px + sz * 0.18f;
+    float x1 = px + sz * 0.82f;
+    float y0 = py + sz * 0.38f;
+    float y1 = py + sz * 0.82f;
+    DrawLineEx((Vector2){x0, y0}, (Vector2){x1, y1}, thick, rope);
+    DrawLineEx((Vector2){x1, y0}, (Vector2){x0, y1}, thick, rope);
+    DrawCircle(px + sz / 2, py + (int)(sz * 0.60f), (int)(2.0f * TILE_SCALE), rope);
+
+    // Flashing red "!" above the sprite (~3 Hz)
+    if (((int)(GetTime() * 6.0) & 1) == 0) {
+        const Color redShadow = (Color){ 60, 10, 10, 220};
+        const Color red       = (Color){240, 60, 60, 255};
+        int bangX = px + sz / 2 - 4;
+        int bangY = py - 4 * TILE_SCALE;
+        int fontSize = 8 * TILE_SCALE;
+        DrawText("!", bangX + 1, bangY + 1, fontSize, redShadow);
+        DrawText("!", bangX,     bangY,     fontSize, red);
     }
 }

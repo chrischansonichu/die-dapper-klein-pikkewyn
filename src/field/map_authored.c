@@ -24,18 +24,40 @@ static void AddWarp(MapBuildContext *ctx, int tx, int ty,
 
 static void AddHarborF1Npcs(MapBuildContext *ctx)
 {
-    if (*ctx->npcCount + 2 > ctx->npcMax) return;
+    if (*ctx->npcCount + 1 > ctx->npcMax) return;
 
     // Friendly penguin elder on the dock
     Npc *elder = &ctx->npcs[(*ctx->npcCount)++];
     NpcInit(elder, 8, 13, 0, NPC_PENGUIN_ELDER);
     NpcAddDialogue(elder, "Jan! The sailors have taken all the fish!");
     NpcAddDialogue(elder, "You must fight them off. Be brave, little one.");
+}
 
-    // Seal ally on the beach
+// Seal is surrounded by two STAND sailors facing inward. Defeating both frees
+// the seal; the captor enemy indices are stored on the seal NPC so the
+// recruitment check doesn't depend on global enemy counts.
+static void AddSealCaptiveScene(MapBuildContext *ctx)
+{
+    if (*ctx->npcCount    + 1 > ctx->npcMax)    return;
+    if (*ctx->enemyCount  + 2 > ctx->enemyMax)  return;
+
+    // Captor A — west of the seal, facing right (toward seal at 14,15)
+    int capAIdx = *ctx->enemyCount;
+    FieldEnemy *capA = &ctx->enemies[(*ctx->enemyCount)++];
+    EnemyInit(capA, 13, 15, 2, BEHAVIOR_STAND, 1, 3, 3, (Color){180, 50, 50, 255});
+    EnemySetDrops(capA, ITEM_SARDINE, 60, -1, 0);
+
+    // Captor B — east of the seal, facing left
+    int capBIdx = *ctx->enemyCount;
+    FieldEnemy *capB = &ctx->enemies[(*ctx->enemyCount)++];
+    EnemyInit(capB, 15, 15, 1, BEHAVIOR_STAND, 1, 3, 3, (Color){200, 60, 60, 255});
+    EnemySetDrops(capB, ITEM_KRILL_SNACK, 70, -1, 0);
+
+    // Tied-up seal between them, facing up.
     Npc *seal = &ctx->npcs[(*ctx->npcCount)++];
     NpcInit(seal, 14, 15, 3, NPC_SEAL);
-    NpcAddDialogue(seal, "Arf! I can help you fight. Come find me when ready.");
+    NpcAddDialogue(seal, "Arf! Let's teach those sailors a lesson together!");
+    NpcSetCaptors(seal, capAIdx, capBIdx);
 }
 
 static void AddHarborF1Enemies(MapBuildContext *ctx)
@@ -204,6 +226,7 @@ void BuildHarborFloor1(MapBuildContext *ctx)
 
     AddHarborF1Npcs(ctx);
     AddHarborF1Enemies(ctx);
+    AddSealCaptiveScene(ctx);
 
     // Descent warp at the far east end of the dock → procedural floor 2.
     // Player has to push past the patrol sailor to reach it. One-way: there

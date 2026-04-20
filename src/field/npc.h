@@ -18,6 +18,8 @@ typedef enum NpcType {
     NPC_SEAL,
 } NpcType;
 
+struct FieldEnemy;
+
 typedef struct Npc {
     int     tileX;
     int     tileY;
@@ -26,15 +28,30 @@ typedef struct Npc {
     bool    active;
     char    dialogue[NPC_MAX_DIALOGUE_PAGES][NPC_DIALOGUE_LEN];
     int     dialogueCount;
+    // Captive scene: NPC is tied up while any listed captor is still active.
+    // Check via NpcCurrentlyCaptive; overlay (rope + flashing "!") via
+    // NpcDrawCaptiveOverlay. captorCount == 0 means "never captive".
+    bool    isCaptive;
+    int     captorIdxs[2];
+    int     captorCount;
 } Npc;
 
 void NpcInit(Npc *n, int tileX, int tileY, int dir, NpcType type);
 void NpcAddDialogue(Npc *n, const char *text);
+// Mark this NPC as a captive held by up to two enemies (by index into
+// FieldState.enemies). Pass -1 for unused slots.
+void NpcSetCaptors(Npc *n, int enemyIdx0, int enemyIdx1);
+// True iff the NPC is flagged captive AND at least one listed captor is
+// still active (non-defeated).
+bool NpcCurrentlyCaptive(const Npc *n, const struct FieldEnemy *enemies, int enemyCount);
 // Returns true if npc is on the tile directly in front of the player.
 // NPC facing doesn't matter — the player is the one initiating interaction.
 bool NpcIsInteractable(const Npc *n, int playerTileX, int playerTileY, int playerDir);
 // Snap NPC to face the given tile (used when the player starts a conversation).
 void NpcTurnToFace(Npc *n, int tileX, int tileY);
 void NpcDraw(const Npc *n, Camera2D cam);
+// Draws rope + flashing "!" on top of the NPC. Caller decides whether to
+// invoke based on NpcCurrentlyCaptive.
+void NpcDrawCaptiveOverlay(const Npc *n);
 
 #endif // NPC_H
