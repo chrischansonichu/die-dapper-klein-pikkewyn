@@ -33,6 +33,11 @@ static FieldState gField = {0};
 #define DROP_MSG_LEN   160
 static char gDropMsg[DROP_MSG_PAGES][DROP_MSG_LEN];
 
+// Rescue greeting — shown when a captive ally is freed and joins the party.
+// Kept alongside drop pages so both can flow into one DialogueBegin.
+#define RESCUE_GREET_LEN 160
+static char gRescueGreet[RESCUE_GREET_LEN];
+
 // Rescue dialogue storage — same lifetime reasoning as gDropMsg: DialogueBegin
 // keeps pointers, so the buffers must outlive the call.
 #define RESCUE_MSG_PAGES 2
@@ -101,26 +106,28 @@ void InitGameplayScreen(void)
 
     // Returning from battle normally — reload textures, preserve all state.
     FieldReloadResources(&gField);
+
+    // Collect dialogue pages from two sources: enemy drops + rescued-ally
+    // greeting. Drops are narrated for the first enemy that produced any;
+    // rescue greeting appends once the temp-ally resolution is done.
+    const char *ptrs[DROP_MSG_PAGES + 1];
+    int pageCount = 0;
+
     // Deactivate every enemy that was in the encounter + roll drops on each.
     // Drops from the first enemy that produced any get narrated; the rest
     // still land in the inventory silently so the player isn't buried in
     // dialogue pages after a big group fight.
     if (br == BATTLE_VICTORY) {
-        int narratedPages = 0;
-        const char *ptrs[DROP_MSG_PAGES];
         for (int k = 0; k < gField.pendingEnemyCount; k++) {
             int idx = gField.pendingEnemyIdxs[k];
             if (idx < 0 || idx >= gField.enemyCount) continue;
             FieldEnemy *e = &gField.enemies[idx];
             int pages = RollEnemyDrops(e, &gGameState.party.inventory);
             e->active = false;
-            if (narratedPages == 0 && pages > 0) {
-                narratedPages = pages;
-                for (int i = 0; i < pages; i++) ptrs[i] = gDropMsg[i];
+            if (pageCount == 0 && pages > 0) {
+                for (int i = 0; i < pages; i++) ptrs[pageCount++] = gDropMsg[i];
             }
         }
-        if (narratedPages > 0)
-            DialogueBegin(&gField.dialogue, ptrs, narratedPages, 40.0f);
     }
     gField.pendingEnemyCount = 0;
 
@@ -137,14 +144,22 @@ void InitGameplayScreen(void)
                                             gField.enemies, gField.enemyCount);
         }
         if (keepAlly && partyIdx < gGameState.party.count) {
-            CombatantClearStatus(&gGameState.party.members[partyIdx], STATUS_BOUND);
+            Combatant *ally = &gGameState.party.members[partyIdx];
+            CombatantClearStatus(ally, STATUS_BOUND);
             gField.npcs[npcIdx].active = false;
+            snprintf(gRescueGreet, RESCUE_GREET_LEN,
+                     "Arf! Thanks for the rescue! %s joins your party.",
+                     ally->name);
+            ptrs[pageCount++] = gRescueGreet;
         } else {
             PartyRemoveMember(&gGameState.party, partyIdx);
         }
         gGameState.tempAllyPartyIdx = -1;
         gGameState.tempAllyNpcIdx   = -1;
     }
+
+    if (pageCount > 0)
+        DialogueBegin(&gField.dialogue, ptrs, pageCount, 40.0f);
 }
 
 // Rebuild the FieldState against the pending map. Called when the player

@@ -221,6 +221,7 @@ static void ApplyMoveToCell(BattleContext *ctx)
         CombatantClearStatus(target, STATUS_BOUND);
         BattleAnimPlayHitFrom(&ctx->anim, actorIsEn, te->idx,
                               ctx->targetOnEnemySide, occ);
+        BattleAnimMarkRopeCut(&ctx->anim);
         snprintf(ctx->narration, NARRATION_LEN,
                  "%s used %s and cut %s's ropes free!",
                  actor->name, mv->name, target->name);
@@ -901,6 +902,43 @@ void BattleDraw(const BattleContext *ctx)
         }
 
         DrawCombatantInCell(c, r, true, alpha, slideX, slideY, flash);
+    }
+
+    // Rope-cut flourish: debris lines + SNAP! tag on the target cell.
+    if (ctx->anim.active && ctx->anim.ropeCut) {
+        Rectangle tr = BattleGridCellRect(ctx->anim.targetIsEnemy,
+                                          0, 0); // placeholder; resolve below
+        GridPos tp;
+        bool found = BattleGridFind(&((BattleContext *)ctx)->grid,
+                                    ctx->anim.targetIsEnemy,
+                                    ctx->anim.targetIdx, &tp);
+        if (found) tr = BattleGridCellRect(ctx->anim.targetIsEnemy, tp.col, tp.row);
+        if (found) {
+            float t = ctx->anim.timer / ctx->anim.duration;
+            if (t > 1.0f) t = 1.0f;
+            float cx = tr.x + tr.width * 0.5f;
+            float cy = tr.y + tr.height * 0.5f;
+            float spread = 6.0f + t * 22.0f;
+            unsigned char a = (unsigned char)(255 * (1.0f - t));
+            Color rope = (Color){210, 180, 120, a};
+            // 4 fragments flying diagonally outward.
+            Vector2 dirs[4] = {{-1,-1},{1,-1},{-1,1},{1,1}};
+            for (int i = 0; i < 4; i++) {
+                float sx = cx + dirs[i].x * spread;
+                float sy = cy + dirs[i].y * spread;
+                float ex = sx + dirs[i].x * 8.0f;
+                float ey = sy + dirs[i].y * 8.0f;
+                DrawLineEx((Vector2){sx, sy}, (Vector2){ex, ey}, 2.0f, rope);
+            }
+            // SNAP! tag — brief, fades with the anim.
+            if (t < 0.6f) {
+                unsigned char ta = (unsigned char)(255 * (1.0f - t / 0.6f));
+                int fs = 18;
+                int tw = MeasureText("SNAP!", fs);
+                DrawText("SNAP!", (int)(cx - tw / 2), (int)(tr.y - 22),
+                         fs, (Color){255, 240, 120, ta});
+            }
+        }
     }
 
     // Draw UI based on state

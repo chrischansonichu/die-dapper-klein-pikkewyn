@@ -30,6 +30,9 @@ typedef struct BattleAnim {
     bool           actorIsEnemy;
     int            actorIdx;
     float          actorSlideX;  // +px toward opponent; player + , enemy -
+    // Cosmetic flag: current BANIM_HIT represents a rope-cutting strike.
+    // Draw layer overlays rope debris + a SNAP! tag on the target cell.
+    bool           ropeCut;
 } BattleAnim;
 
 void BattleAnimPlay(BattleAnim *a, BattleAnimType type, bool isEnemy, int idx);
@@ -38,6 +41,9 @@ void BattleAnimPlay(BattleAnim *a, BattleAnimType type, bool isEnemy, int idx);
 void BattleAnimPlayHitFrom(BattleAnim *a,
                            bool actorIsEnemy, int actorIdx,
                            bool targetIsEnemy, int targetIdx);
+// Flag the current hit as a rope-cut; caller invokes this after the hit-from
+// call. Cleared automatically on the next BattleAnimPlay.
+void BattleAnimMarkRopeCut(BattleAnim *a);
 void BattleAnimUpdate(BattleAnim *a, float dt);
 bool BattleAnimDone(const BattleAnim *a);
 // Apply shake offset to a draw position

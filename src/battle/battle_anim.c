@@ -15,6 +15,7 @@ void BattleAnimPlay(BattleAnim *a, BattleAnimType type, bool isEnemy, int idx)
     a->actorIsEnemy  = false;
     a->actorIdx      = -1;
     a->actorSlideX   = 0.0f;
+    a->ropeCut       = false;
 
     switch (type) {
         case BANIM_HIT:   a->duration = 0.4f; break;
@@ -33,6 +34,13 @@ void BattleAnimPlayHitFrom(BattleAnim *a,
     a->actorIsEnemy = actorIsEnemy;
     a->actorIdx     = actorIdx;
     a->actorSlideX  = 0.0f;
+}
+
+void BattleAnimMarkRopeCut(BattleAnim *a)
+{
+    // Stretch the duration a touch so the debris + SNAP! has time to read.
+    a->ropeCut  = true;
+    a->duration = 0.7f;
 }
 
 void BattleAnimUpdate(BattleAnim *a, float dt)
