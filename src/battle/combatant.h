@@ -11,6 +11,14 @@
 
 #define COMBATANT_NAME_LEN 32
 
+// Bitmask of transient combat conditions. Designed for growth — add flags as
+// new statuses are introduced (poison, stun, ...). STATUS_BOUND skips the
+// actor's turn and is cleared by SLASH/PIERCE damage to their cell.
+typedef enum CombatantStatus {
+    STATUS_NONE  = 0,
+    STATUS_BOUND = 1 << 0,
+} CombatantStatus;
+
 typedef struct Combatant {
     const CreatureDef *def;     // points into static table, never owned
     char  name[COMBATANT_NAME_LEN];
@@ -32,7 +40,19 @@ typedef struct Combatant {
     int   xpToNext;
     // Per-move durability: mirrors moveIds[]; -1 = unlimited, 0 = broken
     int   moveDurability[CREATURE_MAX_MOVES];
+    // Active status flags (bitmask of CombatantStatus).
+    int   statusFlags;
 } Combatant;
+
+static inline bool CombatantHasStatus(const Combatant *c, CombatantStatus s) {
+    return (c->statusFlags & s) != 0;
+}
+static inline void CombatantAddStatus(Combatant *c, CombatantStatus s) {
+    c->statusFlags |= s;
+}
+static inline void CombatantClearStatus(Combatant *c, CombatantStatus s) {
+    c->statusFlags &= ~s;
+}
 
 void CombatantInit(Combatant *c, int creatureId, int level);
 int  CalculateDamage(const Combatant *attacker, const Combatant *defender, const MoveDef *move);

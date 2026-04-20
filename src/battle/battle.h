@@ -65,6 +65,11 @@ typedef struct BattleContext {
     int             targetEnemyIdx;
     int             moveDirCursor; // 0=up 1=right 2=down 3=left 4=stay
 
+    // Freeform target-select cursor: any cell on either side, including
+    // empty cells and friendly cells. Execution resolves based on occupant.
+    GridPos         targetCell;
+    bool            targetOnEnemySide;
+
     // Move phase cursor (the highlighted cell to move to)
     GridPos         moveCursorPos;
     bool            moveCursorActive;
@@ -72,6 +77,11 @@ typedef struct BattleContext {
     // Pre-battle layout state
     GridPos         layoutCursor;
     int             layoutHeld;      // party idx currently picked up, -1 if none
+
+    // Party index of a temporarily-recruited ally (e.g., the bound seal);
+    // -1 if none. Set by BattleSetPending; consumed post-battle by gameplay
+    // screen to decide whether the ally stays or is removed.
+    int             tempAllyPartyIdx;
 
     // Narration
     char            narration[NARRATION_LEN];

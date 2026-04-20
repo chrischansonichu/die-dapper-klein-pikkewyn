@@ -60,6 +60,9 @@ typedef struct FieldState {
     // initiates a surprise strike on an unaware enemy)
     bool          pendingBattle;
     bool          preemptiveAttack; // Jan struck first — grant a free Tackle
+    // If >= 0, the queued battle includes a captive NPC as a temporary bound
+    // ally (screen_gameplay adds them to the party before entering the fight).
+    int           pendingAllyNpcIdx;
 } FieldState;
 
 void FieldInit(FieldState *f, struct GameState *gs);

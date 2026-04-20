@@ -83,11 +83,27 @@ static void AITakeTurn(BattleContext *ctx)
     }
     ctx->selectedMove = bestMove;
 
-    // Pick first living player as target
-    ctx->targetEnemyIdx = -1;
+    // Pick first unbound living player as target cell (enemies avoid wasting
+    // turns on the tied-up seal — it would tick their own captive's ropes).
+    ctx->targetEnemyIdx     = -1;
+    ctx->targetOnEnemySide  = false;
+    ctx->targetCell         = (GridPos){GRID_COLS - 1, 0};
     for (int i = 0; i < ctx->party->count; i++) {
-        if (ctx->party->members[i].alive) {
+        Combatant *m = &ctx->party->members[i];
+        if (!m->alive) continue;
+        if (CombatantHasStatus(m, STATUS_BOUND)) continue;
+        ctx->targetEnemyIdx = i;
+        GridPos tp;
+        if (BattleGridFind(&ctx->grid, false, i, &tp)) ctx->targetCell = tp;
+        break;
+    }
+    // Fallback: if everyone's bound, target the first living member anyway.
+    if (ctx->targetEnemyIdx < 0) {
+        for (int i = 0; i < ctx->party->count; i++) {
+            if (!ctx->party->members[i].alive) continue;
             ctx->targetEnemyIdx = i;
+            GridPos tp;
+            if (BattleGridFind(&ctx->grid, false, i, &tp)) ctx->targetCell = tp;
             break;
         }
     }
@@ -116,18 +132,145 @@ static BattleState TrySelectMove(BattleContext *ctx, int slot)
     }
     ctx->selectedMove = slot;
 
-    int liveCount = 0;
-    for (int i = 0; i < ctx->enemyCount; i++)
-        if (ctx->enemies[i].alive) liveCount++;
-
-    if (mv->range == RANGE_AOE || mv->range == RANGE_SELF || liveCount <= 1) {
-        ctx->targetEnemyIdx = -1;
-        for (int i = 0; i < ctx->enemyCount; i++)
-            if (ctx->enemies[i].alive) { ctx->targetEnemyIdx = i; break; }
+    // AOE / SELF don't need a picked cell — ExecuteAction resolves side from
+    // aoeTargetsEnemies. We still set targetCell for any downstream anim code.
+    if (mv->range == RANGE_AOE || mv->range == RANGE_SELF) {
+        ctx->targetOnEnemySide = !CurrentActorIsEnemy(ctx);
+        ctx->targetCell        = (GridPos){0, 0};
         return BS_EXECUTE;
     }
-    ctx->menu.targetCursor = 0;
+
+    // Seed the freeform cursor on a sensible first guess: the first living
+    // enemy (opposite side). Falls back to the enemy front col, row 0.
+    bool actorIsEn = CurrentActorIsEnemy(ctx);
+    ctx->targetOnEnemySide = !actorIsEn;
+    ctx->targetCell        = (GridPos){ actorIsEn ? (GRID_COLS - 1) : 0, 0 };
+    if (!actorIsEn) {
+        for (int i = 0; i < ctx->enemyCount; i++) {
+            if (!ctx->enemies[i].alive) continue;
+            GridPos tp;
+            if (BattleGridFind(&ctx->grid, true, i, &tp)) {
+                ctx->targetCell = tp;
+                break;
+            }
+        }
+    } else {
+        for (int i = 0; i < ctx->party->count; i++) {
+            if (!ctx->party->members[i].alive) continue;
+            GridPos tp;
+            if (BattleGridFind(&ctx->grid, false, i, &tp)) {
+                ctx->targetCell = tp;
+                break;
+            }
+        }
+    }
     return BS_TARGET_SELECT;
+}
+
+// Decrement durability of a player-cast weapon move; enemies are unlimited.
+static void ConsumeMoveUse(BattleContext *ctx, bool actorIsEnemy, int slot)
+{
+    if (actorIsEnemy || slot < 0) return;
+    Combatant *actor = GetCurrentActor(ctx);
+    if (!actor) return;
+    int *dur = &actor->moveDurability[slot];
+    if (*dur > 0) (*dur)--;
+}
+
+// Compute damage; apply friendly-fire and rope-cut rules; write narration.
+// `targetIdx` is the slot on whichever side `targetIsEnemySide` specifies;
+// negative means "cell is empty" (whiff).
+static void ApplyMoveToCell(BattleContext *ctx)
+{
+    TurnEntry *te    = &ctx->turnOrder[ctx->currentTurn];
+    Combatant *actor = GetCurrentActor(ctx);
+    const MoveDef *mv = GetMoveDef(actor->moveIds[ctx->selectedMove]);
+
+    // Side-of-actor vs side-of-target tells friend from foe.
+    bool actorIsEn = te->isEnemy;
+    bool friendly  = (ctx->targetOnEnemySide == actorIsEn);
+
+    // Pull the occupant at the target cell, if any.
+    int tc = ctx->targetCell.col, tr = ctx->targetCell.row;
+    int occ = ctx->targetOnEnemySide ? ctx->grid.enemySlots[tc][tr]
+                                     : ctx->grid.playerSlots[tc][tr];
+    Combatant *target = NULL;
+    if (occ != GRID_EMPTY) {
+        target = ctx->targetOnEnemySide ? &ctx->enemies[occ]
+                                        : &ctx->party->members[occ];
+    }
+
+    // Status-only move on a specific cell: treat like a whiff-or-ally-touch.
+    // (Today's status moves are AOE/SELF, handled earlier — this is defensive.)
+    if (mv->power == 0) {
+        snprintf(ctx->narration, NARRATION_LEN, "%s used %s!", actor->name, mv->name);
+        ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
+        return;
+    }
+
+    if (!target || !target->alive) {
+        snprintf(ctx->narration, NARRATION_LEN,
+                 "%s used %s — but the strike hit nothing!", actor->name, mv->name);
+        ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
+        return;
+    }
+
+    // Sharp attack on a bound ally cuts ropes and deals zero damage.
+    if (friendly && CombatantHasStatus(target, STATUS_BOUND) &&
+        DamageCutsRopes(mv->damageType)) {
+        CombatantClearStatus(target, STATUS_BOUND);
+        BattleAnimPlayHitFrom(&ctx->anim, actorIsEn, te->idx,
+                              ctx->targetOnEnemySide, occ);
+        snprintf(ctx->narration, NARRATION_LEN,
+                 "%s used %s and cut %s's ropes free!",
+                 actor->name, mv->name, target->name);
+        ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
+        return;
+    }
+
+    int dmg = CalculateDamage(actor, target, mv);
+
+    if (friendly) {
+        // Friendly fire: 10% damage + ribbing remark.
+        dmg = dmg / 10;
+        if (dmg < 1) dmg = 1;
+        target->hp -= dmg;
+        ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
+        if (target->hp <= 0) {
+            target->hp    = 0;
+            target->alive = false;
+            BattleGridRemove(&ctx->grid, ctx->targetOnEnemySide, occ);
+            BattleAnimPlay(&ctx->anim, BANIM_FAINT, ctx->targetOnEnemySide, occ);
+            snprintf(ctx->narration, NARRATION_LEN,
+                     "%s used %s on %s?! %d dmg — %s fainted!",
+                     actor->name, mv->name, target->name, dmg, target->name);
+        } else {
+            BattleAnimPlayHitFrom(&ctx->anim, actorIsEn, te->idx,
+                                  ctx->targetOnEnemySide, occ);
+            snprintf(ctx->narration, NARRATION_LEN,
+                     "%s used %s on %s (%d dmg). \"Hey, I'm on your side!\"",
+                     actor->name, mv->name, target->name, dmg);
+        }
+        return;
+    }
+
+    // Normal hit.
+    target->hp -= dmg;
+    ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
+    if (target->hp <= 0) {
+        target->hp    = 0;
+        target->alive = false;
+        BattleGridRemove(&ctx->grid, ctx->targetOnEnemySide, occ);
+        BattleAnimPlay(&ctx->anim, BANIM_FAINT, ctx->targetOnEnemySide, occ);
+        snprintf(ctx->narration, NARRATION_LEN,
+                 "%s used %s! Dealt %d dmg. %s fainted!",
+                 actor->name, mv->name, dmg, target->name);
+    } else {
+        BattleAnimPlayHitFrom(&ctx->anim, actorIsEn, te->idx,
+                              ctx->targetOnEnemySide, occ);
+        snprintf(ctx->narration, NARRATION_LEN,
+                 "%s used %s! Dealt %d dmg.", actor->name, mv->name, dmg);
+    }
 }
 
 static void ExecuteAction(BattleContext *ctx)
@@ -144,81 +287,86 @@ static void ExecuteAction(BattleContext *ctx)
 
     const MoveDef *mv = GetMoveDef(actor->moveIds[ctx->selectedMove]);
 
-    // Status moves
+    // Status-only AOE/SELF: side is decided by aoeTargetsEnemies (AOE) or
+    // actor-side (SELF), not by the cell cursor.
     if (mv->power == 0) {
-        if (te->isEnemy) {
-            // Status on players
-            Combatant *pts[PARTY_MAX];
+        if (mv->range == RANGE_SELF) {
+            Combatant *pts[1] = { actor };
+            ApplyStatusMove(pts, 1, mv, te->isEnemy);
+        } else if (mv->range == RANGE_AOE) {
+            // "Enemy" from the move's authorship POV: if aoeTargetsEnemies is
+            // true, hit the side opposite the actor; otherwise the actor's side.
+            bool targetSideIsEnemyOfActor = mv->aoeTargetsEnemies;
+            bool targetOnEnemyGrid = te->isEnemy
+                                       ? !targetSideIsEnemyOfActor  // enemy casting → player grid only if targeting-friendlies
+                                       :  targetSideIsEnemyOfActor; // player casting → enemy grid only if targeting-enemies
+            Combatant *pts[BATTLE_MAX_ENEMIES + PARTY_MAX];
             int cnt = 0;
-            for (int i = 0; i < ctx->party->count; i++)
-                if (ctx->party->members[i].alive) pts[cnt++] = &ctx->party->members[i];
-            ApplyStatusMove(pts, cnt, mv, true);
-        } else {
-            // ColonyRoar on self; WaveCall on enemies
-            if (mv->range == RANGE_SELF) {
-                Combatant *pts[1] = { actor };
-                ApplyStatusMove(pts, 1, mv, false);
-            } else {
-                Combatant *pts[BATTLE_MAX_ENEMIES];
-                int cnt = 0;
+            if (targetOnEnemyGrid) {
                 for (int i = 0; i < ctx->enemyCount; i++)
                     if (ctx->enemies[i].alive) pts[cnt++] = &ctx->enemies[i];
-                ApplyStatusMove(pts, cnt, mv, false);
+            } else {
+                for (int i = 0; i < ctx->party->count; i++)
+                    if (ctx->party->members[i].alive) pts[cnt++] = &ctx->party->members[i];
             }
+            ApplyStatusMove(pts, cnt, mv, te->isEnemy);
         }
         snprintf(ctx->narration, NARRATION_LEN, "%s used %s!", actor->name, mv->name);
+        ConsumeMoveUse(ctx, te->isEnemy, ctx->selectedMove);
         return;
     }
 
-    // Damage moves
-    Combatant *target = NULL;
-    bool targetIsEnemy = false;
-    if (te->isEnemy) {
-        // Enemy attacks player
-        if (ctx->targetEnemyIdx >= 0 && ctx->targetEnemyIdx < ctx->party->count)
-            target = &ctx->party->members[ctx->targetEnemyIdx];
-        else {
-            for (int i = 0; i < ctx->party->count; i++)
-                if (ctx->party->members[i].alive) { target = &ctx->party->members[i]; break; }
+    // Damaging AOE: hit every alive combatant on the designated side (enemies
+    // or friendlies — never both).
+    if (mv->range == RANGE_AOE) {
+        bool targetSideIsEnemyOfActor = mv->aoeTargetsEnemies;
+        bool targetOnEnemyGrid = te->isEnemy
+                                   ? !targetSideIsEnemyOfActor
+                                   :  targetSideIsEnemyOfActor;
+        int  totalDmg = 0;
+        int  hits     = 0;
+        int  lastOccIdx = -1;
+        if (targetOnEnemyGrid) {
+            for (int i = 0; i < ctx->enemyCount; i++) {
+                Combatant *t = &ctx->enemies[i];
+                if (!t->alive) continue;
+                int dmg = CalculateDamage(actor, t, mv);
+                t->hp -= dmg;
+                totalDmg += dmg;
+                hits++;
+                lastOccIdx = i;
+                if (t->hp <= 0) {
+                    t->hp = 0; t->alive = false;
+                    BattleGridRemove(&ctx->grid, true, i);
+                }
+            }
+        } else {
+            for (int i = 0; i < ctx->party->count; i++) {
+                Combatant *t = &ctx->party->members[i];
+                if (!t->alive) continue;
+                int dmg = CalculateDamage(actor, t, mv);
+                t->hp -= dmg;
+                totalDmg += dmg;
+                hits++;
+                lastOccIdx = i;
+                if (t->hp <= 0) {
+                    t->hp = 0; t->alive = false;
+                    BattleGridRemove(&ctx->grid, false, i);
+                }
+            }
         }
-        targetIsEnemy = false;
-    } else {
-        // Player attacks enemy
-        if (ctx->targetEnemyIdx >= 0 && ctx->targetEnemyIdx < ctx->enemyCount)
-            target = &ctx->enemies[ctx->targetEnemyIdx];
-        else {
-            for (int i = 0; i < ctx->enemyCount; i++)
-                if (ctx->enemies[i].alive) { target = &ctx->enemies[i]; break; }
-        }
-        targetIsEnemy = true;
-    }
-
-    if (!target || !target->alive) {
-        snprintf(ctx->narration, NARRATION_LEN, "%s missed!", actor->name);
+        if (hits > 0)
+            BattleAnimPlayHitFrom(&ctx->anim, te->isEnemy, te->idx,
+                                  targetOnEnemyGrid, lastOccIdx);
+        snprintf(ctx->narration, NARRATION_LEN,
+                 "%s used %s! (%d total dmg across %d)",
+                 actor->name, mv->name, totalDmg, hits);
+        ConsumeMoveUse(ctx, te->isEnemy, ctx->selectedMove);
         return;
     }
 
-    int dmg = CalculateDamage(actor, target, mv);
-    // Decrement move durability on hit (player moves only; enemies have unlimited)
-    if (!te->isEnemy && ctx->selectedMove >= 0) {
-        int *dur = &actor->moveDurability[ctx->selectedMove];
-        if (*dur > 0) (*dur)--;
-    }
-    target->hp -= dmg;
-    if (target->hp <= 0) {
-        target->hp    = 0;
-        target->alive = false;
-        BattleGridRemove(&ctx->grid, targetIsEnemy,
-                         targetIsEnemy ? ctx->targetEnemyIdx : ctx->targetEnemyIdx);
-        BattleAnimPlay(&ctx->anim, BANIM_FAINT, targetIsEnemy, ctx->targetEnemyIdx);
-        snprintf(ctx->narration, NARRATION_LEN,
-                 "%s used %s! Dealt %d dmg. %s fainted!", actor->name, mv->name, dmg, target->name);
-    } else {
-        BattleAnimPlayHitFrom(&ctx->anim, te->isEnemy, te->idx,
-                              targetIsEnemy, ctx->targetEnemyIdx);
-        snprintf(ctx->narration, NARRATION_LEN,
-                 "%s used %s! Dealt %d dmg.", actor->name, mv->name, dmg);
-    }
+    // Single-cell attack (MELEE, RANGED): freeform target cursor picks the cell.
+    ApplyMoveToCell(ctx);
 }
 
 static bool AllEnemiesFainted(const BattleContext *ctx)
@@ -404,6 +552,17 @@ void BattleUpdate(BattleContext *ctx, float dt)
         ctx->moveCursorActive = false;
 
         TurnEntry *te = &ctx->turnOrder[ctx->currentTurn];
+        Combatant *actor = GetCurrentActor(ctx);
+
+        // Bound actors skip their turn — they struggle but can't act.
+        if (actor && CombatantHasStatus(actor, STATUS_BOUND)) {
+            snprintf(ctx->narration, NARRATION_LEN,
+                     "%s struggles against the ropes!", actor->name);
+            ctx->selectedMove = -1;
+            ctx->state = BS_NARRATION;
+            break;
+        }
+
         if (te->isEnemy) {
             AITakeTurn(ctx);
             ctx->state = BS_EXECUTE;
@@ -533,22 +692,34 @@ void BattleUpdate(BattleContext *ctx, float dt)
     }
 
     case BS_TARGET_SELECT: {
-        // Count living enemies for cursor wrap
-        int liveCount = 0;
-        int liveIdx[BATTLE_MAX_ENEMIES];
-        for (int i = 0; i < ctx->enemyCount; i++)
-            if (ctx->enemies[i].alive) liveIdx[liveCount++] = i;
-
-        int sel = BattleMenuUpdateTarget(&ctx->menu, liveCount);
-
-        // Keep targetEnemyIdx in sync with cursor every frame so the draw
-        // can highlight the currently-pointed-at enemy
-        if (ctx->menu.targetCursor >= 0 && ctx->menu.targetCursor < liveCount)
-            ctx->targetEnemyIdx = liveIdx[ctx->menu.targetCursor];
-
-        if (sel == -2) { ctx->state = BS_MOVE_SELECT; break; } // back
-        if (sel >= 0 && sel < liveCount) {
-            ctx->targetEnemyIdx = liveIdx[sel];
+        // Freeform cursor: any cell on either side. Left/right crosses the
+        // midline between grids; up/down clamps within the current grid.
+        if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
+            if (ctx->targetCell.row > 0) ctx->targetCell.row--;
+        }
+        if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
+            if (ctx->targetCell.row < GRID_ROWS - 1) ctx->targetCell.row++;
+        }
+        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
+            if (ctx->targetOnEnemySide && ctx->targetCell.col == 0) {
+                ctx->targetOnEnemySide = false;
+                ctx->targetCell.col    = GRID_COLS - 1;
+            } else if (ctx->targetCell.col > 0) {
+                ctx->targetCell.col--;
+            }
+        }
+        if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
+            if (!ctx->targetOnEnemySide && ctx->targetCell.col == GRID_COLS - 1) {
+                ctx->targetOnEnemySide = true;
+                ctx->targetCell.col    = 0;
+            } else if (ctx->targetCell.col < GRID_COLS - 1) {
+                ctx->targetCell.col++;
+            }
+        }
+        if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_BACKSPACE)) {
+            ctx->state = BS_MOVE_SELECT;
+        }
+        if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
             ctx->state = BS_EXECUTE;
         }
         break;
@@ -784,17 +955,11 @@ void BattleDraw(const BattleContext *ctx)
         break;
 
     case BS_TARGET_SELECT: {
-        // Highlight candidate targets
-        for (int i = 0; i < ctx->enemyCount; i++) {
-            if (!ctx->enemies[i].alive) continue;
-            GridPos pos;
-            if (BattleGridFind(&ctx->grid, true, i, &pos)) {
-                Color hl = (i == ctx->targetEnemyIdx) ? RED : (Color){200, 100, 100, 180};
-                Rectangle r = BattleGridCellRect(true, pos.col, pos.row);
-                DrawRectangleLinesEx(r, 3, hl);
-            }
-        }
-        BattleMenuDrawNarration("Select target: Left/Right | Z=Confirm | X=Back");
+        // Freeform cursor — single highlight on the selected cell, either grid.
+        Rectangle tr = BattleGridCellRect(ctx->targetOnEnemySide,
+                                          ctx->targetCell.col, ctx->targetCell.row);
+        DrawRectangleLinesEx(tr, 3, YELLOW);
+        BattleMenuDrawNarration("Target any cell: Arrows | Z=Confirm | X=Back");
         break;
     }
 

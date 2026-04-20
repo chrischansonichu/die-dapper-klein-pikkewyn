@@ -24,6 +24,10 @@ typedef struct Party {
 
 void PartyInit(Party *p);
 void PartyAddMember(Party *p, int creatureId, int level);
+// Remove the member at idx, shifting later members (and their preferredCells)
+// down. Used to drop a temp ally (e.g., unrescued captive) after a battle.
+// Returns true on success.
+bool PartyRemoveMember(Party *p, int idx);
 bool PartyAllFainted(const Party *p);
 // Returns pointer to first living member, or NULL
 Combatant *PartyGetActive(Party *p);

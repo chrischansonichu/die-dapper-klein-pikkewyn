@@ -1,6 +1,8 @@
 #ifndef ITEM_DEFS_H
 #define ITEM_DEFS_H
 
+#include "move_defs.h"
+
 //----------------------------------------------------------------------------------
 // Item definitions - consumables Jan can eat to restore HP
 //----------------------------------------------------------------------------------
@@ -14,12 +16,13 @@ typedef enum ItemEffect {
 } ItemEffect;
 
 typedef struct ItemDef {
-    int        id;
-    char       name[ITEM_NAME_LEN];
-    char       desc[ITEM_DESC_LEN];
-    ItemEffect effect;
-    int        amount;
-    int        minLevel;   // minimum level required to use; 1 = no gate
+    int            id;
+    char           name[ITEM_NAME_LEN];
+    char           desc[ITEM_DESC_LEN];
+    ItemEffect     effect;
+    int            amount;
+    int            minLevel;    // minimum level required to use; 1 = no gate
+    MoveDamageType damageType;  // for items used offensively; DMG_NONE for pure heals
 } ItemDef;
 
 // Item IDs

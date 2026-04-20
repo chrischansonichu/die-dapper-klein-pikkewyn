@@ -11,8 +11,10 @@
 #include "field/enemy.h"
 #include "state/game_state.h"
 #include "battle/inventory.h"
+#include "battle/combatant.h"
 #include "data/item_defs.h"
 #include "data/move_defs.h"
+#include "data/creature_defs.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -121,6 +123,28 @@ void InitGameplayScreen(void)
             DialogueBegin(&gField.dialogue, ptrs, narratedPages, 40.0f);
     }
     gField.pendingEnemyCount = 0;
+
+    // Resolve any temp captive ally from a rescue battle.
+    if (gGameState.tempAllyPartyIdx >= 0) {
+        int partyIdx = gGameState.tempAllyPartyIdx;
+        int npcIdx   = gGameState.tempAllyNpcIdx;
+        bool keepAlly = false;
+        if (br == BATTLE_VICTORY && npcIdx >= 0 && npcIdx < gField.npcCount) {
+            // Captors were all marked inactive above → NpcCurrentlyCaptive is
+            // false when the rescue succeeded. Any other result (flee, defeat,
+            // victory with captors somehow still active) drops the ally.
+            keepAlly = !NpcCurrentlyCaptive(&gField.npcs[npcIdx],
+                                            gField.enemies, gField.enemyCount);
+        }
+        if (keepAlly && partyIdx < gGameState.party.count) {
+            CombatantClearStatus(&gGameState.party.members[partyIdx], STATUS_BOUND);
+            gField.npcs[npcIdx].active = false;
+        } else {
+            PartyRemoveMember(&gGameState.party, partyIdx);
+        }
+        gGameState.tempAllyPartyIdx = -1;
+        gGameState.tempAllyNpcIdx   = -1;
+    }
 }
 
 // Rebuild the FieldState against the pending map. Called when the player
@@ -185,6 +209,30 @@ void UpdateGameplayScreen(void)
                 levels[n] = e->level;
                 n++;
             }
+
+            // Captive rescue: add the captive NPC to the party as a bound
+            // temp ally for the duration of this battle. screen_gameplay
+            // resolves whether they stay or go based on the battle outcome.
+            gGameState.tempAllyPartyIdx = -1;
+            gGameState.tempAllyNpcIdx   = -1;
+            if (gField.pendingAllyNpcIdx >= 0 &&
+                gField.pendingAllyNpcIdx < gField.npcCount &&
+                gGameState.party.count < PARTY_MAX) {
+                int npcIdx = gField.pendingAllyNpcIdx;
+                int janLevel = gGameState.party.count > 0
+                                 ? gGameState.party.members[0].level : 1;
+                // Map NPC type → creature id. Today only SEAL is captive.
+                int allyCreatureId = CREATURE_SEAL;
+                int newIdx = gGameState.party.count;
+                PartyAddMember(&gGameState.party, allyCreatureId, janLevel);
+                if (newIdx < gGameState.party.count) {
+                    CombatantAddStatus(&gGameState.party.members[newIdx], STATUS_BOUND);
+                    gGameState.tempAllyPartyIdx = newIdx;
+                    gGameState.tempAllyNpcIdx   = npcIdx;
+                }
+            }
+            gField.pendingAllyNpcIdx = -1;
+
             BattlePrepareEncounter(&gGameState.party, ids, levels, n);
             BattleSetPreemptive(gField.preemptiveAttack);
             gField.preemptiveAttack = false;

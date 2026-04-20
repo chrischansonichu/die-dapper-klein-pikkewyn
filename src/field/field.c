@@ -58,13 +58,17 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
     Npc *n = &ow->npcs[npcIdx];
 
     if (n->type == NPC_SEAL) {
+        // Captive rescue is handled by the battle trigger — BuildNpcInteraction
+        // is only reached for a free seal. Keep a safety page in case flow
+        // changes later.
         if (NpcCurrentlyCaptive(n, ow->enemies, ow->enemyCount)) {
             snprintf(scratch[0], NPC_DIALOGUE_LEN,
                      "...mmph! (He's tied up. Defeat the sailors guarding him!)");
             pages[0] = scratch[0];
             return 1;
         }
-        // Recruit. Match seal's level to Jan's so XP split feels fair.
+        // Already recruited (sprite normally hidden after rescue). Match
+        // seal's level to Jan's so XP split feels fair.
         int janLevel = (ow->gs->party.count > 0) ? ow->gs->party.members[0].level : 1;
         if (ow->gs->party.count < PARTY_MAX) {
             PartyAddMember(&ow->gs->party, CREATURE_SEAL, janLevel);
@@ -124,6 +128,7 @@ void FieldInit(FieldState *ow, GameState *gs)
 {
     memset(ow, 0, sizeof(FieldState));
     ow->gs = gs;
+    ow->pendingAllyNpcIdx = -1;
 
     // Dispatch map construction to the MapSource layer. FieldState owns the
     // storage; MapBuild fills tiles/NPCs/enemies/warps/spawn through borrowed
@@ -170,6 +175,38 @@ static void QueueEnemyForBattle(FieldState *ow, int idx)
         if (ow->pendingEnemyIdxs[k] == idx) return;
     if (ow->pendingEnemyCount >= FIELD_MAX_PENDING) return;
     ow->pendingEnemyIdxs[ow->pendingEnemyCount++] = idx;
+}
+
+// If enemy `idx` is listed as a captor of some active captive NPC, pull the
+// other captors into the same encounter and mark the NPC as a temporary ally
+// so screen_gameplay recruits them as bound for the fight.
+static void PullCaptivesIntoBattle(FieldState *ow, int triggerEnemyIdx)
+{
+    for (int i = 0; i < ow->npcCount; i++) {
+        Npc *n = &ow->npcs[i];
+        if (!n->active || !n->isCaptive) continue;
+        if (!NpcCurrentlyCaptive(n, ow->enemies, ow->enemyCount)) continue;
+        bool involves = false;
+        for (int k = 0; k < n->captorCount; k++)
+            if (n->captorIdxs[k] == triggerEnemyIdx) { involves = true; break; }
+        if (!involves) continue;
+        for (int k = 0; k < n->captorCount; k++)
+            QueueEnemyForBattle(ow, n->captorIdxs[k]);
+        ow->pendingAllyNpcIdx = i;
+        return;
+    }
+}
+
+// Interacting with a captive NPC (or the captors, handled elsewhere) is itself
+// the battle trigger now — the seal joins as a bound ally.
+static void TriggerCaptiveRescueBattle(FieldState *ow, int npcIdx)
+{
+    Npc *n = &ow->npcs[npcIdx];
+    ow->pendingBattle    = true;
+    ow->preemptiveAttack = false;
+    ow->pendingAllyNpcIdx = npcIdx;
+    for (int k = 0; k < n->captorCount; k++)
+        QueueEnemyForBattle(ow, n->captorIdxs[k]);
 }
 
 void FieldUpdate(FieldState *ow, float dt)
@@ -233,6 +270,10 @@ void FieldUpdate(FieldState *ow, float dt)
             for (int i = 0; i < ow->npcCount; i++) {
                 if (NpcIsInteractable(&ow->npcs[i], tx, ty, ow->player.dir)) {
                     NpcTurnToFace(&ow->npcs[i], tx, ty);
+                    if (NpcCurrentlyCaptive(&ow->npcs[i], ow->enemies, ow->enemyCount)) {
+                        TriggerCaptiveRescueBattle(ow, i);
+                        return;
+                    }
                     const char *pages[NPC_MAX_DIALOGUE_PAGES];
                     char scratch[4][NPC_DIALOGUE_LEN];
                     int count = BuildNpcInteraction(ow, i, pages, scratch);
@@ -252,6 +293,10 @@ void FieldUpdate(FieldState *ow, float dt)
         for (int i = 0; i < ow->npcCount; i++) {
             if (NpcIsInteractable(&ow->npcs[i], tx, ty, ow->player.dir)) {
                 NpcTurnToFace(&ow->npcs[i], tx, ty);
+                if (NpcCurrentlyCaptive(&ow->npcs[i], ow->enemies, ow->enemyCount)) {
+                    TriggerCaptiveRescueBattle(ow, i);
+                    return;
+                }
                 const char *pages[NPC_MAX_DIALOGUE_PAGES];
                 char scratch[4][NPC_DIALOGUE_LEN];
                 int count = BuildNpcInteraction(ow, i, pages, scratch);
@@ -266,6 +311,7 @@ void FieldUpdate(FieldState *ow, float dt)
             ow->pendingBattle    = true;
             ow->preemptiveAttack = true;
             QueueEnemyForBattle(ow, surpriseIdx);
+            PullCaptivesIntoBattle(ow, surpriseIdx);
             return;
         }
     }
@@ -288,6 +334,7 @@ void FieldUpdate(FieldState *ow, float dt)
                 if (e2->aiState == ENEMY_CHASING || e2->aiState == ENEMY_ALERTED)
                     QueueEnemyForBattle(ow, j);
             }
+            PullCaptivesIntoBattle(ow, i);
         }
     }
 

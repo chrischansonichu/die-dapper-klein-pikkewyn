@@ -30,6 +30,12 @@ typedef struct GameState {
     unsigned pendingMapSeed;
     int      pendingSpawnX, pendingSpawnY, pendingSpawnDir;
 
+    // Tracking a temporary ally added for the duration of a captive-rescue
+    // battle (e.g., the bound seal). After the battle, screen_gameplay either
+    // keeps them (if their captors all died) or removes them. -1 when none.
+    int      tempAllyPartyIdx;
+    int      tempAllyNpcIdx;
+
     // Additional persistent state lands here in later phases:
     //   int       gold;
     //   Roster    dismissedMembers;

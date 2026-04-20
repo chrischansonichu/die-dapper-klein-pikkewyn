@@ -8,9 +8,11 @@ void GameStateInit(GameState *gs)
 {
     memset(gs, 0, sizeof(GameState));
 
-    gs->currentMapId   = MAP_OVERWORLD_HUB;
-    gs->currentMapSeed = 0;
-    gs->hasPendingMap  = false;
+    gs->currentMapId     = MAP_OVERWORLD_HUB;
+    gs->currentMapSeed   = 0;
+    gs->hasPendingMap    = false;
+    gs->tempAllyPartyIdx = -1;
+    gs->tempAllyNpcIdx   = -1;
 
     PartyInit(&gs->party);
     PartyAddMember(&gs->party, CREATURE_JAN, 5);

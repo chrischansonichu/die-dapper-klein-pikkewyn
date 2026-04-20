@@ -23,6 +23,18 @@ void PartyAddMember(Party *p, int creatureId, int level)
     p->count++;
 }
 
+bool PartyRemoveMember(Party *p, int idx)
+{
+    if (idx < 0 || idx >= p->count) return false;
+    for (int i = idx; i < p->count - 1; i++) {
+        p->members[i]       = p->members[i + 1];
+        p->preferredCell[i] = p->preferredCell[i + 1];
+    }
+    p->count--;
+    if (p->activeIndex >= p->count) p->activeIndex = 0;
+    return true;
+}
+
 bool PartyAllFainted(const Party *p)
 {
     for (int i = 0; i < p->count; i++)

@@ -24,7 +24,6 @@ void BattleMenuInit(BattleMenuState *m)
 {
     m->rootCursor   = 0;
     m->moveCursor   = 0;
-    m->targetCursor = 0;
     m->itemCursor   = 0;
 }
 
@@ -115,20 +114,6 @@ int BattleMenuUpdateItemSelect(BattleMenuState *m, int itemCount)
 
     if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_BACKSPACE)) return -2;
     if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER))     return m->itemCursor;
-    return -1;
-}
-
-int BattleMenuUpdateTarget(BattleMenuState *m, int enemyCount)
-{
-    if (enemyCount < 1) return -1;
-
-    if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A))
-        m->targetCursor = (m->targetCursor - 1 + enemyCount) % enemyCount;
-    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D))
-        m->targetCursor = (m->targetCursor + 1) % enemyCount;
-
-    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_BACKSPACE)) return -2; // back
-    if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER))     return m->targetCursor;
     return -1;
 }
 

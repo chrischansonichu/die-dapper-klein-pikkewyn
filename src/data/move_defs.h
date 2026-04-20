@@ -18,6 +18,21 @@ typedef enum MoveRange {
     RANGE_SELF,         // targets self / entire party
 } MoveRange;
 
+// Damage type: drives rope-cutting (SLASH, PIERCE) and future elemental logic.
+// Shared with ItemDef so a "sharpened krill" could also free a captive.
+typedef enum MoveDamageType {
+    DMG_NONE = 0,   // heal items, status-only moves
+    DMG_BLUNT,      // Tackle, ShellThrow
+    DMG_SLASH,      // FishingHook — cuts ropes
+    DMG_PIERCE,     // SeaUrchinSpike — cuts ropes
+    DMG_SPECIAL,    // WaveCall, ColonyRoar (magical/sonic)
+} MoveDamageType;
+
+// Sharp attacks cut ropes (STATUS_BOUND).
+static inline bool DamageCutsRopes(MoveDamageType t) {
+    return t == DMG_SLASH || t == DMG_PIERCE;
+}
+
 // Move group drives both UI column placement and equip-slot rules.
 // Item Attacks are the only group that accepts weapon drops.
 typedef enum MoveGroup {
@@ -28,15 +43,19 @@ typedef enum MoveGroup {
 } MoveGroup;
 
 typedef struct MoveDef {
-    int       id;
-    char      name[MOVE_NAME_LEN];
-    char      desc[MOVE_DESC_LEN];
-    int       power;             // damage base; 0 = status move
-    MoveRange range;
-    int       defaultDurability; // -1 = unlimited; >0 = uses before broken
-    bool      isWeapon;          // true = equippable weapon (swappable); false = innate move
-    int       minLevel;          // minimum level required to equip/use; 1 = no gate
-    MoveGroup group;             // which of the 3 move-slot columns this belongs to
+    int            id;
+    char           name[MOVE_NAME_LEN];
+    char           desc[MOVE_DESC_LEN];
+    int            power;             // damage base; 0 = status move
+    MoveRange      range;
+    int            defaultDurability; // -1 = unlimited; >0 = uses before broken
+    bool           isWeapon;          // true = equippable weapon (swappable); false = innate move
+    int            minLevel;          // minimum level required to equip/use; 1 = no gate
+    MoveGroup      group;             // which of the 3 move-slot columns this belongs to
+    MoveDamageType damageType;        // physical type — drives rope-cut checks
+    // AOE moves hit either all enemies or all friendlies, never a mix. Meaningless
+    // outside RANGE_AOE. WaveCall = enemies, a hypothetical party-heal = friendlies.
+    bool           aoeTargetsEnemies;
 } MoveDef;
 
 // Forward declaration - defined in move_defs.c

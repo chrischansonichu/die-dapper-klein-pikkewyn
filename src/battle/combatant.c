@@ -27,10 +27,11 @@ void CombatantInit(Combatant *c, int creatureId, int level)
     c->def      = cdef;
     strncpy(c->name, cdef->name, COMBATANT_NAME_LEN - 1);
     c->name[COMBATANT_NAME_LEN - 1] = '\0';
-    c->level    = level;
-    c->alive    = true;
-    c->atkMod   = 100;
-    c->defMod   = 100;
+    c->level       = level;
+    c->alive       = true;
+    c->atkMod      = 100;
+    c->defMod      = 100;
+    c->statusFlags = STATUS_NONE;
 
     RecomputeStats(c);
     c->hp = c->maxHp;
