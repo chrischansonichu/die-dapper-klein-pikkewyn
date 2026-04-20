@@ -62,6 +62,7 @@ typedef struct BattleContext {
     int     selectedMove;   // slot in actor's moveIds
     int     targetEnemyIdx; // unused today but kept for AI narration hooks
     int     moveBudget;     // tiles remaining in current MOVE phase
+    bool    movedThisTurn;  // player has already spent their MOVE action — action menu dims MOVE and rejects re-selection
     TilePos targetTile;     // cursor tile during BS_TARGET_SELECT
 
     // Captive-rescue ally bookkeeping. -1 when not in use. The field reads
@@ -71,6 +72,12 @@ typedef struct BattleContext {
     char  narration[NARRATION_LEN];
     bool  xpNarrationShown;
     bool  preemptiveAttack;  // consumed by Begin
+
+    // End-of-battle XP summary. Populated at BS_ROUND_END when the last enemy
+    // faints; drawn on each party roster row. levelUpFlashT > 0 animates a
+    // golden pulse to flag who just dinged.
+    int   xpGained[PARTY_MAX];
+    float levelUpFlashT[PARTY_MAX];
 } BattleContext;
 
 // Compute the per-turn movement budget from a combatant's speed:

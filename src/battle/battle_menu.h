@@ -35,8 +35,9 @@ int  BattleMenuUpdateMoveSelect(BattleMenuState *m, const Combatant *actor);
 // Update item cursor; returns item slot or -1 / -2 (back) if none yet
 int  BattleMenuUpdateItemSelect(BattleMenuState *m, int itemCount);
 
-// Draw the bottom panel with 2x2 action grid
-void BattleMenuDrawRoot(const BattleMenuState *m);
+// Draw the bottom panel with 2x2 action grid. moveDisabled dims the MOVE
+// button when the player has already repositioned this turn.
+void BattleMenuDrawRoot(const BattleMenuState *m, bool moveDisabled);
 // Draw the move select panel (4 move slots in 2x2 grid).
 // actorInFront: true if the actor is currently in their melee front column,
 // which decides whether MELEE moves are shown as usable.

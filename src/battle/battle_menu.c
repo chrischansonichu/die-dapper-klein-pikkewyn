@@ -116,7 +116,7 @@ int BattleMenuUpdateItemSelect(BattleMenuState *m, int itemCount)
     return -1;
 }
 
-void BattleMenuDrawRoot(const BattleMenuState *m)
+void BattleMenuDrawRoot(const BattleMenuState *m, bool moveDisabled)
 {
     DrawRectangle(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){20, 20, 40, 220});
     DrawRectangleLines(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){80, 80, 140, 255});
@@ -126,8 +126,10 @@ void BattleMenuDrawRoot(const BattleMenuState *m)
         int col = i % 2, row = i / 2;
         int bx = startX + col * (btnW + 10);
         int by = startY + row * (btnH + 8);
-        Color bg   = (m->rootCursor == i) ? (Color){80, 100, 200, 255} : (Color){40, 40, 80, 255};
-        Color text = WHITE;
+        bool dim  = (i == BMENU_MOVE && moveDisabled);
+        Color bg  = (m->rootCursor == i) ? (Color){80, 100, 200, 255} : (Color){40, 40, 80, 255};
+        if (dim && m->rootCursor != i) bg = (Color){30, 30, 40, 255};
+        Color text = dim ? GRAY : WHITE;
         DrawRectangle(bx, by, btnW, btnH, bg);
         DrawRectangleLines(bx, by, btnW, btnH, (Color){120, 140, 220, 255});
         DrawText(gActionLabels[i], bx + 12, by + 12, 18, text);

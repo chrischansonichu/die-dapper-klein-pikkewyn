@@ -233,6 +233,30 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
     BattleContext *ctx = &ow->battle;
     memset(ctx, 0, sizeof(*ctx));
 
+    // Aggro cluster into battle enemy slots. CombatantInit copies stats from
+    // the creature def; tile position comes from the FieldEnemy.
+    int clusterIdxs[BATTLE_MAX_ENEMIES];
+    int clusterCount = FieldEnemyAggroCluster(ow, seedIdx, clusterIdxs,
+                                              BATTLE_MAX_ENEMIES);
+
+    // If no explicit rescue target was passed, auto-include any captive NPC
+    // whose captor landed in this cluster. Without this, a seal captured by
+    // sailors is invisible to combat when the fight starts by proximity —
+    // fishing-hook on his tile would report "hit nothing".
+    if (allyNpcIdx < 0) {
+        for (int n = 0; n < ow->npcCount && allyNpcIdx < 0; n++) {
+            const Npc *npc = &ow->npcs[n];
+            if (!npc->active || !npc->isCaptive) continue;
+            for (int k = 0; k < npc->captorCount; k++) {
+                int ci = npc->captorIdxs[k];
+                for (int j = 0; j < clusterCount; j++) {
+                    if (clusterIdxs[j] == ci) { allyNpcIdx = n; break; }
+                }
+                if (allyNpcIdx >= 0) break;
+            }
+        }
+    }
+
     // Captive-rescue: add the NPC to the party as a bound temp ally before
     // building the battle (so their combatant participates this turn).
     ow->gs->tempAllyPartyIdx = -1;
@@ -252,11 +276,6 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
     }
     ctx->tempAllyPartyIdx = ow->gs->tempAllyPartyIdx;
 
-    // Aggro cluster into battle enemy slots. CombatantInit copies stats from
-    // the creature def; tile position comes from the FieldEnemy.
-    int clusterIdxs[BATTLE_MAX_ENEMIES];
-    int clusterCount = FieldEnemyAggroCluster(ow, seedIdx, clusterIdxs,
-                                              BATTLE_MAX_ENEMIES);
     for (int i = 0; i < clusterCount; i++) {
         FieldEnemy *fe = &ow->enemies[clusterIdxs[i]];
         CombatantInit(&ctx->enemies[i], fe->creatureId, fe->level);

@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 //----------------------------------------------------------------------------------
 // Internal helpers
@@ -519,6 +520,13 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
 {
     BattleAnimUpdate(&ctx->anim, dt);
 
+    for (int i = 0; i < PARTY_MAX; i++) {
+        if (ctx->levelUpFlashT[i] > 0.0f) {
+            ctx->levelUpFlashT[i] -= dt * 0.6f;
+            if (ctx->levelUpFlashT[i] < 0.0f) ctx->levelUpFlashT[i] = 0.0f;
+        }
+    }
+
     switch (ctx->state) {
 
     case BS_PREEMPTIVE_NARRATION:
@@ -547,8 +555,11 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
             AITakeTurn(ctx, map);
             ctx->state = BS_EXECUTE;
         } else {
-            ctx->moveBudget = CombatantMoveBudget(actor);
-            ctx->state      = BS_MOVE_PHASE;
+            // Player starts the turn in the action menu. If they want to
+            // reposition, they pick MOVE (which spends a movement budget).
+            ctx->moveBudget    = 0;
+            ctx->movedThisTurn = false;
+            ctx->state         = BS_ACTION_MENU;
         }
         break;
     }
@@ -576,7 +587,8 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
         if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_BACKSPACE) ||
             IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
             ctx->moveBudget <= 0) {
-            ctx->state = BS_ACTION_MENU;
+            ctx->movedThisTurn = true;
+            ctx->state         = BS_ACTION_MENU;
         }
         break;
     }
@@ -596,9 +608,10 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
         if (action == BMENU_FIGHT) ctx->state = BS_MOVE_SELECT;
         if (action == BMENU_ITEM)  { ctx->menu.itemCursor = 0; ctx->state = BS_ITEM_SELECT; }
         if (action == BMENU_PASS)  { ctx->selectedMove = -1; ctx->state = BS_EXECUTE; }
-        if (action == BMENU_MOVE) {
-            // Re-enter the move phase so the player can reposition mid-turn
-            // (burning another budget allotment).
+        if (action == BMENU_MOVE && !ctx->movedThisTurn) {
+            // Re-enter the move phase so the player can reposition once per
+            // turn. A second MOVE press is silently ignored (the menu also
+            // dims MOVE to signal it's spent).
             Combatant *actor = GetCurrentActor(ctx);
             ctx->moveBudget  = actor ? CombatantMoveBudget(actor) : 0;
             ctx->state       = BS_MOVE_PHASE;
@@ -690,8 +703,8 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
                 for (int i = 0; i < ctx->party->count; i++)
                     if (ctx->party->members[i].alive) livingCount++;
 
-                bool levelUp  = false;
-                int  janShare = 0;
+                int  memberXp[PARTY_MAX]     = {0};
+                bool memberDinged[PARTY_MAX] = {0};
                 for (int j = 0; j < ctx->enemyCount; j++) {
                     int reward = CombatantXpReward(&ctx->enemies[j]);
                     int share  = (livingCount > 0) ? (reward / livingCount) : reward;
@@ -700,16 +713,23 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
                         Combatant *m = &ctx->party->members[i];
                         if (!m->alive) continue;
                         if (m->level - enemyLevel > 3) continue;
-                        if (CombatantAddXp(m, share)) levelUp = true;
-                        if (i == 0) janShare += share;
+                        if (CombatantAddXp(m, share)) memberDinged[i] = true;
+                        memberXp[i] += share;
                     }
                 }
-                if (levelUp)
-                    snprintf(ctx->narration, NARRATION_LEN,
-                             "Victory! +%d XP  LEVEL UP! HP restored!", janShare);
-                else
-                    snprintf(ctx->narration, NARRATION_LEN,
-                             "Victory! +%d XP", janShare);
+
+                char *buf = ctx->narration;
+                int   off = snprintf(buf, NARRATION_LEN, "Victory!");
+                for (int i = 0; i < ctx->party->count && off < NARRATION_LEN - 1; i++) {
+                    const Combatant *m = &ctx->party->members[i];
+                    if (memberXp[i] <= 0) continue;
+                    off += snprintf(buf + off, NARRATION_LEN - off,
+                                    "\n%s +%d XP%s",
+                                    m->name, memberXp[i],
+                                    memberDinged[i] ? "  LEVEL UP!" : "");
+                    ctx->xpGained[i]      = memberXp[i];
+                    if (memberDinged[i]) ctx->levelUpFlashT[i] = 1.0f;
+                }
                 ctx->xpNarrationShown = true;
                 ctx->state = BS_NARRATION;
             } else {
@@ -786,13 +806,14 @@ void BattleDrawWorldOverlay(const BattleContext *ctx)
 }
 
 static void DrawRosterPanel(const Combatant *roster, int count,
-                            int panelX, int panelY, int activeIdx)
+                            int panelX, int panelY, int activeIdx,
+                            bool showXpBar, const float *flashT)
 {
     if (count <= 0) return;
 
-    const int rowH  = 30;
-    const int padX  = 8;
-    const int padY  = 6;
+    const int rowH   = showXpBar ? 38 : 30;
+    const int padX   = 8;
+    const int padY   = 6;
     const int panelW = 210;
     const int panelH = padY * 2 + count * rowH;
 
@@ -802,17 +823,33 @@ static void DrawRosterPanel(const Combatant *roster, int count,
     for (int i = 0; i < count; i++) {
         const Combatant *c = &roster[i];
         int rowY = panelY + padY + i * rowH;
+        float flash = (flashT && flashT[i] > 0.0f) ? flashT[i] : 0.0f;
 
         if (i == activeIdx) {
             DrawRectangle(panelX + 2, rowY - 2, panelW - 4, rowH,
                           (Color){60, 60, 110, 180});
+        }
+        if (flash > 0.0f) {
+            // Pulsing gold fill — sin on GetTime for the shimmer.
+            float pulse = 0.5f + 0.5f * sinf((float)GetTime() * 8.0f);
+            unsigned char a = (unsigned char)(flash * (80 + pulse * 120));
+            DrawRectangle(panelX + 2, rowY - 2, panelW - 4, rowH,
+                          (Color){240, 200, 70, a});
+            DrawRectangleLines(panelX + 1, rowY - 3, panelW - 2, rowH + 2,
+                               (Color){255, 230, 120, (unsigned char)(flash * 255)});
         }
 
         char label[64];
         snprintf(label, sizeof(label), "%s Lv%d", c->name, c->level);
         Color nameCol = c->alive ? (Color){230, 230, 240, 255}
                                  : (Color){120, 120, 130, 180};
+        if (flash > 0.0f) nameCol = (Color){255, 240, 150, 255};
         DrawText(label, panelX + padX, rowY, 12, nameCol);
+
+        if (flash > 0.0f) {
+            DrawText("LEVEL UP!", panelX + panelW - 64, rowY, 10,
+                     (Color){255, 230, 120, 255});
+        }
 
         int barX = panelX + padX;
         int barY = rowY + 14;
@@ -835,6 +872,23 @@ static void DrawRosterPanel(const Combatant *roster, int count,
         DrawText(hpStr, barX + barW - 48, barY - 12, 10,
                  c->alive ? (Color){200, 210, 220, 255}
                           : (Color){110, 110, 120, 200});
+
+        if (showXpBar) {
+            int xpY = barY + barH + 2;
+            int xpH = 4;
+            DrawRectangle(barX, xpY, barW, xpH, (Color){30, 30, 50, 255});
+            if (c->xpToNext > 0) {
+                int xpFill = barW * c->xp / c->xpToNext;
+                if (xpFill < 0) xpFill = 0;
+                if (xpFill > barW) xpFill = barW;
+                DrawRectangle(barX, xpY, xpFill, xpH,
+                              (Color){110, 170, 240, 255});
+            }
+            DrawRectangleLines(barX, xpY, barW, xpH, (Color){60, 60, 90, 255});
+            char xpStr[24];
+            snprintf(xpStr, sizeof(xpStr), "XP %d/%d", c->xp, c->xpToNext);
+            DrawText(xpStr, barX, xpY + xpH + 1, 9, (Color){150, 170, 210, 220});
+        }
     }
 }
 
@@ -848,9 +902,11 @@ static void DrawRosters(const BattleContext *ctx)
         else             activeParty = te->idx;
     }
 
-    DrawRosterPanel(ctx->enemies, ctx->enemyCount, 800 - 210 - 8, 8, activeEnemy);
+    DrawRosterPanel(ctx->enemies, ctx->enemyCount, 800 - 210 - 8, 8, activeEnemy,
+                    false, NULL);
     if (ctx->party) {
-        DrawRosterPanel(ctx->party->members, ctx->party->count, 8, 8, activeParty);
+        DrawRosterPanel(ctx->party->members, ctx->party->count, 8, 8, activeParty,
+                        true, ctx->levelUpFlashT);
     }
 }
 
@@ -868,7 +924,7 @@ void BattleDrawUI(const BattleContext *ctx)
         break;
     }
     case BS_ACTION_MENU:
-        BattleMenuDrawRoot(&ctx->menu);
+        BattleMenuDrawRoot(&ctx->menu, ctx->movedThisTurn);
         break;
     case BS_MOVE_SELECT: {
         Combatant *actor =
