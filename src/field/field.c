@@ -299,6 +299,20 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
             m->tileY = ow->player.tileY;
             continue;
         }
+        // Captive-rescue ally stays pinned to his NPC tile — that's the spot
+        // the player sees (with the rope overlay) and aims the rope-cut at.
+        // Also keeps sailors from pathing onto the seal mid-battle.
+        if (i == ow->gs->tempAllyPartyIdx &&
+            ow->gs->tempAllyNpcIdx >= 0 &&
+            ow->gs->tempAllyNpcIdx < ow->npcCount) {
+            const Npc *seal = &ow->npcs[ow->gs->tempAllyNpcIdx];
+            m->tileX = seal->tileX;
+            m->tileY = seal->tileY;
+            avoidX[avoidCount] = m->tileX;
+            avoidY[avoidCount] = m->tileY;
+            avoidCount++;
+            continue;
+        }
         int px, py;
         if (FindBattlePlacement(ow, ow->player.tileX, ow->player.tileY,
                                 avoidX, avoidY, avoidCount, &px, &py)) {
@@ -697,8 +711,22 @@ void FieldDraw(const FieldState *ow)
             EnemyDraw(&ow->enemies[i]);
 
         for (int i = 0; i < ow->npcCount; i++) {
-            NpcDraw(&ow->npcs[i], ow->camera);
-            if (NpcCurrentlyCaptive(&ow->npcs[i], ow->enemies, ow->enemyCount))
+            // In battle, the rescued captive's combatant sprite stands on his
+            // NPC tile — skip the NPC sprite to avoid a double-draw. The rope
+            // overlay persists only while the ally is still bound.
+            bool battleTempAlly = (ow->mode == FIELD_BATTLE &&
+                                   i == ow->gs->tempAllyNpcIdx);
+            if (!battleTempAlly)
+                NpcDraw(&ow->npcs[i], ow->camera);
+            bool showRope = NpcCurrentlyCaptive(&ow->npcs[i],
+                                                ow->enemies, ow->enemyCount);
+            if (battleTempAlly) {
+                int p = ow->gs->tempAllyPartyIdx;
+                showRope = (p >= 0 && p < ow->gs->party.count &&
+                            CombatantHasStatus(&ow->gs->party.members[p],
+                                               STATUS_BOUND));
+            }
+            if (showRope)
                 NpcDrawCaptiveOverlay(&ow->npcs[i]);
         }
 

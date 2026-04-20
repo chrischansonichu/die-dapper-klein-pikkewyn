@@ -785,53 +785,45 @@ void BattleDrawWorldOverlay(const BattleContext *ctx)
     }
 }
 
-static void DrawEnemyRoster(const BattleContext *ctx)
+static void DrawRosterPanel(const Combatant *roster, int count,
+                            int panelX, int panelY, int activeIdx)
 {
-    if (ctx->enemyCount <= 0) return;
+    if (count <= 0) return;
 
     const int rowH  = 30;
     const int padX  = 8;
     const int padY  = 6;
     const int panelW = 210;
-    const int panelH = padY * 2 + ctx->enemyCount * rowH;
-    const int panelX = 800 - panelW - 8;
-    const int panelY = 8;
+    const int panelH = padY * 2 + count * rowH;
 
     DrawRectangle(panelX, panelY, panelW, panelH, (Color){20, 20, 40, 220});
     DrawRectangleLines(panelX, panelY, panelW, panelH, (Color){80, 80, 140, 255});
 
-    int activeActorIdx = -1;
-    if (ctx->currentTurn >= 0 && ctx->currentTurn < ctx->turnCount &&
-        ctx->turnOrder[ctx->currentTurn].isEnemy) {
-        activeActorIdx = ctx->turnOrder[ctx->currentTurn].idx;
-    }
-
-    for (int i = 0; i < ctx->enemyCount; i++) {
-        const Combatant *e = &ctx->enemies[i];
+    for (int i = 0; i < count; i++) {
+        const Combatant *c = &roster[i];
         int rowY = panelY + padY + i * rowH;
 
-        if (i == activeActorIdx) {
+        if (i == activeIdx) {
             DrawRectangle(panelX + 2, rowY - 2, panelW - 4, rowH,
                           (Color){60, 60, 110, 180});
         }
 
         char label[64];
-        snprintf(label, sizeof(label), "%s Lv%d", e->name, e->level);
-        Color nameCol = e->alive ? (Color){230, 230, 240, 255}
+        snprintf(label, sizeof(label), "%s Lv%d", c->name, c->level);
+        Color nameCol = c->alive ? (Color){230, 230, 240, 255}
                                  : (Color){120, 120, 130, 180};
         DrawText(label, panelX + padX, rowY, 12, nameCol);
 
-        // HP bar
         int barX = panelX + padX;
         int barY = rowY + 14;
         int barW = panelW - padX * 2;
         int barH = 8;
         DrawRectangle(barX, barY, barW, barH, (Color){30, 30, 50, 255});
-        if (e->alive && e->maxHp > 0) {
-            int fill = barW * e->hp / e->maxHp;
+        if (c->alive && c->maxHp > 0) {
+            int fill = barW * c->hp / c->maxHp;
             if (fill < 0) fill = 0;
             if (fill > barW) fill = barW;
-            Color hpCol = (e->hp * 2 < e->maxHp)
+            Color hpCol = (c->hp * 2 < c->maxHp)
                               ? (Color){220, 90, 70, 255}
                               : (Color){90, 200, 110, 255};
             DrawRectangle(barX, barY, fill, barH, hpCol);
@@ -839,16 +831,32 @@ static void DrawEnemyRoster(const BattleContext *ctx)
         DrawRectangleLines(barX, barY, barW, barH, (Color){70, 70, 100, 255});
 
         char hpStr[24];
-        snprintf(hpStr, sizeof(hpStr), "%d/%d", e->alive ? e->hp : 0, e->maxHp);
+        snprintf(hpStr, sizeof(hpStr), "%d/%d", c->alive ? c->hp : 0, c->maxHp);
         DrawText(hpStr, barX + barW - 48, barY - 12, 10,
-                 e->alive ? (Color){200, 210, 220, 255}
+                 c->alive ? (Color){200, 210, 220, 255}
                           : (Color){110, 110, 120, 200});
+    }
+}
+
+static void DrawRosters(const BattleContext *ctx)
+{
+    int activeEnemy = -1;
+    int activeParty = -1;
+    if (ctx->currentTurn >= 0 && ctx->currentTurn < ctx->turnCount) {
+        const TurnEntry *te = &ctx->turnOrder[ctx->currentTurn];
+        if (te->isEnemy) activeEnemy = te->idx;
+        else             activeParty = te->idx;
+    }
+
+    DrawRosterPanel(ctx->enemies, ctx->enemyCount, 800 - 210 - 8, 8, activeEnemy);
+    if (ctx->party) {
+        DrawRosterPanel(ctx->party->members, ctx->party->count, 8, 8, activeParty);
     }
 }
 
 void BattleDrawUI(const BattleContext *ctx)
 {
-    DrawEnemyRoster(ctx);
+    DrawRosters(ctx);
 
     switch (ctx->state) {
     case BS_TURN_START:

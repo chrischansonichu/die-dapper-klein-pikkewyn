@@ -80,7 +80,9 @@ int CalculateDamage(const Combatant *attacker, const Combatant *defender, const 
 
 int CombatantXpReward(const Combatant *c)
 {
-    return c->level * 22;
+    // Scale reward with actual toughness, not just level. A level-3 Captain
+    // (HP 51, ATK 12) should clearly outpay a level-3 Deckhand (HP 12, ATK 6).
+    return c->maxHp + c->atk * 3 + c->level * 5;
 }
 
 bool CombatantAddXp(Combatant *c, int amount)
