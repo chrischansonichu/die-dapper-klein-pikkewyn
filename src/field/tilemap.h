@@ -43,7 +43,11 @@ Texture2D TilesetBuild(void);
 
 void TileMapInit(TileMap *m, int width, int height, const char *name);
 void TileMapSetTile(TileMap *m, int x, int y, int tileId);
+// OR `flag` into the tile's flag byte. TileMapSetTile resets flags to the
+// tile type's defaults, so call this AFTER setting the tile.
+void TileMapAddFlag(TileMap *m, int x, int y, unsigned char flag);
 int  TileMapGetTile(const TileMap *m, int x, int y);
+unsigned char TileMapGetFlags(const TileMap *m, int x, int y);
 bool TileMapIsSolid(const TileMap *m, int x, int y);
 bool TileMapIsWater(const TileMap *m, int x, int y);
 void TileMapDraw(const TileMap *m, Camera2D cam);

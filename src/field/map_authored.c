@@ -1,6 +1,21 @@
 #include "map_source.h"
 #include "../data/item_defs.h"
 
+// Append a warp and mark its tile so the field's step-completion check can
+// fast-fail on non-warp tiles. Silently ignored if the warp array is full.
+static void AddWarp(MapBuildContext *ctx, int tx, int ty,
+                    int targetMapId, int tsx, int tsy, int tdir)
+{
+    if (*ctx->warpCount >= ctx->warpMax) return;
+    FieldWarp *w = &ctx->warps[(*ctx->warpCount)++];
+    w->tileX = tx; w->tileY = ty;
+    w->targetMapId    = targetMapId;
+    w->targetSpawnX   = tsx;
+    w->targetSpawnY   = tsy;
+    w->targetSpawnDir = tdir;
+    TileMapAddFlag(ctx->map, tx, ty, TILE_FLAG_WARP);
+}
+
 //----------------------------------------------------------------------------------
 // Authored map builders. These produce fully-deterministic maps with scripted
 // NPC and enemy placement — no random rolls. The current "harbor floor 1" is
@@ -145,6 +160,11 @@ void BuildOverworldHub(MapBuildContext *ctx)
 
     AddHubNpcs(ctx);
 
+    // South-gate warp → harbor floor 1. Both tiles of the 2-wide gap trigger
+    // so the player can approach the gate from either side.
+    AddWarp(ctx, 11, m->height - 2, MAP_HARBOR_F1, 8, 14, 3);
+    AddWarp(ctx, 12, m->height - 2, MAP_HARBOR_F1, 8, 14, 3);
+
     *ctx->spawnTileX = 11;
     *ctx->spawnTileY = 7;
     *ctx->spawnDir   = 0; // facing down — toward the south gate
@@ -182,6 +202,11 @@ void BuildHarborFloor1(MapBuildContext *ctx)
 
     AddHarborF1Npcs(ctx);
     AddHarborF1Enemies(ctx);
+
+    // Descent warp at the far east end of the dock → procedural floor 2.
+    // Player has to push past the patrol sailor to reach it. One-way: there
+    // is no return warp from F2 back up here.
+    AddWarp(ctx, 18, 13, MAP_HARBOR_PROC_F2, 2, 2, 2);
 
     *ctx->spawnTileX = 8;
     *ctx->spawnTileY = 14;

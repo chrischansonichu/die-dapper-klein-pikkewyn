@@ -7,6 +7,7 @@
 #include "player.h"
 #include "npc.h"
 #include "enemy.h"
+#include "map_source.h"
 #include "../systems/camera_system.h"
 #include "../systems/dialogue.h"
 #include "inventory_ui.h"
@@ -21,6 +22,7 @@ struct GameState;
 
 #define FIELD_MAX_NPCS    16
 #define FIELD_MAX_ENEMIES 16
+#define FIELD_MAX_WARPS   8
 #define FIELD_MAX_PENDING 4   // battle supports up to 4 enemies at once
 
 typedef struct FieldState {
@@ -37,6 +39,9 @@ typedef struct FieldState {
     // Filled when one or more enemies aggro simultaneously.
     int           pendingEnemyIdxs[FIELD_MAX_PENDING];
     int           pendingEnemyCount;
+
+    FieldWarp     warps[FIELD_MAX_WARPS];
+    int           warpCount;
 
     // Borrowed pointer to the persistent game state (party, inventory, ...).
     struct GameState *gs;

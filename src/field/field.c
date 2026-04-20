@@ -125,7 +125,9 @@ void FieldInit(FieldState *ow, GameState *gs)
     ow->gs = gs;
 
     // Dispatch map construction to the MapSource layer. FieldState owns the
-    // storage; MapBuild fills tiles/NPCs/enemies/spawn through borrowed ptrs.
+    // storage; MapBuild fills tiles/NPCs/enemies/warps/spawn through borrowed
+    // ptrs. Which map to build is decided by GameState so map transitions
+    // (step 8) can swap targets without reaching into this function.
     int spawnX = 0, spawnY = 0, spawnDir = 0;
     MapBuildContext ctx = {
         .map         = &ow->map,
@@ -135,11 +137,14 @@ void FieldInit(FieldState *ow, GameState *gs)
         .enemies     = ow->enemies,
         .enemyCount  = &ow->enemyCount,
         .enemyMax    = FIELD_MAX_ENEMIES,
+        .warps       = ow->warps,
+        .warpCount   = &ow->warpCount,
+        .warpMax     = FIELD_MAX_WARPS,
         .spawnTileX  = &spawnX,
         .spawnTileY  = &spawnY,
         .spawnDir    = &spawnDir,
     };
-    MapBuild(MAP_OVERWORLD_HUB, &ctx, 0);
+    MapBuild((MapId)gs->currentMapId, &ctx, gs->currentMapSeed);
 
     // GPU-side resources and player/camera setup live here — builders only
     // produce data.
@@ -189,10 +194,28 @@ void FieldUpdate(FieldState *ow, float dt)
     // Update player movement
     PlayerUpdate(&ow->player, &ow->map, ow);
 
-    // After step completes, check NPC interaction
+    // After step completes, check warp tiles then NPC interaction.
     if (ow->player.stepCompleted) {
         int tx = ow->player.tileX;
         int ty = ow->player.tileY;
+
+        // Warp check fires as soon as the player lands on a warp tile, no
+        // button press required. Fast-path via the tile flag; only iterate
+        // warps when the flag is set.
+        if (TileMapGetFlags(&ow->map, tx, ty) & TILE_FLAG_WARP) {
+            for (int i = 0; i < ow->warpCount; i++) {
+                const FieldWarp *w = &ow->warps[i];
+                if (w->tileX == tx && w->tileY == ty) {
+                    ow->gs->hasPendingMap    = true;
+                    ow->gs->pendingMapId     = w->targetMapId;
+                    ow->gs->pendingMapSeed   = 0;
+                    ow->gs->pendingSpawnX    = w->targetSpawnX;
+                    ow->gs->pendingSpawnY    = w->targetSpawnY;
+                    ow->gs->pendingSpawnDir  = w->targetSpawnDir;
+                    return;
+                }
+            }
+        }
 
         if (IsInteractPressed()) {
             for (int i = 0; i < ow->npcCount; i++) {

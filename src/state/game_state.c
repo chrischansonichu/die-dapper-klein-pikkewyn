@@ -1,11 +1,16 @@
 #include "game_state.h"
 #include "../data/creature_defs.h"
 #include "../data/item_defs.h"
+#include "../field/map_source.h"
 #include <string.h>
 
 void GameStateInit(GameState *gs)
 {
     memset(gs, 0, sizeof(GameState));
+
+    gs->currentMapId   = MAP_OVERWORLD_HUB;
+    gs->currentMapSeed = 0;
+    gs->hasPendingMap  = false;
 
     PartyInit(&gs->party);
     PartyAddMember(&gs->party, CREATURE_JAN, 5);

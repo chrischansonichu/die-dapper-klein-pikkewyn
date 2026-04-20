@@ -19,6 +19,16 @@ typedef enum MapId {
     MAP_COUNT
 } MapId;
 
+// Warps are one-way transitions between maps. Authored maps place these on
+// specific tiles; procedural floors generate them at stairwell anchors. There's
+// no return warp from a deeper dungeon floor back up — leaving a dungeon
+// requires the escape item or clearing the boss (future phase).
+typedef struct FieldWarp {
+    int tileX, tileY;
+    int targetMapId;       // MapId, kept as int so state/ doesn't need this header
+    int targetSpawnX, targetSpawnY, targetSpawnDir;
+} FieldWarp;
+
 // Output sinks filled by a builder. Pointers borrow FieldState storage — the
 // builder writes through them and updates the counts. `spawn*` defaults in
 // FieldInit are overwritten iff the builder sets them.
@@ -32,6 +42,10 @@ typedef struct MapBuildContext {
     FieldEnemy *enemies;
     int        *enemyCount;
     int         enemyMax;
+
+    FieldWarp  *warps;
+    int        *warpCount;
+    int         warpMax;
 
     int        *spawnTileX;
     int        *spawnTileY;

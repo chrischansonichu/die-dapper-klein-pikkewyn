@@ -109,10 +109,22 @@ void TileMapSetTile(TileMap *m, int x, int y, int tileId)
     m->flags[y * m->width + x] = TILE_DEFAULT_FLAGS[tileId];
 }
 
+void TileMapAddFlag(TileMap *m, int x, int y, unsigned char flag)
+{
+    if (x < 0 || x >= m->width || y < 0 || y >= m->height) return;
+    m->flags[y * m->width + x] |= flag;
+}
+
 int TileMapGetTile(const TileMap *m, int x, int y)
 {
     if (x < 0 || x >= m->width || y < 0 || y >= m->height) return TILE_OCEAN;
     return m->tiles[y * m->width + x];
+}
+
+unsigned char TileMapGetFlags(const TileMap *m, int x, int y)
+{
+    if (x < 0 || x >= m->width || y < 0 || y >= m->height) return 0;
+    return m->flags[y * m->width + x];
 }
 
 bool TileMapIsSolid(const TileMap *m, int x, int y)
