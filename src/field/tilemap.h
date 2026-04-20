@@ -51,7 +51,4 @@ bool TileMapIsWater(const TileMap *m, int x, int y);
 void TileMapDraw(const TileMap *m, Camera2D cam);
 void TileMapUnload(TileMap *m);
 
-// Build a simple test map (ocean + dock + sand)
-void TileMapBuildTestMap(TileMap *m);
-
 #endif // TILEMAP_H

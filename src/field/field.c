@@ -1,7 +1,7 @@
 #include "field.h"
 #include "enemy_sprites.h"
+#include "map_source.h"
 #include "../state/game_state.h"
-#include "../data/item_defs.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -119,85 +119,39 @@ static int FindSurpriseTarget(const FieldState *ow, int px, int py)
     return -1;
 }
 
-static void AddTestNpcs(FieldState *ow)
-{
-    // Friendly penguin elder on the dock
-    Npc *elder = &ow->npcs[ow->npcCount++];
-    NpcInit(elder, 8, 13, 0, NPC_PENGUIN_ELDER);
-    NpcAddDialogue(elder, "Jan! The sailors have taken all the fish!");
-    NpcAddDialogue(elder, "You must fight them off. Be brave, little one.");
-
-    // Seal ally on the beach
-    Npc *seal = &ow->npcs[ow->npcCount++];
-    NpcInit(seal, 14, 15, 3, NPC_SEAL);
-    NpcAddDialogue(seal, "Arf! I can help you fight. Come find me when ready.");
-}
-
-static void AddTestEnemies(FieldState *ow)
-{
-    ow->enemyCount = 0;
-
-    // 2x STAND sailors on the dock, facing down (toward player spawn at y=14)
-    FieldEnemy *s1 = &ow->enemies[ow->enemyCount++];
-    EnemyInit(s1, 10, 11, 0, BEHAVIOR_STAND, 1, 3, 5, (Color){200, 60, 60, 255});
-    s1->wanderInterval = 90;
-    EnemySetDrops(s1, ITEM_KRILL_SNACK, 70, -1, 0);
-
-    FieldEnemy *s2 = &ow->enemies[ow->enemyCount++];
-    EnemyInit(s2, 14, 10, 0, BEHAVIOR_STAND, 1, 3, 5, (Color){200, 80, 50, 255});
-    s2->wanderInterval = 110;
-    EnemySetDrops(s2, ITEM_FRESH_FISH, 60, 2, 25);  // ShellThrow
-
-    // 2x WANDER sailors in the shallow water. One is a bosun — the water is
-    // where the tougher fights live; the dock is the starter zone.
-    FieldEnemy *w1 = &ow->enemies[ow->enemyCount++];
-    EnemyInit(w1, 6, 6, 0, BEHAVIOR_WANDER, 2, 3, 4, (Color){160, 80, 180, 255});
-    w1->wanderInterval = 70;
-    EnemySetDrops(w1, ITEM_KRILL_SNACK, 80, -1, 0);
-
-    FieldEnemy *w2 = &ow->enemies[ow->enemyCount++];
-    EnemyInit(w2, 16, 8, 2, BEHAVIOR_WANDER, 2, 4, 4, (Color){180, 60, 140, 255});
-    w2->wanderInterval = 100;
-    EnemySetDrops(w2, ITEM_SARDINE, 50, 1, 30);     // FishingHook
-
-    // 1x PATROL sailor along the far end of the dock (keeps spawn safe).
-    // Downgraded to a deckhand so the player can reasonably defeat one
-    // enemy and unlock the seal recruitment without grinding.
-    FieldEnemy *p1 = &ow->enemies[ow->enemyCount++];
-    EnemyInit(p1, 15, 13, 1, BEHAVIOR_PATROL, 1, 3, 6, (Color){220, 120, 40, 255});
-    EnemySetPatrol(p1, 12, 13, 18, 13);
-    EnemySetDrops(p1, ITEM_SARDINE, 70, 3, 35);     // SeaUrchinSpike
-}
-
 void FieldInit(FieldState *ow, GameState *gs)
 {
     memset(ow, 0, sizeof(FieldState));
     ow->gs = gs;
 
-    // Build map
-    TileMapBuildTestMap(&ow->map);
+    // Dispatch map construction to the MapSource layer. FieldState owns the
+    // storage; MapBuild fills tiles/NPCs/enemies/spawn through borrowed ptrs.
+    int spawnX = 0, spawnY = 0, spawnDir = 0;
+    MapBuildContext ctx = {
+        .map         = &ow->map,
+        .npcs        = ow->npcs,
+        .npcCount    = &ow->npcCount,
+        .npcMax      = FIELD_MAX_NPCS,
+        .enemies     = ow->enemies,
+        .enemyCount  = &ow->enemyCount,
+        .enemyMax    = FIELD_MAX_ENEMIES,
+        .spawnTileX  = &spawnX,
+        .spawnTileY  = &spawnY,
+        .spawnDir    = &spawnDir,
+    };
+    MapBuild(MAP_OVERWORLD_HUB, &ctx, 0);
+
+    // GPU-side resources and player/camera setup live here — builders only
+    // produce data.
     ow->map.tileset = TilesetBuild();
-
-    // Spawn player on the beach
-    PlayerInit(&ow->player, 8, 14);
-
-    // Inventory overlay closed on start
+    PlayerInit(&ow->player, spawnX, spawnY);
+    ow->player.dir = spawnDir;
     InventoryUIInit(&ow->invUi);
 
-    // Camera
     int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;
     int mapPixH = ow->map.height * TILE_SIZE * TILE_SCALE;
     Vector2 startPos = PlayerPixelPos(&ow->player);
     ow->camera = CameraCreate(startPos, mapPixW, mapPixH);
-
-    // NPCs and enemies
-    ow->npcCount = 0;
-    AddTestNpcs(ow);
-    AddTestEnemies(ow);
-
-    ow->pendingBattle     = false;
-    ow->pendingEnemyCount = 0;
-    ow->preemptiveAttack  = false;
 }
 
 // Add an enemy index to the pending battle roster, ignoring duplicates and
