@@ -1,5 +1,4 @@
 #include "battle_menu.h"
-#include "battle_grid.h"
 #include "../data/move_defs.h"
 #include "../data/item_defs.h"
 #include <string.h>
@@ -225,12 +224,6 @@ void BattleMenuDrawItemSelect(const BattleMenuState *m, const Inventory *inv)
         DrawText(it->desc, startX + 300, startY + i * rowH + 4, 12, GRAY);
     }
     DrawText("X: Back | Z: Use", 600, PANEL_Y + PANEL_H - 22, 14, GRAY);
-}
-
-void BattleMenuDrawMoveCursor(int col, int row, bool isEnemy)
-{
-    Rectangle r = BattleGridCellRect(isEnemy, col, row);
-    DrawRectangleLinesEx(r, 3, YELLOW);
 }
 
 void BattleMenuDrawNarration(const char *text)

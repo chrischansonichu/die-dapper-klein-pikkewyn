@@ -1,73 +1,28 @@
 /**********************************************************************************************
 *
-*   Die Dapper Klein Pikkewyn - Battle Screen
-*   Hosts the tactical grid combat encounter.
+*   Die Dapper Klein Pikkewyn - Battle Screen (retired)
+*   Combat now runs inline on the dungeon tilemap via FieldState. This file
+*   keeps no-op implementations of the BATTLE screen interface so screens.h /
+*   raylib_game.c don't need restructuring yet.
 *
 **********************************************************************************************/
 
+#include <stdbool.h>
 #include "raylib.h"
 #include "screens.h"
-#include "battle/battle.h"
 
-//----------------------------------------------------------------------------------
-// Module Variables Definition (local)
-//----------------------------------------------------------------------------------
-static int          finishScreen  = 0;
-static BattleContext gBattleCtx   = {0};
-static BattleResult  gLastResult  = BATTLE_ONGOING;
+void InitBattleScreen(void)    {}
+void UpdateBattleScreen(void)  {}
+void DrawBattleScreen(void)    {}
+void UnloadBattleScreen(void)  {}
+int  FinishBattleScreen(void)  { return 0; }
 
-//----------------------------------------------------------------------------------
-// Called by screen_gameplay before TransitionToScreen(BATTLE)
-//----------------------------------------------------------------------------------
+// Legacy handoff entry points — kept as no-ops so any straggler caller links.
 void BattlePrepareEncounter(Party *party, int enemyIds[], int enemyLevels[], int count)
 {
-    BattleSetPending(&gBattleCtx, party, enemyIds, enemyLevels, count);
-    gLastResult = BATTLE_ONGOING;
+    (void)party; (void)enemyIds; (void)enemyLevels; (void)count;
 }
 
-BattleResult GetLastBattleResult(void)
-{
-    return gLastResult;
-}
+void BattleSetPreemptive(bool preemptive) { (void)preemptive; }
 
-void BattleSetPreemptive(bool preemptive)
-{
-    gBattleCtx.preemptiveAttack = preemptive;
-}
-
-//----------------------------------------------------------------------------------
-// Battle Screen Functions
-//----------------------------------------------------------------------------------
-
-void InitBattleScreen(void)
-{
-    finishScreen = 0;
-    BattleInit(&gBattleCtx);
-}
-
-void UpdateBattleScreen(void)
-{
-    BattleUpdate(&gBattleCtx, GetFrameTime());
-
-    int result = BattleFinished(&gBattleCtx);
-    if (result == 1) { gLastResult = BATTLE_VICTORY; finishScreen = 1; }  // → field
-    // Defeat is no longer a game-over — the village rescues the player and the
-    // field screen puts them back in the hub (see InitGameplayScreen).
-    if (result == 2) { gLastResult = BATTLE_DEFEAT;  finishScreen = 1; }  // → field (rescued)
-    if (result == 3) { gLastResult = BATTLE_FLED;    finishScreen = 1; }  // → field
-}
-
-void DrawBattleScreen(void)
-{
-    BattleDraw(&gBattleCtx);
-}
-
-void UnloadBattleScreen(void)
-{
-    BattleUnload(&gBattleCtx);
-}
-
-int FinishBattleScreen(void)
-{
-    return finishScreen;
-}
+BattleResult GetLastBattleResult(void) { return BATTLE_ONGOING; }

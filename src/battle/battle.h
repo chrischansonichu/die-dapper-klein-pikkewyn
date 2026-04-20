@@ -9,32 +9,32 @@
 #include "battle_anim.h"
 
 //----------------------------------------------------------------------------------
-// Battle - top-level state machine for a tactical grid combat encounter
+// Battle - turn-based combat running inline on the dungeon tilemap. No separate
+// screen: FieldState hosts the BattleContext and toggles its mode between
+// FIELD_FREE and FIELD_BATTLE. Combatants hold their tile positions directly
+// (Combatant.tileX/tileY) for the duration of the fight.
 //----------------------------------------------------------------------------------
 
 #define BATTLE_MAX_ENEMIES 4
 #define NARRATION_LEN      256
 
 typedef enum BattleState {
-    BS_ENTER = 0,            // flash-in entrance animation
-    BS_LAYOUT,               // pre-battle party arrangement
-    BS_PREEMPTIVE_NARRATION, // "Surprise attack!" text, shown only if Jan struck first
-    BS_TURN_START,           // determine whose turn, set up UI
-    BS_MOVE_PHASE,           // current combatant selects a cell to move to (or stay)
-    BS_ACTION_MENU,          // root menu: FIGHT / ITEM / MOVE / PASS
-    BS_MOVE_SELECT,          // pick a move from the combatant's move list
-    BS_ITEM_SELECT,          // pick a consumable from the party inventory
-    BS_TARGET_SELECT,        // pick a target cell (ranged/AOE only)
-    BS_EXECUTE,              // resolve the action
-    BS_ANIM,                 // play hit/faint animation
-    BS_NARRATION,            // show narration text, wait for Z
-    BS_ROUND_END,            // check win/lose
+    BS_PREEMPTIVE_NARRATION,
+    BS_TURN_START,
+    BS_MOVE_PHASE,     // actor steps 1 tile at a time, arrow keys, X commits
+    BS_ACTION_MENU,    // root menu: FIGHT / ITEM / MOVE / PASS
+    BS_MOVE_SELECT,    // pick a move slot
+    BS_ITEM_SELECT,    // pick an inventory consumable
+    BS_TARGET_SELECT,  // tile cursor for single-target moves
+    BS_EXECUTE,
+    BS_ANIM,
+    BS_NARRATION,
+    BS_ROUND_END,
     BS_VICTORY,
     BS_DEFEAT,
     BS_FLEE,
 } BattleState;
 
-// Turn order entry
 typedef struct TurnEntry {
     bool isEnemy;
     int  idx;
@@ -42,68 +42,61 @@ typedef struct TurnEntry {
 } TurnEntry;
 
 typedef struct BattleContext {
-    // References (not owned)
-    Party          *party;
+    Party *party;   // borrowed, lives in GameState
 
-    // Enemies for this encounter
-    Combatant       enemies[BATTLE_MAX_ENEMIES];
-    int             enemyCount;
+    Combatant enemies[BATTLE_MAX_ENEMIES];
+    int       enemyCount;
+    // Mapping back to FieldState->enemies indices so the field knows which
+    // on-map enemies were in this encounter (for drops, deactivation, and
+    // re-sync of tile position on retreat / survival).
+    int       enemyFieldIdx[BATTLE_MAX_ENEMIES];
 
-    // State
     BattleState     state;
-    BattleGrid      grid;
     BattleMenuState menu;
     BattleAnim      anim;
 
-    // Turn order
-    TurnEntry       turnOrder[PARTY_MAX + BATTLE_MAX_ENEMIES];
-    int             turnCount;
-    int             currentTurn;   // index into turnOrder
+    TurnEntry turnOrder[PARTY_MAX + BATTLE_MAX_ENEMIES];
+    int       turnCount;
+    int       currentTurn;
 
-    // Per-turn selection
-    int             selectedMove;  // move index in actor's moveIds
-    int             targetEnemyIdx;
-    int             moveDirCursor; // 0=up 1=right 2=down 3=left 4=stay
+    int     selectedMove;   // slot in actor's moveIds
+    int     targetEnemyIdx; // unused today but kept for AI narration hooks
+    int     moveBudget;     // tiles remaining in current MOVE phase
+    TilePos targetTile;     // cursor tile during BS_TARGET_SELECT
 
-    // Freeform target-select cursor: any cell on either side, including
-    // empty cells and friendly cells. Execution resolves based on occupant.
-    GridPos         targetCell;
-    bool            targetOnEnemySide;
+    // Captive-rescue ally bookkeeping. -1 when not in use. The field reads
+    // these post-battle to decide whether a temp seal stays or leaves.
+    int tempAllyPartyIdx;
 
-    // Move phase cursor (the highlighted cell to move to)
-    GridPos         moveCursorPos;
-    bool            moveCursorActive;
-
-    // Pre-battle layout state
-    GridPos         layoutCursor;
-    int             layoutHeld;      // party idx currently picked up, -1 if none
-
-    // Party index of a temporarily-recruited ally (e.g., the bound seal);
-    // -1 if none. Set by BattleSetPending; consumed post-battle by gameplay
-    // screen to decide whether the ally stays or is removed.
-    int             tempAllyPartyIdx;
-
-    // Narration
-    char            narration[NARRATION_LEN];
-    float           enterTimer;
-    bool            xpNarrationShown; // true after XP award narration displayed
-    bool            preemptiveAttack; // set by field; consumed by BattleInit
-
-    // Background tint for the battle scene
-    Color           bgColor;
+    char  narration[NARRATION_LEN];
+    bool  xpNarrationShown;
+    bool  preemptiveAttack;  // consumed by Begin
 } BattleContext;
 
-// Set the pending context before transitioning to BATTLE screen
-// (called by field just before screen switch)
-void BattleSetPending(BattleContext *ctx, Party *party,
-                      int enemyIds[], int enemyLevels[], int enemyCount);
+// Compute the per-turn movement budget from a combatant's speed:
+//   budget = 2 + max(0, (spd - 4) / 4)
+// Jan at SPD 4 → 2. Seal with pinniped growth hits 3 at level 3. Put here so
+// future tuning lives in one place.
+int  CombatantMoveBudget(const Combatant *c);
 
-void BattleInit(BattleContext *ctx);
-void BattleUpdate(BattleContext *ctx, float dt);
-void BattleDraw(const BattleContext *ctx);
-void BattleUnload(BattleContext *ctx);
+// Begin the fight — caller has already populated ctx->enemies[], ctx->enemyCount,
+// ctx->enemyFieldIdx[], and seeded tileX/tileY on every participating combatant.
+void BattleBegin(BattleContext *ctx, Party *party, bool preemptive);
 
-// Returns 0=ongoing 1=victory 2=defeat 3=fled
+// Per-frame update. Needs the tilemap for walkability / LOS checks during the
+// MOVE phase, target select, and attack resolution.
+struct TileMap;
+void BattleUpdate(BattleContext *ctx, const struct TileMap *map, float dt);
+
+// Draw combat overlays (actor highlight, reachable tiles, target cursor) in
+// camera space, and bottom-panel UI in screen space. Call from FieldDraw
+// after the normal tilemap/entities pass, while still inside BeginMode2D
+// for the world-space helpers; see BattleDrawWorldOverlay / BattleDrawUI.
+void BattleDrawWorldOverlay(const BattleContext *ctx);
+void BattleDrawUI(const BattleContext *ctx);
+
+// 0 = ongoing, 1 = victory, 2 = defeat, 3 = fled. Consume the result on a
+// Z press when narration is showing the final state.
 int  BattleFinished(const BattleContext *ctx);
 
 #endif // BATTLE_H

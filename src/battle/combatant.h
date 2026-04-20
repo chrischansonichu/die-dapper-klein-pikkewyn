@@ -32,6 +32,11 @@ typedef struct Combatant {
     // Fixed 6-slot layout mirroring CreatureDef.moveIds. -1 = empty slot.
     int   moveIds[CREATURE_MAX_MOVES];
     bool  alive;
+    // Runtime dungeon-tile position — only valid for the duration of a battle.
+    // FieldState seeds these at battle start and updates them during the MOVE
+    // phase / AI moves. Ignore outside FIELD_BATTLE.
+    int   tileX;
+    int   tileY;
     // Status modifiers (percentage multipliers, 100 = normal)
     int   atkMod;   // applied as: effective_atk = atk * atkMod / 100
     int   defMod;

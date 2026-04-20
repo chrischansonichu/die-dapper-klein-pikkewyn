@@ -32,6 +32,8 @@ void CombatantInit(Combatant *c, int creatureId, int level)
     c->atkMod      = 100;
     c->defMod      = 100;
     c->statusFlags = STATUS_NONE;
+    c->tileX       = 0;
+    c->tileY       = 0;
 
     RecomputeStats(c);
     c->hp = c->maxHp;

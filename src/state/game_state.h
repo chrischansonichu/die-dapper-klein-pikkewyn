@@ -34,10 +34,15 @@ typedef struct GameState {
     int      pendingSpawnX, pendingSpawnY, pendingSpawnDir;
 
     // Tracking a temporary ally added for the duration of a captive-rescue
-    // battle (e.g., the bound seal). After the battle, screen_gameplay either
-    // keeps them (if their captors all died) or removes them. -1 when none.
+    // battle (e.g., the bound seal). After the battle, field.c either keeps
+    // them (if their captors all died) or removes them. -1 when none.
     int      tempAllyPartyIdx;
     int      tempAllyNpcIdx;
+
+    // Set by the battle-defeat path so the next map transition shows the
+    // "village patched you up" dialogue. Consumed by screen_gameplay after
+    // the hub is rebuilt.
+    bool     rescueDialoguePending;
 
     // Additional persistent state lands here in later phases:
     //   int       gold;

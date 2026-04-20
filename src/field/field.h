@@ -10,6 +10,7 @@
 #include "map_source.h"
 #include "../systems/camera_system.h"
 #include "../systems/dialogue.h"
+#include "../battle/battle.h"
 #include "inventory_ui.h"
 #include "stats_ui.h"
 
@@ -19,12 +20,18 @@ struct GameState;
 
 //----------------------------------------------------------------------------------
 // FieldState - the complete tile-walking field subsystem (hub, dungeons, etc.)
+// Combat runs inline on the same tilemap — `mode` gates between free movement
+// and turn-based battle.
 //----------------------------------------------------------------------------------
 
 #define FIELD_MAX_NPCS    16
 #define FIELD_MAX_ENEMIES 16
 #define FIELD_MAX_WARPS   8
-#define FIELD_MAX_PENDING 4   // battle supports up to 4 enemies at once
+
+typedef enum FieldMode {
+    FIELD_FREE = 0,
+    FIELD_BATTLE,
+} FieldMode;
 
 typedef struct FieldState {
     TileMap       map;
@@ -36,10 +43,6 @@ typedef struct FieldState {
 
     FieldEnemy    enemies[FIELD_MAX_ENEMIES];
     int           enemyCount;
-    // Indices of every enemy that should enter the next battle together.
-    // Filled when one or more enemies aggro simultaneously.
-    int           pendingEnemyIdxs[FIELD_MAX_PENDING];
-    int           pendingEnemyCount;
 
     FieldWarp     warps[FIELD_MAX_WARPS];
     int           warpCount;
@@ -56,18 +59,15 @@ typedef struct FieldState {
     // Stats/Layout overlay
     StatsUI       statsUi;
 
-    // Pending battle (set when an enemy reaches the player, or when Jan
-    // initiates a surprise strike on an unaware enemy)
-    bool          pendingBattle;
-    bool          preemptiveAttack; // Jan struck first — grant a free Tackle
-    // If >= 0, the queued battle includes a captive NPC as a temporary bound
-    // ally (screen_gameplay adds them to the party before entering the fight).
-    int           pendingAllyNpcIdx;
+    // Inline battle sub-state. FIELD_BATTLE pauses enemy patrol AI and routes
+    // input through BattleUpdate; the battle writes back into party combatants
+    // and the FieldEnemy array via enemyFieldIdx in BattleContext.
+    FieldMode     mode;
+    BattleContext battle;
 } FieldState;
 
 void FieldInit(FieldState *f, struct GameState *gs);
 // Reload GPU resources (textures) without touching game state.
-// Call this instead of FieldInit when returning from battle.
 void FieldReloadResources(FieldState *f);
 void FieldUpdate(FieldState *f, float dt);
 void FieldDraw(const FieldState *f);

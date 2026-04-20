@@ -5,47 +5,45 @@
 #include "raylib.h"
 
 //----------------------------------------------------------------------------------
-// Tactical battle grid - 3x3 per side, sides face each other
+// Tile-space combat helpers. Combat now runs directly on the dungeon map — range
+// checks are Chebyshev distance, not 3x3 cell membership.
 //
-// Layout (screen):
-//   Player grid (left)    |  Enemy grid (right)
-//   col 0  col 1  col 2   |  col 0  col 1  col 2
+//   MELEE  = Chebyshev ≤ 1 (8 neighbours)
+//   RANGED = Chebyshev ≤ 5 + line of sight (walls block; water passes)
+//   AOE    = every living target on the "other" side (filtered at execute time)
+//   SELF   = actor only
 //
-// Player col 2 is the "front" (closest to enemies).
-// Enemy  col 0 is the "front" (closest to players).
-// Melee attacks require attacker in their front col, enemy in their front col.
+// GridPos stays as a small (col, row) pair for the party-layout preference in
+// stats_ui. It no longer participates in combat.
 //----------------------------------------------------------------------------------
 
-#define GRID_COLS 3
-#define GRID_ROWS 3
-#define GRID_EMPTY -1
+struct TileMap; // forward decl — battle_grid.c includes tilemap.h
+
+typedef struct TilePos {
+    int x;
+    int y;
+} TilePos;
 
 typedef struct GridPos {
     int col;
     int row;
 } GridPos;
 
-typedef struct BattleGrid {
-    int playerSlots[GRID_COLS][GRID_ROWS]; // index into party.members[], or GRID_EMPTY
-    int enemySlots[GRID_COLS][GRID_ROWS];  // index into enemies[], or GRID_EMPTY
-} BattleGrid;
+// Vestigial: used only by the LAYOUT tab in stats_ui for cosmetic party ordering.
+#define GRID_COLS 3
+#define GRID_ROWS 3
 
-void     BattleGridInit(BattleGrid *g);
-// Place a combatant index at a position (isEnemy selects which grid)
-void     BattleGridPlace(BattleGrid *g, bool isEnemy, int idx, int col, int row);
-// Remove a combatant (on faint)
-void     BattleGridRemove(BattleGrid *g, bool isEnemy, int idx);
-// Find where a combatant is (returns false if not on grid)
-bool     BattleGridFind(const BattleGrid *g, bool isEnemy, int idx, GridPos *out);
-// Check if a cell is empty
-bool     BattleGridCellEmpty(const BattleGrid *g, bool isEnemy, int col, int row);
-// Is a move from src valid to hit target? (checks range rules)
-bool     BattleGridCanHit(const BattleGrid *g, GridPos attacker, bool attackerIsEnemy,
-                          GridPos target, bool targetIsEnemy, int moveRange);
-// Move combatant one step in direction (0=up 1=right 2=down 3=left), returns true if moved
-bool     BattleGridMoveCombatant(BattleGrid *g, bool isEnemy, int idx, int dir);
+// Chebyshev tile distance: max(|dx|, |dy|). Diagonals count as 1.
+int  TileChebyshev(TilePos a, TilePos b);
 
-// Draw helpers - returns screen rect for a grid cell
-Rectangle BattleGridCellRect(bool isEnemy, int col, int row);
+// True if `attacker` can reach `target` with a move of the given MoveRange.
+// AOE / SELF always return true; filtering happens at execute time.
+bool TileMoveReaches(const struct TileMap *m, TilePos attacker, TilePos target,
+                     int moveRange);
+
+// 8-directional Bresenham walk from a to b. Interior tiles are tested for
+// TileMapIsSolid; the endpoints themselves are not checked (so a combatant
+// standing on `b` doesn't block their own cell). Water is transparent to LOS.
+bool TileHasLOS(const struct TileMap *m, TilePos a, TilePos b);
 
 #endif // BATTLE_GRID_H

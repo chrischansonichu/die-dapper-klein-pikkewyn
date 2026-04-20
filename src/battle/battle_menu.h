@@ -43,8 +43,6 @@ void BattleMenuDrawRoot(const BattleMenuState *m);
 void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, bool actorInFront);
 // Draw the item select panel listing inventory consumables
 void BattleMenuDrawItemSelect(const BattleMenuState *m, const Inventory *inv);
-// Draw move cursor on the grid (highlights reachable cells)
-void BattleMenuDrawMoveCursor(int col, int row, bool isEnemy);
 // Draw narration text box at bottom
 void BattleMenuDrawNarration(const char *text);
 
