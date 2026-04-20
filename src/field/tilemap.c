@@ -158,10 +158,15 @@ void TileMapDraw(const TileMap *m, Camera2D cam)
 
     // Top-left world pixel in camera space
     Vector2 topLeft = GetScreenToWorld2D((Vector2){0, 0}, cam);
+    // lastCol/lastRow are derived from the bottom-right of the viewport, NOT
+    // firstCol + width-in-tiles. The old form (firstCol + int(screenW/tile) + 2)
+    // lost a column whenever firstCol got clamped up to 0 — leaving a strip
+    // of cleared background along the right/bottom edges at certain camera
+    // positions. +1 pads a partial tile at the edge.
     int firstCol = (int)(topLeft.x / tilePixels) - 1;
     int firstRow = (int)(topLeft.y / tilePixels) - 1;
-    int lastCol  = firstCol + (int)(screenW / tilePixels) + 2;
-    int lastRow  = firstRow + (int)(screenH / tilePixels) + 2;
+    int lastCol  = (int)((topLeft.x + screenW) / tilePixels) + 1;
+    int lastRow  = (int)((topLeft.y + screenH) / tilePixels) + 1;
 
     if (firstCol < 0) firstCol = 0;
     if (firstRow < 0) firstRow = 0;
