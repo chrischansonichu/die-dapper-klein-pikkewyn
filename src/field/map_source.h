@@ -14,8 +14,8 @@
 
 typedef enum MapId {
     MAP_OVERWORLD_HUB = 0,   // town / hub — shops, recruiter, housing (no enemies)
-    MAP_HARBOR_F1,           // dungeon floor 1: dock + shallow water sailors
-    // Additional dungeon floors (authored or procedural) slot in here.
+    MAP_HARBOR_F1,           // dungeon floor 1: dock + shallow water sailors (authored)
+    MAP_HARBOR_PROC_F2,      // dungeon floor 2+: procedural room-stitched floor
     MAP_COUNT
 } MapId;
 
