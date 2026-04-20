@@ -6,12 +6,13 @@
 // little sturdier than before, which is fine — the game is meant to start
 // rewarding combat rather than trivializing it.
 const CreatureDef gCreatureDefs[CREATURE_DEF_COUNT] = {
-    // id,               name,        class,         HP  ATK DEF SPD DEX  moves,            moveCount
-    { CREATURE_JAN,      "Jan",       CLASS_PENGUIN, 10, 3,  2,  4,  2,   {0, 1, 4, -1},    3 },
-    { CREATURE_DECKHAND, "Deckhand",  CLASS_HUMAN,    8, 2,  2,  3,  1,   {0, 1, -1, -1},   2 },
-    { CREATURE_BOSUN,    "Bosun",     CLASS_HUMAN,   20, 4,  4,  2,  1,   {0, 1, 2, -1},    3 },
-    { CREATURE_CAPTAIN,  "Captain",   CLASS_HUMAN,   45, 8,  6,  2,  1,   {0, 2, 3, 5},     4 },
-    { CREATURE_SEAL,     "Seal",      CLASS_PINNIPED, 24, 7, 5,  5,  1,   {0, 2, 4, -1},    3 },
+    // Move slots: [Attack0, Attack1, Item0, Item1, Special0, Special1].  -1 = empty.
+    // id,               name,        class,         HP  ATK DEF SPD DEX  { Atk0  Atk1  Item0 Item1 Sp0   Sp1 }
+    { CREATURE_JAN,      "Jan",       CLASS_PENGUIN, 10, 3,  2,  4,  2,   {   0,   -1,    1,   -1,    4,  -1} },
+    { CREATURE_DECKHAND, "Deckhand",  CLASS_HUMAN,    8, 2,  2,  3,  1,   {   0,   -1,    1,   -1,   -1,  -1} },
+    { CREATURE_BOSUN,    "Bosun",     CLASS_HUMAN,   20, 4,  4,  2,  1,   {   0,   -1,    1,    2,   -1,  -1} },
+    { CREATURE_CAPTAIN,  "Captain",   CLASS_HUMAN,   45, 8,  6,  2,  1,   {   0,   -1,    2,    3,    5,  -1} },
+    { CREATURE_SEAL,     "Seal",      CLASS_PINNIPED,24, 7,  5,  5,  1,   {   0,   -1,    2,   -1,    4,  -1} },
 };
 
 // Penguins grow nimbly (high DEX, modest power). Humans are bulky and hit hard

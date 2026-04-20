@@ -73,7 +73,7 @@ static void AITakeTurn(BattleContext *ctx)
     Combatant *actor = &ctx->enemies[idx];
     int bestMove = 0;
     int bestPow  = -1;
-    for (int i = 0; i < actor->moveCount; i++) {
+    for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
         if (actor->moveIds[i] < 0) continue;
         const MoveDef *mv = GetMoveDef(actor->moveIds[i]);
         if (mv->power > bestPow) {
@@ -93,13 +93,51 @@ static void AITakeTurn(BattleContext *ctx)
     }
 }
 
+// Try to commit the player's move at the given slot index. Returns the next
+// BattleState — BS_EXECUTE, BS_TARGET_SELECT, or BS_ACTION_MENU on silent reject
+// (e.g., empty/broken slot, MELEE not in front). Shared by the MOVE_SELECT
+// confirm path and the number-key hotkey path so both stay consistent.
+static BattleState TrySelectMove(BattleContext *ctx, int slot)
+{
+    Combatant *actor = GetCurrentActor(ctx);
+    if (!actor) return BS_ACTION_MENU;
+    if (slot < 0 || slot >= CREATURE_MAX_MOVES) return BS_ACTION_MENU;
+    if (actor->moveIds[slot] < 0) return BS_ACTION_MENU;
+    if (actor->moveDurability[slot] == 0) return BS_ACTION_MENU;
+
+    const MoveDef *mv = GetMoveDef(actor->moveIds[slot]);
+    if (mv->range == RANGE_MELEE) {
+        GridPos ap;
+        bool isEn = CurrentActorIsEnemy(ctx);
+        if (BattleGridFind(&ctx->grid, isEn, CurrentActorIdx(ctx), &ap)) {
+            int frontCol = isEn ? 0 : GRID_COLS - 1;
+            if (ap.col != frontCol) return BS_ACTION_MENU; // "TOO FAR" — silent reject
+        }
+    }
+    ctx->selectedMove = slot;
+
+    int liveCount = 0;
+    for (int i = 0; i < ctx->enemyCount; i++)
+        if (ctx->enemies[i].alive) liveCount++;
+
+    if (mv->range == RANGE_AOE || mv->range == RANGE_SELF || liveCount <= 1) {
+        ctx->targetEnemyIdx = -1;
+        for (int i = 0; i < ctx->enemyCount; i++)
+            if (ctx->enemies[i].alive) { ctx->targetEnemyIdx = i; break; }
+        return BS_EXECUTE;
+    }
+    ctx->menu.targetCursor = 0;
+    return BS_TARGET_SELECT;
+}
+
 static void ExecuteAction(BattleContext *ctx)
 {
     TurnEntry *te    = &ctx->turnOrder[ctx->currentTurn];
     Combatant *actor = GetCurrentActor(ctx);
     if (!actor || !actor->alive) return;
 
-    if (ctx->selectedMove < 0 || ctx->selectedMove >= actor->moveCount) {
+    if (ctx->selectedMove < 0 || ctx->selectedMove >= CREATURE_MAX_MOVES ||
+        actor->moveIds[ctx->selectedMove] < 0) {
         snprintf(ctx->narration, NARRATION_LEN, "%s passed.", actor->name);
         return;
     }
@@ -207,12 +245,28 @@ static void AdvanceTurn(BattleContext *ctx)
     }
 }
 
-// Place combatants in default starting positions
+// Place combatants in default starting positions. Players use their
+// per-member preferredCell (set from the field LAYOUT tab). If two members
+// want the same cell, later members get bumped to the first free cell
+// scanning from front→back, row 0→2.
 static void SetupGridPositions(BattleContext *ctx)
 {
-    // Players: col 0 = back, col 2 = front
-    for (int i = 0; i < ctx->party->count && i < GRID_ROWS; i++)
-        BattleGridPlace(&ctx->grid, false, i, 0, i); // start in back col
+    int playerFrontCol = GRID_COLS - 1;
+    for (int i = 0; i < ctx->party->count && i < GRID_COLS * GRID_ROWS; i++) {
+        GridPos p = ctx->party->preferredCell[i];
+        if (p.col < 0 || p.col >= GRID_COLS || p.row < 0 || p.row >= GRID_ROWS
+            || !BattleGridCellEmpty(&ctx->grid, false, p.col, p.row)) {
+            // Fallback: find first empty cell, front column first.
+            bool placed = false;
+            for (int c = playerFrontCol; c >= 0 && !placed; c--)
+                for (int r = 0; r < GRID_ROWS && !placed; r++)
+                    if (BattleGridCellEmpty(&ctx->grid, false, c, r)) {
+                        p.col = c; p.row = r; placed = true;
+                    }
+            if (!placed) continue;
+        }
+        BattleGridPlace(&ctx->grid, false, i, p.col, p.row);
+    }
 
     // Enemies: col 0 = front (closest to player)
     for (int i = 0; i < ctx->enemyCount && i < GRID_ROWS; i++)
@@ -246,6 +300,14 @@ void BattleInit(BattleContext *ctx)
 
     SetupGridPositions(ctx);
     BuildTurnOrder(ctx);
+
+    // Seed layout cursor on the first member's default cell.
+    ctx->layoutHeld = -1;
+    if (ctx->party->count > 0) {
+        BattleGridFind(&ctx->grid, false, 0, &ctx->layoutCursor);
+    } else {
+        ctx->layoutCursor = (GridPos){GRID_COLS - 1, 0};
+    }
 
     // Pre-emptive surprise strike: Jan lands a free Tackle on the first enemy
     // before the turn order begins. Narration is shown after the enter flash.
@@ -281,9 +343,51 @@ void BattleUpdate(BattleContext *ctx, float dt)
     case BS_ENTER:
         ctx->enterTimer += dt;
         if (ctx->enterTimer >= 0.6f) {
+            ctx->state = BS_LAYOUT;
+        }
+        break;
+
+    case BS_LAYOUT: {
+        // Arrow keys move the layout cursor within the player grid (no wrap).
+        if (IsKeyPressed(KEY_UP)    || IsKeyPressed(KEY_W))
+            if (ctx->layoutCursor.row > 0) ctx->layoutCursor.row--;
+        if (IsKeyPressed(KEY_DOWN)  || IsKeyPressed(KEY_S))
+            if (ctx->layoutCursor.row < GRID_ROWS - 1) ctx->layoutCursor.row++;
+        if (IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A))
+            if (ctx->layoutCursor.col > 0) ctx->layoutCursor.col--;
+        if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D))
+            if (ctx->layoutCursor.col < GRID_COLS - 1) ctx->layoutCursor.col++;
+
+        if (IsKeyPressed(KEY_Z)) {
+            int underCursor = ctx->grid.playerSlots[ctx->layoutCursor.col][ctx->layoutCursor.row];
+            if (ctx->layoutHeld < 0) {
+                // Pick up whoever stands here (if anyone).
+                if (underCursor != GRID_EMPTY) ctx->layoutHeld = underCursor;
+            } else {
+                // Place the held member. Swap or move.
+                GridPos heldPos;
+                BattleGridFind(&ctx->grid, false, ctx->layoutHeld, &heldPos);
+                if (underCursor == GRID_EMPTY) {
+                    BattleGridRemove(&ctx->grid, false, ctx->layoutHeld);
+                    BattleGridPlace(&ctx->grid, false, ctx->layoutHeld,
+                                    ctx->layoutCursor.col, ctx->layoutCursor.row);
+                } else if (underCursor != ctx->layoutHeld) {
+                    BattleGridRemove(&ctx->grid, false, ctx->layoutHeld);
+                    BattleGridRemove(&ctx->grid, false, underCursor);
+                    BattleGridPlace(&ctx->grid, false, ctx->layoutHeld,
+                                    ctx->layoutCursor.col, ctx->layoutCursor.row);
+                    BattleGridPlace(&ctx->grid, false, underCursor,
+                                    heldPos.col, heldPos.row);
+                }
+                ctx->layoutHeld = -1;
+            }
+        }
+        if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_BACKSPACE)) {
+            ctx->layoutHeld = -1;
             ctx->state = ctx->preemptiveAttack ? BS_PREEMPTIVE_NARRATION : BS_TURN_START;
         }
         break;
+    }
 
     case BS_PREEMPTIVE_NARRATION:
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
@@ -352,6 +456,19 @@ void BattleUpdate(BattleContext *ctx, float dt)
     }
 
     case BS_ACTION_MENU: {
+        // Number-key hotkeys 1..6 jump straight to firing the move in that slot,
+        // bypassing FIGHT + cursor navigation. Silent-rejects match the regular
+        // confirm path (TrySelectMove).
+        for (int k = 0; k < CREATURE_MAX_MOVES; k++) {
+            if (!IsKeyPressed(KEY_ONE + k)) continue;
+            Combatant *actor = GetCurrentActor(ctx);
+            if (!actor || actor->moveIds[k] < 0) break;
+            ctx->menu.moveCursor = k;
+            ctx->state = TrySelectMove(ctx, k);
+            break;
+        }
+        if (ctx->state != BS_ACTION_MENU) break;
+
         int action = BattleMenuUpdateRoot(&ctx->menu);
         if (action == BMENU_FIGHT)  ctx->state = BS_MOVE_SELECT;
         if (action == BMENU_ITEM) {
@@ -359,10 +476,11 @@ void BattleUpdate(BattleContext *ctx, float dt)
             ctx->state = BS_ITEM_SELECT;
         }
         if (action == BMENU_PASS) { ctx->selectedMove = -1; ctx->state = BS_EXECUTE; }
-        if (action == BMENU_SWITCH) {
-            // Stub: not yet implemented, treat as PASS
-            ctx->selectedMove = -1;
-            ctx->state = BS_EXECUTE;
+        if (action == BMENU_MOVE) {
+            // Re-enter the move phase so the player can reposition mid-turn.
+            BattleGridFind(&ctx->grid, false, CurrentActorIdx(ctx), &ctx->moveCursorPos);
+            ctx->moveCursorActive = true;
+            ctx->state = BS_MOVE_PHASE;
         }
         break;
     }
@@ -403,40 +521,13 @@ void BattleUpdate(BattleContext *ctx, float dt)
 
     case BS_MOVE_SELECT: {
         Combatant *actor = GetCurrentActor(ctx);
-        int sel = actor ? BattleMenuUpdateMoveSelect(&ctx->menu, actor->moveCount) : -2;
+        int sel = BattleMenuUpdateMoveSelect(&ctx->menu, actor);
         if (sel == -2) { ctx->state = BS_ACTION_MENU; break; } // back
         if (sel >= 0) {
-            // Ignore selection if move is broken
-            if (actor->moveDurability[sel] == 0) break;
-            const MoveDef *mvCheck = GetMoveDef(actor->moveIds[sel]);
-            // Enforce MELEE range: actor must be in their front column
-            if (mvCheck->range == RANGE_MELEE) {
-                GridPos ap;
-                bool isEn = CurrentActorIsEnemy(ctx);
-                if (BattleGridFind(&ctx->grid, isEn, CurrentActorIdx(ctx), &ap)) {
-                    int frontCol = isEn ? 0 : GRID_COLS - 1;
-                    if (ap.col != frontCol) break; // silently reject — "TOO FAR" shown in UI
-                }
-            }
-            ctx->selectedMove = sel;
-            const MoveDef *mv = mvCheck;
-
-            // Count living enemies to decide if target selection is needed
-            int liveCount = 0;
-            for (int i = 0; i < ctx->enemyCount; i++)
-                if (ctx->enemies[i].alive) liveCount++;
-
-            if (mv->range == RANGE_AOE || liveCount <= 1) {
-                // AOE hits all; single enemy = no choice needed
-                ctx->targetEnemyIdx = -1;
-                for (int i = 0; i < ctx->enemyCount; i++)
-                    if (ctx->enemies[i].alive) { ctx->targetEnemyIdx = i; break; }
-                ctx->state = BS_EXECUTE;
-            } else {
-                // MELEE or RANGED with multiple enemies: let player choose
-                ctx->menu.targetCursor = 0;
-                ctx->state = BS_TARGET_SELECT;
-            }
+            BattleState next = TrySelectMove(ctx, sel);
+            // Silent reject keeps us on the move-select panel so the player
+            // sees the TOO FAR / BROKEN indicator and can re-pick.
+            if (next != BS_ACTION_MENU) ctx->state = next;
         }
         break;
     }
@@ -647,6 +738,22 @@ void BattleDraw(const BattleContext *ctx)
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                       (Color){255, 255, 255, (unsigned char)(200 * (1.0f - ctx->enterTimer / 0.6f))});
         break;
+
+    case BS_LAYOUT: {
+        // Cursor outline
+        Rectangle cr = BattleGridCellRect(false, ctx->layoutCursor.col, ctx->layoutCursor.row);
+        DrawRectangleLinesEx(cr, 3, YELLOW);
+        // Held-member highlight (distinct from cursor)
+        if (ctx->layoutHeld >= 0) {
+            GridPos hp;
+            if (BattleGridFind(&((BattleContext *)ctx)->grid, false, ctx->layoutHeld, &hp)) {
+                Rectangle hr = BattleGridCellRect(false, hp.col, hp.row);
+                DrawRectangleLinesEx(hr, 3, (Color){120, 220, 120, 255});
+            }
+        }
+        BattleMenuDrawNarration("ARRANGE — Arrows: move | Z: pick/swap | X: begin");
+        break;
+    }
 
     case BS_TURN_START:
     case BS_MOVE_PHASE:

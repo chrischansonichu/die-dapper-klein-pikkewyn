@@ -11,6 +11,7 @@
 #include "../systems/camera_system.h"
 #include "../systems/dialogue.h"
 #include "inventory_ui.h"
+#include "stats_ui.h"
 
 // Forward declaration — field.c reads/writes the persistent party + inventory
 // through this pointer; ownership lives in screen_gameplay.c.
@@ -51,6 +52,9 @@ typedef struct FieldState {
 
     // Inventory overlay
     InventoryUI   invUi;
+
+    // Stats/Layout overlay
+    StatsUI       statsUi;
 
     // Pending battle (set when an enemy reaches the player, or when Jan
     // initiates a surprise strike on an unaware enemy)

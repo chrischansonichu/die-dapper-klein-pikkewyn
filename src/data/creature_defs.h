@@ -6,7 +6,12 @@
 //----------------------------------------------------------------------------------
 
 #define CREATURE_NAME_LEN 32
-#define CREATURE_MAX_MOVES 4
+// Move slots: 3 groups x 2 slots = 6 total.
+// Slot order is fixed: [Atk0, Atk1, Item0, Item1, Spec0, Spec1].
+// Empty slots hold moveId = -1.
+#define MOVE_SLOTS_PER_GROUP 2
+#define CREATURE_MAX_MOVES (MOVE_SLOTS_PER_GROUP * 3)
+#define MOVE_GROUP_SLOT(group, n) ((group) * MOVE_SLOTS_PER_GROUP + (n))
 #define CREATURE_DEF_COUNT 5
 
 typedef enum CreatureClass {
@@ -25,8 +30,9 @@ typedef struct CreatureDef {
     int           baseDef;
     int           baseSpd;
     int           baseDex;
+    // Fixed-layout move slots. -1 = empty. Each group's two slots are
+    // at indices [group*2, group*2+1].
     int           moveIds[CREATURE_MAX_MOVES];
-    int           moveCount;
 } CreatureDef;
 
 // Per-level stat gain. Added to base stats once per level above 1.

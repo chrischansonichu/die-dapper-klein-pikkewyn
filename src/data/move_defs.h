@@ -18,6 +18,15 @@ typedef enum MoveRange {
     RANGE_SELF,         // targets self / entire party
 } MoveRange;
 
+// Move group drives both UI column placement and equip-slot rules.
+// Item Attacks are the only group that accepts weapon drops.
+typedef enum MoveGroup {
+    MOVE_GROUP_ATTACK = 0,       // innate damaging moves (Tackle, etc.)
+    MOVE_GROUP_ITEM_ATTACK,      // thrown/wielded items (FishingHook, ShellThrow)
+    MOVE_GROUP_SPECIAL,          // buffs/debuffs (WaveCall, ColonyRoar)
+    MOVE_GROUP_COUNT,
+} MoveGroup;
+
 typedef struct MoveDef {
     int       id;
     char      name[MOVE_NAME_LEN];
@@ -27,6 +36,7 @@ typedef struct MoveDef {
     int       defaultDurability; // -1 = unlimited; >0 = uses before broken
     bool      isWeapon;          // true = equippable weapon (swappable); false = innate move
     int       minLevel;          // minimum level required to equip/use; 1 = no gate
+    MoveGroup group;             // which of the 3 move-slot columns this belongs to
 } MoveDef;
 
 // Forward declaration - defined in move_defs.c

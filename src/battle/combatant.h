@@ -21,8 +21,8 @@ typedef struct Combatant {
     int   spd;
     int   dex;
     int   level;
+    // Fixed 6-slot layout mirroring CreatureDef.moveIds. -1 = empty slot.
     int   moveIds[CREATURE_MAX_MOVES];
-    int   moveCount;
     bool  alive;
     // Status modifiers (percentage multipliers, 100 = normal)
     int   atkMod;   // applied as: effective_atk = atk * atkMod / 100

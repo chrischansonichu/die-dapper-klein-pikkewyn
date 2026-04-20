@@ -70,10 +70,10 @@ static void EquipBagWeapon(InventoryUI *ui, Party *party)
         return;
     }
     if (!CombatantEquipWeapon(leader, w.moveId, w.durability)) {
-        // Put it back — all slots full
+        // Put it back — item-attack group is full (both slots 2 and 3).
         InventoryAddWeapon(&party->inventory, w.moveId, w.durability);
         snprintf(ui->status, sizeof(ui->status),
-                 "All weapon slots full. Unequip first.");
+                 "Item-attack slots are full. Unequip first.");
         return;
     }
     snprintf(ui->status, sizeof(ui->status),
@@ -98,7 +98,7 @@ static void UnequipLeaderWeapon(InventoryUI *ui, Party *party)
     }
     snprintf(ui->status, sizeof(ui->status),
              "Unequipped %s.", GetMoveDef(id)->name);
-    if (ui->cursor >= leader->moveCount && ui->cursor > 0) ui->cursor--;
+    if (ui->cursor >= CREATURE_MAX_MOVES && ui->cursor > 0) ui->cursor--;
 }
 
 bool InventoryUIUpdate(InventoryUI *ui, Party *party)
@@ -128,9 +128,10 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party)
             if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) UseItemOnLeader(ui, party);
         }
     } else {
-        // Weapons tab: LEFT/RIGHT swaps focus between equipped and bag
-        Combatant *leader = &party->members[0];
-        int equippedN = leader->moveCount;
+        // Weapons tab: LEFT/RIGHT swaps focus between equipped and bag.
+        // Equipped cursor ranges over the full fixed 6-slot layout (empties
+        // included — selecting an empty slot is a no-op via UnequipLeaderWeapon).
+        int equippedN = CREATURE_MAX_MOVES;
         int bagN      = party->inventory.weaponCount;
 
         if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) { ui->equippedFocus = true;  ui->cursor = 0; }
@@ -202,21 +203,36 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
     int colX = 60, y = 95;
     DrawText(TextFormat("%s's Moves", led->name), colX, y, 18, WHITE);
     y += 26;
-    for (int i = 0; i < led->moveCount; i++) {
-        const MoveDef *mv = GetMoveDef(led->moveIds[i]);
-        bool sel = (ui->equippedFocus && ui->cursor == i);
-        Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
-        DrawRectangle(colX - 6, y - 2, 320, 22, bg);
-        char buf[96];
-        if (mv->isWeapon) {
-            int d = led->moveDurability[i];
-            if (d == 0) snprintf(buf, sizeof(buf), "%-14s [WEAPON] BROKEN", mv->name);
-            else        snprintf(buf, sizeof(buf), "%-14s [WEAPON] dur %d", mv->name, d);
-        } else {
-            snprintf(buf, sizeof(buf), "%-14s [INNATE]", mv->name);
+    // Fixed 6-slot layout with group headers between rows.
+    static const char *groupTitle[MOVE_GROUP_COUNT] = {
+        "Attacks", "Item Attacks", "Specials"
+    };
+    for (int g = 0; g < MOVE_GROUP_COUNT; g++) {
+        DrawText(groupTitle[g], colX, y, 12, (Color){160, 180, 220, 255});
+        y += 16;
+        for (int n = 0; n < MOVE_SLOTS_PER_GROUP; n++) {
+            int i = MOVE_GROUP_SLOT(g, n);
+            bool sel = (ui->equippedFocus && ui->cursor == i);
+            Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
+            DrawRectangle(colX - 6, y - 2, 320, 22, bg);
+            char buf[96];
+            if (led->moveIds[i] < 0) {
+                snprintf(buf, sizeof(buf), "  [slot %d]  —", i + 1);
+                DrawText(buf, colX, y, 14, GRAY);
+            } else {
+                const MoveDef *mv = GetMoveDef(led->moveIds[i]);
+                if (mv->isWeapon) {
+                    int d = led->moveDurability[i];
+                    if (d == 0) snprintf(buf, sizeof(buf), "%d %-14s [WEAPON] BROKEN", i + 1, mv->name);
+                    else        snprintf(buf, sizeof(buf), "%d %-14s [WEAPON] dur %d", i + 1, mv->name, d);
+                } else {
+                    snprintf(buf, sizeof(buf), "%d %-14s [INNATE]", i + 1, mv->name);
+                }
+                DrawText(buf, colX, y, 14, WHITE);
+            }
+            y += 22;
         }
-        DrawText(buf, colX, y, 14, WHITE);
-        y += 24;
+        y += 4;
     }
 
     // Bag on right

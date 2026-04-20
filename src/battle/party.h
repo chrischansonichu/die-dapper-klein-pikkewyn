@@ -3,6 +3,7 @@
 
 #include "combatant.h"
 #include "inventory.h"
+#include "battle_grid.h"
 
 //----------------------------------------------------------------------------------
 // Party - the player's group of combatants
@@ -15,6 +16,10 @@ typedef struct Party {
     int       count;
     int       activeIndex;   // who is currently acting in battle
     Inventory inventory;     // shared bag (items + unequipped weapons)
+    // Default battle-grid cell for each member. Populated by the field
+    // LAYOUT tab; read by BattleInit to seed SetupGridPositions. Default is
+    // (GRID_COLS-1, idx) — front column, row matching the member's party index.
+    GridPos   preferredCell[PARTY_MAX];
 } Party;
 
 void PartyInit(Party *p);

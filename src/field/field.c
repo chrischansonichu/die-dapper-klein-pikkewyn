@@ -153,6 +153,7 @@ void FieldInit(FieldState *ow, GameState *gs)
     PlayerInit(&ow->player, spawnX, spawnY);
     ow->player.dir = spawnDir;
     InventoryUIInit(&ow->invUi);
+    StatsUIInit(&ow->statsUi);
 
     int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;
     int mapPixH = ow->map.height * TILE_SIZE * TILE_SCALE;
@@ -180,9 +181,19 @@ void FieldUpdate(FieldState *ow, float dt)
         InventoryUIUpdate(&ow->invUi, &ow->gs->party);
         return;
     }
+    // Stats overlay captures all input while open
+    if (ow->statsUi.active) {
+        StatsUIUpdate(&ow->statsUi, &ow->gs->party);
+        return;
+    }
     // Open inventory with I (only while not moving / no dialogue)
     if (IsKeyPressed(KEY_I) && !ow->dialogue.active && !ow->player.moving) {
         InventoryUIOpen(&ow->invUi);
+        return;
+    }
+    // Open stats/layout with C
+    if (IsKeyPressed(KEY_C) && !ow->dialogue.active && !ow->player.moving) {
+        StatsUIOpen(&ow->statsUi);
         return;
     }
 
@@ -394,6 +405,11 @@ void FieldDraw(const FieldState *ow)
     // Inventory overlay
     if (ow->invUi.active) {
         InventoryUIDraw(&ow->invUi, &ow->gs->party);
+    }
+
+    // Stats/Layout overlay
+    if (ow->statsUi.active) {
+        StatsUIDraw(&ow->statsUi, &ow->gs->party);
     }
 }
 

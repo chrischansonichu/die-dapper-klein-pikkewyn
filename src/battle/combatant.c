@@ -35,21 +35,20 @@ void CombatantInit(Combatant *c, int creatureId, int level)
     RecomputeStats(c);
     c->hp = c->maxHp;
 
-    for (int i = 0; i < CREATURE_MAX_MOVES; i++)
-        c->moveIds[i] = cdef->moveIds[i];
-    c->moveCount = cdef->moveCount;
-
     // XP
     c->xp      = 0;
     c->xpToNext = c->level * 50;
 
-    // Durability: mirror defaultDurability from move table
-    for (int i = 0; i < c->moveCount; i++) {
-        const MoveDef *mv = GetMoveDef(c->moveIds[i]);
-        c->moveDurability[i] = mv->defaultDurability;
+    // Copy the 6-slot move layout verbatim; -1 slots carry -1 durability.
+    for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
+        c->moveIds[i] = cdef->moveIds[i];
+        if (c->moveIds[i] >= 0) {
+            const MoveDef *mv = GetMoveDef(c->moveIds[i]);
+            c->moveDurability[i] = mv->defaultDurability;
+        } else {
+            c->moveDurability[i] = -1;
+        }
     }
-    for (int i = c->moveCount; i < CREATURE_MAX_MOVES; i++)
-        c->moveDurability[i] = -1;
 }
 
 int CalculateDamage(const Combatant *attacker, const Combatant *defender, const MoveDef *move)
@@ -90,39 +89,45 @@ bool CombatantAddXp(Combatant *c, int amount)
 int CombatantWeaponCount(const Combatant *c)
 {
     int n = 0;
-    for (int i = 0; i < c->moveCount; i++) {
+    for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
         if (c->moveIds[i] < 0) continue;
         if (GetMoveDef(c->moveIds[i])->isWeapon) n++;
     }
     return n;
 }
 
+// Weapons only land in the Item-Attack group (slots 2-3). Returns the first
+// empty slot within that group, or -1 if both are full.
+static int FindEmptyItemAttackSlot(const Combatant *c)
+{
+    int start = MOVE_GROUP_SLOT(MOVE_GROUP_ITEM_ATTACK, 0);
+    for (int n = 0; n < MOVE_SLOTS_PER_GROUP; n++) {
+        if (c->moveIds[start + n] == -1) return start + n;
+    }
+    return -1;
+}
+
 bool CombatantEquipWeapon(Combatant *c, int moveId, int durability)
 {
-    if (c->moveCount >= CREATURE_MAX_MOVES) return false;
-    c->moveIds[c->moveCount]        = moveId;
-    c->moveDurability[c->moveCount] = durability;
-    c->moveCount++;
+    int slot = FindEmptyItemAttackSlot(c);
+    if (slot < 0) return false;
+    c->moveIds[slot]        = moveId;
+    c->moveDurability[slot] = durability;
     return true;
 }
 
 bool CombatantUnequipWeapon(Combatant *c, int slot, int *outMoveId, int *outDurability)
 {
-    if (slot < 0 || slot >= c->moveCount) return false;
+    if (slot < 0 || slot >= CREATURE_MAX_MOVES) return false;
     if (c->moveIds[slot] < 0) return false;
     if (!GetMoveDef(c->moveIds[slot])->isWeapon) return false;
 
     *outMoveId     = c->moveIds[slot];
     *outDurability = c->moveDurability[slot];
 
-    // Shift remaining slots down to keep moveIds/moveDurability compact
-    for (int i = slot; i < c->moveCount - 1; i++) {
-        c->moveIds[i]        = c->moveIds[i + 1];
-        c->moveDurability[i] = c->moveDurability[i + 1];
-    }
-    c->moveCount--;
-    c->moveIds[c->moveCount]        = -1;
-    c->moveDurability[c->moveCount] = -1;
+    // Fixed layout: clear the slot in place (no shifting).
+    c->moveIds[slot]        = -1;
+    c->moveDurability[slot] = -1;
     return true;
 }
 

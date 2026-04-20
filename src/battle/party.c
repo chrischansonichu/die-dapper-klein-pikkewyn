@@ -7,12 +7,19 @@ void PartyInit(Party *p)
     p->count       = 0;
     p->activeIndex = 0;
     InventoryInit(&p->inventory);
+    for (int i = 0; i < PARTY_MAX; i++) {
+        p->preferredCell[i].col = GRID_COLS - 1;
+        p->preferredCell[i].row = i < GRID_ROWS ? i : GRID_ROWS - 1;
+    }
 }
 
 void PartyAddMember(Party *p, int creatureId, int level)
 {
     if (p->count >= PARTY_MAX) return;
     CombatantInit(&p->members[p->count], creatureId, level);
+    // New recruits take the front column, in the first free row.
+    p->preferredCell[p->count].col = GRID_COLS - 1;
+    p->preferredCell[p->count].row = p->count < GRID_ROWS ? p->count : GRID_ROWS - 1;
     p->count++;
 }
 

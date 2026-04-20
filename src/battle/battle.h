@@ -17,10 +17,11 @@
 
 typedef enum BattleState {
     BS_ENTER = 0,            // flash-in entrance animation
+    BS_LAYOUT,               // pre-battle party arrangement
     BS_PREEMPTIVE_NARRATION, // "Surprise attack!" text, shown only if Jan struck first
     BS_TURN_START,           // determine whose turn, set up UI
     BS_MOVE_PHASE,           // current combatant selects a cell to move to (or stay)
-    BS_ACTION_MENU,          // root menu: FIGHT / ITEM / SWITCH / PASS
+    BS_ACTION_MENU,          // root menu: FIGHT / ITEM / MOVE / PASS
     BS_MOVE_SELECT,          // pick a move from the combatant's move list
     BS_ITEM_SELECT,          // pick a consumable from the party inventory
     BS_TARGET_SELECT,        // pick a target cell (ranged/AOE only)
@@ -67,6 +68,10 @@ typedef struct BattleContext {
     // Move phase cursor (the highlighted cell to move to)
     GridPos         moveCursorPos;
     bool            moveCursorActive;
+
+    // Pre-battle layout state
+    GridPos         layoutCursor;
+    int             layoutHeld;      // party idx currently picked up, -1 if none
 
     // Narration
     char            narration[NARRATION_LEN];

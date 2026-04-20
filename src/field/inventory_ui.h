@@ -19,7 +19,7 @@ typedef struct InventoryUI {
     InventoryTab tab;
     int          cursor;        // row within the current tab
     // For weapons tab, the cursor also navigates between equipped slots of the party leader.
-    // equippedFocus == true means cursor is on an equipped slot (0..leader.moveCount-1);
+    // equippedFocus == true means cursor is on an equipped slot (0..CREATURE_MAX_MOVES-1);
     // false means cursor is in the bag list.
     bool         equippedFocus;
     char         status[128];   // last action message, e.g. "Ate Fresh Fish +30 HP"

@@ -13,14 +13,14 @@
 typedef enum BattleMenuAction {
     BMENU_FIGHT  = 0,
     BMENU_ITEM,
-    BMENU_SWITCH,
+    BMENU_MOVE,
     BMENU_PASS,
     BMENU_ACTION_COUNT,
 } BattleMenuAction;
 
 typedef struct BattleMenuState {
-    int  rootCursor;    // 0..3 (FIGHT/ITEM/SWITCH/PASS)
-    int  moveCursor;    // 0..3 (which move slot)
+    int  rootCursor;    // 0..3 (FIGHT/ITEM/MOVE/PASS)
+    int  moveCursor;    // 0..CREATURE_MAX_MOVES-1 (slot index in 3x2 layout)
     int  targetCursor;  // which enemy idx (for ranged target select)
     int  itemCursor;    // which item slot in inventory
 } BattleMenuState;
@@ -29,8 +29,10 @@ void BattleMenuInit(BattleMenuState *m);
 
 // Update root action menu cursor; returns selected action or -1 if none yet
 int  BattleMenuUpdateRoot(BattleMenuState *m);
-// Update move selection cursor; returns selected move slot or -1 if none yet
-int  BattleMenuUpdateMoveSelect(BattleMenuState *m, int moveCount);
+// Update move selection cursor; returns selected slot [0..5] or -1 if none yet,
+// -2 if the player pressed back. Empty slots (moveIds[slot] == -1) are skipped
+// during nav and reject confirm.
+int  BattleMenuUpdateMoveSelect(BattleMenuState *m, const Combatant *actor);
 // Update target cursor; returns enemy idx or -1 if none yet
 int  BattleMenuUpdateTarget(BattleMenuState *m, int enemyCount);
 // Update item cursor; returns item slot or -1 / -2 (back) if none yet
