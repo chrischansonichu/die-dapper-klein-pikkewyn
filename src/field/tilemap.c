@@ -15,11 +15,11 @@ static const Color TILE_COLORS[TILE_COUNT] = {
 // Per-tile default flags
 static const unsigned char TILE_DEFAULT_FLAGS[TILE_COUNT] = {
     TILE_FLAG_SOLID | TILE_FLAG_WATER,   // OCEAN
-    TILE_FLAG_ENCOUNTER | TILE_FLAG_WATER, // SHALLOW (encounter zone)
+    TILE_FLAG_WATER,                     // SHALLOW (walkable water)
     TILE_FLAG_WALKABLE,                  // SAND
     TILE_FLAG_WALKABLE,                  // DOCK
     TILE_FLAG_SOLID,                     // ROCK
-    TILE_FLAG_ENCOUNTER,                 // GRASS (encounter zone)
+    TILE_FLAG_WALKABLE,                  // GRASS
 };
 
 // Water animation hash (same algorithm as screen_gameplay.c)
@@ -119,12 +119,6 @@ bool TileMapIsSolid(const TileMap *m, int x, int y)
 {
     if (x < 0 || x >= m->width || y < 0 || y >= m->height) return true;
     return (m->flags[y * m->width + x] & TILE_FLAG_SOLID) != 0;
-}
-
-bool TileMapIsEncounter(const TileMap *m, int x, int y)
-{
-    if (x < 0 || x >= m->width || y < 0 || y >= m->height) return false;
-    return (m->flags[y * m->width + x] & TILE_FLAG_ENCOUNTER) != 0;
 }
 
 bool TileMapIsWater(const TileMap *m, int x, int y)

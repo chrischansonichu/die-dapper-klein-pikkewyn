@@ -26,8 +26,7 @@ typedef enum TileFlag {
     TILE_FLAG_WALKABLE  = 0,
     TILE_FLAG_SOLID     = 1 << 0,
     TILE_FLAG_WATER     = 1 << 1,
-    TILE_FLAG_ENCOUNTER = 1 << 2,
-    TILE_FLAG_WARP      = 1 << 3,
+    TILE_FLAG_WARP      = 1 << 2,
 } TileFlag;
 
 typedef struct TileMap {
@@ -46,7 +45,6 @@ void TileMapInit(TileMap *m, int width, int height, const char *name);
 void TileMapSetTile(TileMap *m, int x, int y, int tileId);
 int  TileMapGetTile(const TileMap *m, int x, int y);
 bool TileMapIsSolid(const TileMap *m, int x, int y);
-bool TileMapIsEncounter(const TileMap *m, int x, int y);
 bool TileMapIsWater(const TileMap *m, int x, int y);
 void TileMapDraw(const TileMap *m, Camera2D cam);
 void TileMapUnload(TileMap *m);
