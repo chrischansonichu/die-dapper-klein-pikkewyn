@@ -22,5 +22,8 @@ void PartyAddMember(Party *p, int creatureId, int level);
 bool PartyAllFainted(const Party *p);
 // Returns pointer to first living member, or NULL
 Combatant *PartyGetActive(Party *p);
+// Restore every member to full HP (used by the defeat-rescue path — the
+// village patches everyone up before the game continues).
+void PartyHealAll(Party *p);
 
 #endif // PARTY_H

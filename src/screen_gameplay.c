@@ -21,6 +21,7 @@
 //----------------------------------------------------------------------------------
 static int  finishScreen  = 0;
 static bool gInitialized  = false;  // false until first FieldInit
+static bool gShowRescueDialogue = false; // set on defeat → triggers dialogue after hub transition
 static GameState gGameState = {0};
 static FieldState gField = {0};
 
@@ -29,6 +30,15 @@ static FieldState gField = {0};
 #define DROP_MSG_PAGES 2
 #define DROP_MSG_LEN   160
 static char gDropMsg[DROP_MSG_PAGES][DROP_MSG_LEN];
+
+// Rescue dialogue storage — same lifetime reasoning as gDropMsg: DialogueBegin
+// keeps pointers, so the buffers must outlive the call.
+#define RESCUE_MSG_PAGES 2
+#define RESCUE_MSG_LEN   160
+static const char *gRescueMsg[RESCUE_MSG_PAGES] = {
+    "A fisherman pulled you out of the water and carried you back to the village.",
+    "You're safe. Rest up, gather your courage, and head back when you're ready.",
+};
 
 //----------------------------------------------------------------------------------
 // Gameplay Screen Functions Definition
@@ -60,41 +70,57 @@ static int RollEnemyDrops(FieldEnemy *e, Inventory *inv)
 void InitGameplayScreen(void)
 {
     finishScreen = 0;
-    // A defeat sends us through ENDING back to TITLE; starting a new game
-    // from there must wipe the prior run, not reload its field state.
-    if (GetLastBattleResult() == BATTLE_DEFEAT) {
-        gInitialized = false;
-    }
+
     if (!gInitialized) {
         GameStateInit(&gGameState);
         FieldInit(&gField, &gGameState);
         gInitialized = true;
-    } else {
-        // Returning from battle: reload textures, preserve all game state
-        FieldReloadResources(&gField);
-        // Deactivate every enemy that was in the encounter + roll drops on each.
-        // Drops from the first enemy that produced any get narrated; the rest
-        // still land in the inventory silently so the player isn't buried in
-        // dialogue pages after a big group fight.
-        if (GetLastBattleResult() == BATTLE_VICTORY) {
-            int narratedPages = 0;
-            const char *ptrs[DROP_MSG_PAGES];
-            for (int k = 0; k < gField.pendingEnemyCount; k++) {
-                int idx = gField.pendingEnemyIdxs[k];
-                if (idx < 0 || idx >= gField.enemyCount) continue;
-                FieldEnemy *e = &gField.enemies[idx];
-                int pages = RollEnemyDrops(e, &gGameState.party.inventory);
-                e->active = false;
-                if (narratedPages == 0 && pages > 0) {
-                    narratedPages = pages;
-                    for (int i = 0; i < pages; i++) ptrs[i] = gDropMsg[i];
-                }
-            }
-            if (narratedPages > 0)
-                DialogueBegin(&gField.dialogue, ptrs, narratedPages, 40.0f);
-        }
-        gField.pendingEnemyCount = 0;
+        return;
     }
+
+    BattleResult br = GetLastBattleResult();
+
+    if (br == BATTLE_DEFEAT) {
+        // Rescue flow: the village patches the party up and sets a pending
+        // transition back to the hub. The actual field swap + rescue dialogue
+        // are handled by ApplyPendingMapTransition in UpdateGameplayScreen,
+        // so the current field (harbor, proc floor, whatever) gets torn down
+        // properly before the hub is rebuilt.
+        PartyHealAll(&gGameState.party);
+        gGameState.hasPendingMap   = true;
+        gGameState.pendingMapId    = MAP_OVERWORLD_HUB;
+        gGameState.pendingMapSeed  = 0;
+        gGameState.pendingSpawnX   = 11;  // just inside the south gate
+        gGameState.pendingSpawnY   = 13;
+        gGameState.pendingSpawnDir = 3;   // facing up, into the village
+        gShowRescueDialogue = true;
+        return;
+    }
+
+    // Returning from battle normally — reload textures, preserve all state.
+    FieldReloadResources(&gField);
+    // Deactivate every enemy that was in the encounter + roll drops on each.
+    // Drops from the first enemy that produced any get narrated; the rest
+    // still land in the inventory silently so the player isn't buried in
+    // dialogue pages after a big group fight.
+    if (br == BATTLE_VICTORY) {
+        int narratedPages = 0;
+        const char *ptrs[DROP_MSG_PAGES];
+        for (int k = 0; k < gField.pendingEnemyCount; k++) {
+            int idx = gField.pendingEnemyIdxs[k];
+            if (idx < 0 || idx >= gField.enemyCount) continue;
+            FieldEnemy *e = &gField.enemies[idx];
+            int pages = RollEnemyDrops(e, &gGameState.party.inventory);
+            e->active = false;
+            if (narratedPages == 0 && pages > 0) {
+                narratedPages = pages;
+                for (int i = 0; i < pages; i++) ptrs[i] = gDropMsg[i];
+            }
+        }
+        if (narratedPages > 0)
+            DialogueBegin(&gField.dialogue, ptrs, narratedPages, 40.0f);
+    }
+    gField.pendingEnemyCount = 0;
 }
 
 // Rebuild the FieldState against the pending map. Called when the player
@@ -127,6 +153,11 @@ static void ApplyPendingMapTransition(void)
     int mapPixW = gField.map.width  * TILE_SIZE * TILE_SCALE;
     int mapPixH = gField.map.height * TILE_SIZE * TILE_SCALE;
     gField.camera = CameraCreate(PlayerPixelPos(&gField.player), mapPixW, mapPixH);
+
+    if (gShowRescueDialogue) {
+        gShowRescueDialogue = false;
+        DialogueBegin(&gField.dialogue, gRescueMsg, RESCUE_MSG_PAGES, 40.0f);
+    }
 }
 
 void UpdateGameplayScreen(void)

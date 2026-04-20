@@ -32,3 +32,13 @@ Combatant *PartyGetActive(Party *p)
         if (p->members[i].alive) return &p->members[i];
     return NULL;
 }
+
+void PartyHealAll(Party *p)
+{
+    for (int i = 0; i < p->count; i++) {
+        Combatant *c = &p->members[i];
+        c->alive = true;        // rescue revives fainted members
+        c->hp    = c->maxHp;
+    }
+    p->activeIndex = 0;
+}

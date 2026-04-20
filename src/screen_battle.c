@@ -51,7 +51,9 @@ void UpdateBattleScreen(void)
 
     int result = BattleFinished(&gBattleCtx);
     if (result == 1) { gLastResult = BATTLE_VICTORY; finishScreen = 1; }  // → field
-    if (result == 2) { gLastResult = BATTLE_DEFEAT;  finishScreen = 2; }  // → ending
+    // Defeat is no longer a game-over — the village rescues the player and the
+    // field screen puts them back in the hub (see InitGameplayScreen).
+    if (result == 2) { gLastResult = BATTLE_DEFEAT;  finishScreen = 1; }  // → field (rescued)
     if (result == 3) { gLastResult = BATTLE_FLED;    finishScreen = 1; }  // → field
 }
 
