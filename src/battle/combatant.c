@@ -2,6 +2,25 @@
 #include "raylib.h"
 #include <string.h>
 
+// Derive stats from base values + per-class growth at the current level.
+// Does NOT touch c->hp — callers decide whether to full-heal or preserve it.
+static void RecomputeStats(Combatant *c)
+{
+    const CreatureDef *d = c->def;
+    const ClassGrowth *g = GetClassGrowth(d->creatureClass);
+    int L = c->level - 1;
+    c->maxHp   = d->baseHp  + L * g->hpPerLevel;
+    c->atk     = d->baseAtk + L * g->atkPerLevel;
+    c->defense = d->baseDef + L * g->defPerLevel;
+    c->spd     = d->baseSpd + L * g->spdPerLevel;
+    c->dex     = d->baseDex + L * g->dexPerLevel;
+    if (c->maxHp   < 1) c->maxHp   = 1;
+    if (c->atk     < 1) c->atk     = 1;
+    if (c->defense < 1) c->defense = 1;
+    if (c->spd     < 1) c->spd     = 1;
+    if (c->dex     < 0) c->dex     = 0;
+}
+
 void CombatantInit(Combatant *c, int creatureId, int level)
 {
     const CreatureDef *cdef = GetCreatureDef(creatureId);
@@ -9,24 +28,12 @@ void CombatantInit(Combatant *c, int creatureId, int level)
     strncpy(c->name, cdef->name, COMBATANT_NAME_LEN - 1);
     c->name[COMBATANT_NAME_LEN - 1] = '\0';
     c->level    = level;
+    c->alive    = true;
+    c->atkMod   = 100;
+    c->defMod   = 100;
 
-    // Scale stats with level (linear: full stats at level 10)
-    int scale = 50 + level * 5;  // 55..100 for levels 1..10
-    c->maxHp   = cdef->baseHp  * scale / 100;
-    c->hp      = c->maxHp;
-    c->atk     = cdef->baseAtk * scale / 100;
-    c->defense = cdef->baseDef * scale / 100;
-    c->spd     = cdef->baseSpd * scale / 100;
-    c->alive   = true;
-    c->atkMod  = 100;
-    c->defMod  = 100;
-
-    // Ensure minimums
-    if (c->maxHp   < 1) c->maxHp   = 1;
-    if (c->hp      < 1) c->hp      = 1;
-    if (c->atk     < 1) c->atk     = 1;
-    if (c->defense < 1) c->defense = 1;
-    if (c->spd     < 1) c->spd     = 1;
+    RecomputeStats(c);
+    c->hp = c->maxHp;
 
     for (int i = 0; i < CREATURE_MAX_MOVES; i++)
         c->moveIds[i] = cdef->moveIds[i];
@@ -73,17 +80,7 @@ bool CombatantAddXp(Combatant *c, int amount)
         c->xp -= c->xpToNext;
         c->level++;
         c->xpToNext = c->level * 50;
-        // Recalculate stats from base def
-        int scale  = 50 + c->level * 5;
-        c->maxHp   = c->def->baseHp  * scale / 100;
-        c->atk     = c->def->baseAtk * scale / 100;
-        c->defense = c->def->baseDef * scale / 100;
-        c->spd     = c->def->baseSpd * scale / 100;
-        // Enforce minimums
-        if (c->maxHp   < 1) c->maxHp   = 1;
-        if (c->atk     < 1) c->atk     = 1;
-        if (c->defense < 1) c->defense = 1;
-        if (c->spd     < 1) c->spd     = 1;
+        RecomputeStats(c);
         c->hp = c->maxHp; // restore HP on level-up
         return true;
     }

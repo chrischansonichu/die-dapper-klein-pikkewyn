@@ -61,6 +61,14 @@ static void EquipBagWeapon(InventoryUI *ui, Party *party)
     Combatant *leader = &party->members[0];
     WeaponStack w;
     if (!InventoryTakeWeapon(&party->inventory, ui->cursor, &w)) return;
+    const MoveDef *mv = GetMoveDef(w.moveId);
+    if (leader->level < mv->minLevel) {
+        // Gate: too low level. Put the weapon back in the bag unchanged.
+        InventoryAddWeapon(&party->inventory, w.moveId, w.durability);
+        snprintf(ui->status, sizeof(ui->status),
+                 "%s needs Lv %d to equip.", mv->name, mv->minLevel);
+        return;
+    }
     if (!CombatantEquipWeapon(leader, w.moveId, w.durability)) {
         // Put it back — all slots full
         InventoryAddWeapon(&party->inventory, w.moveId, w.durability);
@@ -69,7 +77,7 @@ static void EquipBagWeapon(InventoryUI *ui, Party *party)
         return;
     }
     snprintf(ui->status, sizeof(ui->status),
-             "Equipped %s.", GetMoveDef(w.moveId)->name);
+             "Equipped %s.", mv->name);
     if (ui->cursor >= party->inventory.weaponCount && ui->cursor > 0) ui->cursor--;
 }
 

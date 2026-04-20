@@ -4,6 +4,7 @@
 #include "../state/game_state.h"
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 // Interact key: Z or Enter
 static bool IsInteractPressed(void)
@@ -285,6 +286,41 @@ void FieldUpdate(FieldState *ow, float dt)
     CameraUpdate(&ow->camera, PlayerPixelPos(&ow->player), mapPixW, mapPixH);
 }
 
+// Overlay a pulsing cyan chevron on every warp tile so the "next floor"
+// exit reads at a glance. Chevrons point downward regardless of tile
+// orientation — the visual language is generic "stairs down" rather than
+// directional. Drawn after the tilemap but before characters so the
+// player sprite can still cover it when standing on the warp.
+static void DrawWarpMarkers(const FieldState *ow)
+{
+    int tp = TILE_SIZE * TILE_SCALE;
+    float pulse = 0.5f + 0.5f * sinf((float)GetTime() * 3.0f);
+    Color border = (Color){120, 230, 255, (unsigned char)(140 + 80 * pulse)};
+    Color fill   = (Color){200, 240, 255, (unsigned char)(200 + 40 * pulse)};
+
+    for (int i = 0; i < ow->warpCount; i++) {
+        const FieldWarp *w = &ow->warps[i];
+        float px = (float)(w->tileX * tp);
+        float py = (float)(w->tileY * tp);
+
+        DrawRectangleLinesEx((Rectangle){px + 2, py + 2,
+                                         (float)tp - 4, (float)tp - 4},
+                             2.0f, border);
+
+        float cx = px + tp * 0.5f;
+        float chevW = tp * 0.22f;
+        float chevH = tp * 0.12f;
+        // Two stacked downward chevrons → "descend"
+        float rowsY[2] = { py + tp * 0.38f, py + tp * 0.60f };
+        for (int r = 0; r < 2; r++) {
+            float ry = rowsY[r];
+            DrawTriangle((Vector2){cx - chevW, ry - chevH},
+                         (Vector2){cx,         ry + chevH},
+                         (Vector2){cx + chevW, ry - chevH}, fill);
+        }
+    }
+}
+
 void FieldDraw(const FieldState *ow)
 {
     // Draw tilemap (handles BeginMode2D / EndMode2D internally)
@@ -292,6 +328,10 @@ void FieldDraw(const FieldState *ow)
 
     // Draw world objects inside camera space
     BeginMode2D(ow->camera);
+        // Warp markers go under characters so a player sprite standing on
+        // the tile still renders on top.
+        DrawWarpMarkers(ow);
+
         // Draw enemies
         for (int i = 0; i < ow->enemyCount; i++)
             EnemyDraw(&ow->enemies[i]);

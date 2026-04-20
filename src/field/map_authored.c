@@ -71,11 +71,13 @@ static void AddHarborF1Enemies(MapBuildContext *ctx)
 
     // 1x PATROL sailor along the far end of the dock (keeps spawn safe).
     // Downgraded to a deckhand so the player can reasonably defeat one
-    // enemy and unlock the seal recruitment without grinding.
+    // enemy and unlock the seal recruitment without grinding. Patrol stops
+    // one tile short of the descent warp at (18,13) so the route forward
+    // is never blocked — engaging the sailor is optional, not a gate.
     if (*ctx->enemyCount < ctx->enemyMax) {
         FieldEnemy *p1 = &ctx->enemies[(*ctx->enemyCount)++];
         EnemyInit(p1, 15, 13, 1, BEHAVIOR_PATROL, 1, 3, 6, (Color){220, 120, 40, 255});
-        EnemySetPatrol(p1, 12, 13, 18, 13);
+        EnemySetPatrol(p1, 12, 13, 17, 13);
         EnemySetDrops(p1, ITEM_SARDINE, 70, 3, 35);     // SeaUrchinSpike
     }
 }

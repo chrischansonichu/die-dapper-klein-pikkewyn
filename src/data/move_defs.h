@@ -26,6 +26,7 @@ typedef struct MoveDef {
     MoveRange range;
     int       defaultDurability; // -1 = unlimited; >0 = uses before broken
     bool      isWeapon;          // true = equippable weapon (swappable); false = innate move
+    int       minLevel;          // minimum level required to equip/use; 1 = no gate
 } MoveDef;
 
 // Forward declaration - defined in move_defs.c

@@ -69,10 +69,13 @@ static bool EnemyCheckLoS(FieldEnemy *e, const TileMap *map,
 
 // A tile is walkable for this enemy if it isn't solid and no other character
 // currently claims it. The enemy's own position is excluded via selfIdx.
+// Warp tiles are off-limits so enemies can never block progression to the
+// next floor — reaching a warp is a route guarantee, not a combat gate.
 static bool EnemyCanEnter(const TileMap *map, const struct FieldState *f,
                            int selfIdx, int x, int y)
 {
     if (TileMapIsSolid(map, x, y)) return false;
+    if (TileMapGetFlags(map, x, y) & TILE_FLAG_WARP) return false;
     if (f && FieldIsTileOccupied(f, x, y, selfIdx)) return false;
     return true;
 }

@@ -375,6 +375,18 @@ void BattleUpdate(BattleContext *ctx, float dt)
             if (!actor) break;
             const ItemStack *stk = &ctx->party->inventory.items[sel];
             const ItemDef   *it  = GetItemDef(stk->itemId);
+            if (actor->level < it->minLevel) {
+                // Level-gated — narrate and return to the action menu without
+                // consuming a turn or the item stack.
+                snprintf(ctx->narration, NARRATION_LEN,
+                         "%s can't use %s yet (needs Lv %d).",
+                         actor->name, it->name, it->minLevel);
+                ctx->state = BS_NARRATION;
+                // Mark as a "no-op" turn so advance still happens after the message.
+                ctx->selectedMove   = -1;
+                ctx->targetEnemyIdx = -1;
+                break;
+            }
             int healed = 0;
             if (it->effect == ITEM_EFFECT_HEAL)       healed = CombatantHeal(actor, it->amount);
             else if (it->effect == ITEM_EFFECT_HEAL_FULL) healed = CombatantHeal(actor, actor->maxHp);
@@ -468,27 +480,34 @@ void BattleUpdate(BattleContext *ctx, float dt)
     case BS_ROUND_END:
         if (AllEnemiesFainted(ctx)) {
             if (!ctx->xpNarrationShown) {
-                // Award XP to all living party members — split evenly so adding
-                // party members has a real cost per-member.
-                int totalXp = 0;
-                for (int i = 0; i < ctx->enemyCount; i++)
-                    totalXp += CombatantXpReward(&ctx->enemies[i]);
+                // Award XP per-enemy, split across the living party. Each
+                // member individually filters out enemies more than 3 levels
+                // below them — so a level-15 Jan gets nothing off a level-10
+                // sailor, while a newly-recruited level-8 seal still benefits.
                 int livingCount = 0;
                 for (int i = 0; i < ctx->party->count; i++)
                     if (ctx->party->members[i].alive) livingCount++;
-                int xpPerMember = (livingCount > 0) ? (totalXp / livingCount) : totalXp;
-                bool levelUp = false;
-                for (int i = 0; i < ctx->party->count; i++)
-                    if (ctx->party->members[i].alive)
-                        if (CombatantAddXp(&ctx->party->members[i], xpPerMember)) levelUp = true;
-                const char *suffix = (livingCount > 1) ? " each" : "";
+
+                bool levelUp  = false;
+                int  janShare = 0; // reported in narration for continuity
+                for (int j = 0; j < ctx->enemyCount; j++) {
+                    int reward = CombatantXpReward(&ctx->enemies[j]);
+                    int share  = (livingCount > 0) ? (reward / livingCount) : reward;
+                    int enemyLevel = ctx->enemies[j].level;
+                    for (int i = 0; i < ctx->party->count; i++) {
+                        Combatant *m = &ctx->party->members[i];
+                        if (!m->alive) continue;
+                        if (m->level - enemyLevel > 3) continue; // under-leveled enemy
+                        if (CombatantAddXp(m, share)) levelUp = true;
+                        if (i == 0) janShare += share;
+                    }
+                }
                 if (levelUp)
                     snprintf(ctx->narration, NARRATION_LEN,
-                             "Victory! +%d XP%s  LEVEL UP! HP restored!",
-                             xpPerMember, suffix);
+                             "Victory! +%d XP  LEVEL UP! HP restored!", janShare);
                 else
                     snprintf(ctx->narration, NARRATION_LEN,
-                             "Victory! +%d XP%s", xpPerMember, suffix);
+                             "Victory! +%d XP", janShare);
                 ctx->xpNarrationShown = true;
                 ctx->state = BS_NARRATION;
             } else {

@@ -19,6 +19,7 @@ typedef struct Combatant {
     int   atk;
     int   defense;
     int   spd;
+    int   dex;
     int   level;
     int   moveIds[CREATURE_MAX_MOVES];
     int   moveCount;

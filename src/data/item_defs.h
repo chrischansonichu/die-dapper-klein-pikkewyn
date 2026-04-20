@@ -19,6 +19,7 @@ typedef struct ItemDef {
     char       desc[ITEM_DESC_LEN];
     ItemEffect effect;
     int        amount;
+    int        minLevel;   // minimum level required to use; 1 = no gate
 } ItemDef;
 
 // Item IDs
