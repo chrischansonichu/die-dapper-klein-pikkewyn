@@ -97,8 +97,45 @@ void InitGameplayScreen(void)
     }
 }
 
+// Rebuild the FieldState against the pending map. Called when the player
+// steps on a warp tile (step 7) — later also for the escape item and the
+// rescue-after-defeat flow (step 9). The new map's builder emits its default
+// spawn; we overwrite it with the warp's target so the player always arrives
+// at the door they came in by.
+static void ApplyPendingMapTransition(void)
+{
+    FieldUnload(&gField);
+
+    gGameState.currentMapId    = gGameState.pendingMapId;
+    gGameState.currentMapSeed  = gGameState.pendingMapSeed;
+    int sx   = gGameState.pendingSpawnX;
+    int sy   = gGameState.pendingSpawnY;
+    int sdir = gGameState.pendingSpawnDir;
+    gGameState.hasPendingMap = false;
+
+    FieldInit(&gField, &gGameState);
+
+    gField.player.tileX         = sx;
+    gField.player.tileY         = sy;
+    gField.player.targetTileX   = sx;
+    gField.player.targetTileY   = sy;
+    gField.player.dir           = sdir;
+    gField.player.moving        = false;
+    gField.player.moveFrames    = 0;
+    gField.player.stepCompleted = false;
+
+    int mapPixW = gField.map.width  * TILE_SIZE * TILE_SCALE;
+    int mapPixH = gField.map.height * TILE_SIZE * TILE_SCALE;
+    gField.camera = CameraCreate(PlayerPixelPos(&gField.player), mapPixW, mapPixH);
+}
+
 void UpdateGameplayScreen(void)
 {
+    if (gGameState.hasPendingMap) {
+        ApplyPendingMapTransition();
+        return; // Skip field update this frame — next frame handles input.
+    }
+
     FieldUpdate(&gField, GetFrameTime());
 
     if (gField.pendingBattle) {
