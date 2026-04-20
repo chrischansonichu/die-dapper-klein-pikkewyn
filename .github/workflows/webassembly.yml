@@ -61,7 +61,10 @@ jobs:
     - name: Build Product
       run: |
         cd ${{ env.PROJECT_NAME }}/src
-        make PLATFORM=PLATFORM_WEB BUILD_MODE=RELEASE EMSDK_PATH="D:/a/${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}/emsdk-cache/emsdk-main" PROJECT_BUILD_PATH=. RAYLIB_SRC_PATH=../../raylib/src -B
+        # BUILD_WEB_RESOURCES=TRUE bakes src/resources/ into the .data file via
+        # emcc --preload-file. Without it, the browser build runs but fails to
+        # find title.png / coin.wav / mecha.png at startup.
+        make PLATFORM=PLATFORM_WEB BUILD_MODE=RELEASE BUILD_WEB_RESOURCES=TRUE EMSDK_PATH="D:/a/${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}/emsdk-cache/emsdk-main" PROJECT_BUILD_PATH=. RAYLIB_SRC_PATH=../../raylib/src -B
 
     - name: Generate Artifacts
       run: |

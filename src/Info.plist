@@ -5,15 +5,15 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>gamejam_template</string>
+	<string>die-dapper-klein-pikkewyn</string>
 	<key>CFBundleIconFile</key>
 	<string>raylib.icns</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.raylibtech.gamejam_template</string>
+	<string>com.bdhimes.die-dapper-klein-pikkewyn</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>gamejam_template</string>
+	<string>die-dapper-klein-pikkewyn</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleVersion</key>

@@ -368,6 +368,33 @@
     <ClCompile Include="..\..\..\src\screen_options.c" />
     <ClCompile Include="..\..\..\src\screen_gameplay.c" />
     <ClCompile Include="..\..\..\src\screen_ending.c" />
+    <ClCompile Include="..\..\..\src\screen_battle.c" />
+    <ClCompile Include="..\..\..\src\battle\battle.c" />
+    <ClCompile Include="..\..\..\src\battle\battle_anim.c" />
+    <ClCompile Include="..\..\..\src\battle\battle_grid.c" />
+    <ClCompile Include="..\..\..\src\battle\battle_menu.c" />
+    <ClCompile Include="..\..\..\src\battle\battle_sprites.c" />
+    <ClCompile Include="..\..\..\src\battle\combatant.c" />
+    <ClCompile Include="..\..\..\src\battle\inventory.c" />
+    <ClCompile Include="..\..\..\src\battle\party.c" />
+    <ClCompile Include="..\..\..\src\data\creature_defs.c" />
+    <ClCompile Include="..\..\..\src\data\item_defs.c" />
+    <ClCompile Include="..\..\..\src\data\move_defs.c" />
+    <ClCompile Include="..\..\..\src\data\room_templates.c" />
+    <ClCompile Include="..\..\..\src\field\enemy.c" />
+    <ClCompile Include="..\..\..\src\field\enemy_sprites.c" />
+    <ClCompile Include="..\..\..\src\field\field.c" />
+    <ClCompile Include="..\..\..\src\field\inventory_ui.c" />
+    <ClCompile Include="..\..\..\src\field\map_authored.c" />
+    <ClCompile Include="..\..\..\src\field\map_dungeon_proc.c" />
+    <ClCompile Include="..\..\..\src\field\map_source.c" />
+    <ClCompile Include="..\..\..\src\field\npc.c" />
+    <ClCompile Include="..\..\..\src\field\player.c" />
+    <ClCompile Include="..\..\..\src\field\stats_ui.c" />
+    <ClCompile Include="..\..\..\src\field\tilemap.c" />
+    <ClCompile Include="..\..\..\src\state\game_state.c" />
+    <ClCompile Include="..\..\..\src\systems\camera_system.c" />
+    <ClCompile Include="..\..\..\src\systems\dialogue.c" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\..\..\src\raylib_game.rc" />
