@@ -114,6 +114,15 @@ jobs:
         cp -r ${{ env.PROJECT_NAME }}/src/${{ env.PROJECT_RESOURCES_PATH }} ${{ env.PROJECT_RELEASE_PATH }}/${{ env.PROJECT_NAME }}.app/Contents
         cp ${{ env.PROJECT_NAME }}/README.md ${{ env.PROJECT_RELEASE_PATH }}
         cp ${{ env.PROJECT_NAME }}/LICENSE ${{ env.PROJECT_RELEASE_PATH }}
+        # Ad-hoc sign the .app bundle. Without this the downloaded bundle is
+        # rejected by Gatekeeper as "damaged or incomplete" — the executable
+        # gets a linker ad-hoc signature but the bundle's Info.plist and
+        # resources are unsealed, which Gatekeeper treats as tampering.
+        # Ad-hoc signing doesn't bypass Gatekeeper (the user still sees the
+        # "unidentified developer" prompt), but it turns the dead-end error
+        # into a right-click → Open override.
+        codesign --force --deep --sign - ${{ env.PROJECT_RELEASE_PATH }}/${{ env.PROJECT_NAME }}.app
+        codesign -dv ${{ env.PROJECT_RELEASE_PATH }}/${{ env.PROJECT_NAME }}.app || true
         ls ${{ env.PROJECT_RELEASE_PATH }}
         7z a ./${{ env.PROJECT_RELEASE_PATH }}.zip ./${{ env.PROJECT_RELEASE_PATH }}
 
