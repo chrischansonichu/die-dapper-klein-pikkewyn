@@ -52,6 +52,14 @@ void CombatantInit(Combatant *c, int creatureId, int level)
     }
 }
 
+bool RollHit(const Combatant *attacker, const Combatant *defender)
+{
+    int hit = 85 + 4 * (attacker->dex - defender->dex);
+    if (hit < 35) hit = 35;
+    if (hit > 99) hit = 99;
+    return GetRandomValue(1, 100) <= hit;
+}
+
 int CalculateDamage(const Combatant *attacker, const Combatant *defender, const MoveDef *move)
 {
     if (move->power == 0) return 0;

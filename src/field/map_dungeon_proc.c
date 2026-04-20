@@ -1,6 +1,34 @@
 #include "map_dungeon_proc.h"
 #include "../data/room_templates.h"
 #include "../data/item_defs.h"
+#include "../data/creature_defs.h"
+
+#define DUNGEON_DEEPEST_PROC_FLOOR 8
+#define DUNGEON_FINAL_FLOOR        9
+
+// Pick a creature id for a given dungeon depth. Weights shift toward sturdier
+// sailors as the floor number climbs so F2 is mostly deckhands while F8 is a
+// captain-and-bosun gauntlet. Returns one of CREATURE_DECKHAND / _BOSUN /
+// _CAPTAIN.
+static int PickEnemyCreature(int floor, unsigned roll)
+{
+    // Map floor 2..8 onto three per-tier weights out of 100. Captains start
+    // as a rare-sighting on F2 (10%) and ramp up so the tier is visible
+    // across the whole dungeon, not just the deep floors.
+    int wDeck, wBosun, wCap;
+    if      (floor <= 2) { wDeck = 60; wBosun = 30; wCap = 10; }
+    else if (floor <= 3) { wDeck = 45; wBosun = 35; wCap = 20; }
+    else if (floor <= 4) { wDeck = 30; wBosun = 40; wCap = 30; }
+    else if (floor <= 5) { wDeck = 15; wBosun = 45; wCap = 40; }
+    else if (floor <= 6) { wDeck = 5;  wBosun = 45; wCap = 50; }
+    else if (floor <= 7) { wDeck = 0;  wBosun = 35; wCap = 65; }
+    else                 { wDeck = 0;  wBosun = 20; wCap = 80; }
+
+    int pct = (int)(roll % 100);
+    if (pct < wDeck)           return CREATURE_DECKHAND;
+    if (pct < wDeck + wBosun)  return CREATURE_BOSUN;
+    return CREATURE_CAPTAIN;
+}
 
 #define DUNGEON_ROOMS_X 2
 #define DUNGEON_ROOMS_Y 2
@@ -51,12 +79,14 @@ static bool IsFloor(const TileMap *m, int x, int y)
     return t == TILE_SAND || t == TILE_DOCK || t == TILE_GRASS;
 }
 
-void BuildHarborProcFloor(MapBuildContext *ctx, unsigned seed)
+void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
 {
     TileMap *m = ctx->map;
     TileMapInit(m, DUNGEON_W, DUNGEON_H, "harbor-proc");
 
-    unsigned rng = seed ? seed : 0xA1B2C3D4u;
+    // Mix the floor number into the seed so consecutive floors from the same
+    // run get distinct layouts while staying deterministic.
+    unsigned rng = (seed ? seed : 0xA1B2C3D4u) ^ ((unsigned)floor * 0x9E3779B9u);
 
     // Place rooms first — walls and all. Door carving happens after so we
     // don't immediately paint back over the carved openings.
@@ -89,20 +119,31 @@ void BuildHarborProcFloor(MapBuildContext *ctx, unsigned seed)
         for (int rx = 0; rx < DUNGEON_ROOMS_X; rx++) {
             if (rx == spawnRoomX && ry == spawnRoomY) continue;
             const RoomTemplate *tpl = GetRoomTemplate(pickedTpl[ry][rx]);
+            // Empty-anchor rate decays with depth so deeper floors feel more
+            // densely populated — F2 leaves ~25% anchors empty, F8 only ~10%.
+            int emptyChance = 28 - floor * 2;
+            if (emptyChance < 8) emptyChance = 8;
             for (int i = 0; i < tpl->enemyCount && *ctx->enemyCount < ctx->enemyMax; i++) {
                 unsigned r = XorShift(&rng);
-                if ((r & 3) == 0) continue; // ~25% of anchors stay empty
+                if ((int)(r % 100) < emptyChance) continue;
                 int etx = rx * ROOM_W + tpl->enemyX[i];
                 int ety = ry * ROOM_H + tpl->enemyY[i];
                 if (!IsFloor(m, etx, ety)) continue;
 
-                // Pick creature id (1 = deckhand, 2 = bosun) and level band.
+                // Creature tier weights by depth (PickEnemyCreature). Level
+                // bumps +1 per floor past F2 so the stat curve also climbs,
+                // not just the roster.
                 unsigned r2 = XorShift(&rng);
-                int creatureId = (r2 & 1) ? 2 : 1;
-                int level = 3 + (int)((r2 >> 1) & 1);
-                Color color = (creatureId == 2)
-                    ? (Color){160,  80, 180, 255}
-                    : (Color){200,  70,  60, 255};
+                int creatureId = PickEnemyCreature(floor, r2);
+                int depthBonus = floor - 2;
+                if (depthBonus < 0) depthBonus = 0;
+                int level = 3 + (int)((r2 >> 1) & 1) + depthBonus;
+                Color color;
+                switch (creatureId) {
+                    case CREATURE_CAPTAIN: color = (Color){230, 200,  80, 255}; break;
+                    case CREATURE_BOSUN:   color = (Color){160,  80, 180, 255}; break;
+                    default:               color = (Color){200,  70,  60, 255}; break;
+                }
 
                 FieldEnemy *e = &ctx->enemies[(*ctx->enemyCount)++];
                 EnemyInit(e, etx, ety, 0, BEHAVIOR_STAND, creatureId, level, 4, color);
@@ -115,4 +156,38 @@ void BuildHarborProcFloor(MapBuildContext *ctx, unsigned seed)
     *ctx->spawnTileX = spawnRoomX * ROOM_W + 2;
     *ctx->spawnTileY = spawnRoomY * ROOM_H + 2;
     *ctx->spawnDir   = 2; // facing right, toward the first doorway
+
+    // Stairs-down warp — placed in the room diagonally opposite the spawn so
+    // the player has to traverse the floor before descending. Scan from the
+    // room interior outward until we find a floor tile to host the warp.
+    if (*ctx->warpCount < ctx->warpMax) {
+        int stairsRoomX = DUNGEON_ROOMS_X - 1 - spawnRoomX;
+        int stairsRoomY = DUNGEON_ROOMS_Y - 1 - spawnRoomY;
+        int sx = -1, sy = -1;
+        for (int oy = 1; oy < ROOM_H - 1 && sx < 0; oy++) {
+            for (int ox = 1; ox < ROOM_W - 1 && sx < 0; ox++) {
+                int tx = stairsRoomX * ROOM_W + ox;
+                int ty = stairsRoomY * ROOM_H + oy;
+                if (IsFloor(m, tx, ty)) { sx = tx; sy = ty; }
+            }
+        }
+        if (sx >= 0) {
+            int nextFloor = floor + 1;
+            int nextMapId = (nextFloor >= DUNGEON_FINAL_FLOOR)
+                              ? MAP_HARBOR_F9 : MAP_HARBOR_PROC;
+            FieldWarp *w = &ctx->warps[(*ctx->warpCount)++];
+            w->tileX          = sx;
+            w->tileY          = sy;
+            w->targetMapId    = nextMapId;
+            w->targetFloor    = nextFloor;
+            w->targetSpawnX   = 2;
+            w->targetSpawnY   = 2;
+            w->targetSpawnDir = 2; // facing right into the new floor
+            TileMapAddFlag(m, sx, sy, TILE_FLAG_WARP);
+        }
+    }
+
+    // Suppress unused warning if nothing above reaches the cap — not strictly
+    // needed today but keeps the builder shape uniform with authored builders.
+    (void)DUNGEON_DEEPEST_PROC_FLOOR;
 }

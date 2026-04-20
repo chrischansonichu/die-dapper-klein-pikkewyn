@@ -11,6 +11,7 @@ void InventoryUIInit(InventoryUI *ui)
     ui->tab           = INV_TAB_ITEMS;
     ui->cursor        = 0;
     ui->equippedFocus = false;
+    ui->memberCursor  = 0;
     ui->status[0]     = '\0';
 }
 
@@ -22,6 +23,7 @@ void InventoryUIOpen(InventoryUI *ui)
     ui->tab           = INV_TAB_ITEMS;
     ui->cursor        = 0;
     ui->equippedFocus = false;
+    ui->memberCursor  = 0;
     ui->status[0]     = '\0';
 }
 
@@ -31,25 +33,26 @@ void InventoryUIClose(InventoryUI *ui)
     ui->status[0]     = '\0';
 }
 
-// Use item at ui->cursor on party leader (members[0])
-static void UseItemOnLeader(InventoryUI *ui, Party *party)
+// Use item at ui->cursor on the currently-selected party member.
+static void UseItemOnMember(InventoryUI *ui, Party *party)
 {
     if (ui->cursor < 0 || ui->cursor >= party->inventory.itemCount) return;
-    Combatant *leader = &party->members[0];
-    if (!leader->alive) {
-        snprintf(ui->status, sizeof(ui->status), "Jan is unconscious.");
+    if (ui->memberCursor < 0 || ui->memberCursor >= party->count) return;
+    Combatant *target = &party->members[ui->memberCursor];
+    if (!target->alive) {
+        snprintf(ui->status, sizeof(ui->status), "%s is unconscious.", target->name);
         return;
     }
     const ItemStack *stk = &party->inventory.items[ui->cursor];
     const ItemDef   *it  = GetItemDef(stk->itemId);
     int healed = 0;
-    if (it->effect == ITEM_EFFECT_HEAL)           healed = CombatantHeal(leader, it->amount);
-    else if (it->effect == ITEM_EFFECT_HEAL_FULL) healed = CombatantHeal(leader, leader->maxHp);
+    if (it->effect == ITEM_EFFECT_HEAL)           healed = CombatantHeal(target, it->amount);
+    else if (it->effect == ITEM_EFFECT_HEAL_FULL) healed = CombatantHeal(target, target->maxHp);
     if (healed == 0) {
-        snprintf(ui->status, sizeof(ui->status), "%s is already at full HP.", leader->name);
+        snprintf(ui->status, sizeof(ui->status), "%s is already at full HP.", target->name);
         return;
     }
-    snprintf(ui->status, sizeof(ui->status), "Ate %s  +%d HP", it->name, healed);
+    snprintf(ui->status, sizeof(ui->status), "%s ate %s  +%d HP", target->name, it->name, healed);
     InventoryConsumeItem(&party->inventory, ui->cursor);
     // Keep cursor in bounds after consumption
     if (ui->cursor >= party->inventory.itemCount && ui->cursor > 0) ui->cursor--;
@@ -58,46 +61,48 @@ static void UseItemOnLeader(InventoryUI *ui, Party *party)
 static void EquipBagWeapon(InventoryUI *ui, Party *party)
 {
     if (ui->cursor < 0 || ui->cursor >= party->inventory.weaponCount) return;
-    Combatant *leader = &party->members[0];
+    if (ui->memberCursor < 0 || ui->memberCursor >= party->count) return;
+    Combatant *target = &party->members[ui->memberCursor];
     WeaponStack w;
     if (!InventoryTakeWeapon(&party->inventory, ui->cursor, &w)) return;
     const MoveDef *mv = GetMoveDef(w.moveId);
-    if (leader->level < mv->minLevel) {
+    if (target->level < mv->minLevel) {
         // Gate: too low level. Put the weapon back in the bag unchanged.
         InventoryAddWeapon(&party->inventory, w.moveId, w.durability);
         snprintf(ui->status, sizeof(ui->status),
-                 "%s needs Lv %d to equip.", mv->name, mv->minLevel);
+                 "%s needs Lv %d to equip %s.", target->name, mv->minLevel, mv->name);
         return;
     }
-    if (!CombatantEquipWeapon(leader, w.moveId, w.durability)) {
+    if (!CombatantEquipWeapon(target, w.moveId, w.durability)) {
         // Put it back — item-attack group is full (both slots 2 and 3).
         InventoryAddWeapon(&party->inventory, w.moveId, w.durability);
         snprintf(ui->status, sizeof(ui->status),
-                 "Item-attack slots are full. Unequip first.");
+                 "%s's item-attack slots are full. Unequip first.", target->name);
         return;
     }
     snprintf(ui->status, sizeof(ui->status),
-             "Equipped %s.", mv->name);
+             "%s equipped %s.", target->name, mv->name);
     if (ui->cursor >= party->inventory.weaponCount && ui->cursor > 0) ui->cursor--;
 }
 
-static void UnequipLeaderWeapon(InventoryUI *ui, Party *party)
+static void UnequipMemberWeapon(InventoryUI *ui, Party *party)
 {
-    Combatant *leader = &party->members[0];
+    if (ui->memberCursor < 0 || ui->memberCursor >= party->count) return;
+    Combatant *target = &party->members[ui->memberCursor];
     int slot = ui->cursor;
     int id, dur;
-    if (!CombatantUnequipWeapon(leader, slot, &id, &dur)) {
+    if (!CombatantUnequipWeapon(target, slot, &id, &dur)) {
         snprintf(ui->status, sizeof(ui->status), "That slot isn't a weapon.");
         return;
     }
     if (!InventoryAddWeapon(&party->inventory, id, dur)) {
         // Bag full — re-equip to avoid losing it
-        CombatantEquipWeapon(leader, id, dur);
+        CombatantEquipWeapon(target, id, dur);
         snprintf(ui->status, sizeof(ui->status), "Weapon bag full.");
         return;
     }
     snprintf(ui->status, sizeof(ui->status),
-             "Unequipped %s.", GetMoveDef(id)->name);
+             "%s unequipped %s.", target->name, GetMoveDef(id)->name);
     if (ui->cursor >= CREATURE_MAX_MOVES && ui->cursor > 0) ui->cursor--;
 }
 
@@ -119,13 +124,28 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party)
         ui->status[0]     = '\0';
     }
 
+    // Party-member cycling — the inventory is shared, but actions always land
+    // on one specific combatant. Bracket keys scroll through living members so
+    // the player can feed/equip any of them, not just Jan.
+    if (party->count > 0) {
+        if (IsKeyPressed(KEY_LEFT_BRACKET)) {
+            ui->memberCursor = (ui->memberCursor - 1 + party->count) % party->count;
+            ui->status[0] = '\0';
+        }
+        if (IsKeyPressed(KEY_RIGHT_BRACKET)) {
+            ui->memberCursor = (ui->memberCursor + 1) % party->count;
+            ui->status[0] = '\0';
+        }
+        if (ui->memberCursor >= party->count) ui->memberCursor = 0;
+    }
+
     if (ui->tab == INV_TAB_ITEMS) {
         int n = party->inventory.itemCount;
         if (n > 0) {
             if (IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_W)) ui->cursor = (ui->cursor - 1 + n) % n;
             if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) ui->cursor = (ui->cursor + 1) % n;
             if (ui->cursor >= n) ui->cursor = n - 1;
-            if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) UseItemOnLeader(ui, party);
+            if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) UseItemOnMember(ui, party);
         }
     } else {
         // Weapons tab: LEFT/RIGHT swaps focus between equipped and bag.
@@ -144,7 +164,7 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party)
             if (ui->cursor >= n) ui->cursor = n - 1;
         }
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
-            if (ui->equippedFocus) UnequipLeaderWeapon(ui, party);
+            if (ui->equippedFocus) UnequipMemberWeapon(ui, party);
             else                   EquipBagWeapon(ui, party);
         }
     }
@@ -184,24 +204,30 @@ static void DrawItemsTab(const InventoryUI *ui, const Party *party)
         DrawText(buf, x, y, 14, WHITE);
         y += 24;
     }
-    // HP bar for Jan
-    const Combatant *jan = &party->members[0];
+    // HP bar for the active member — cycled via [ / ]
+    int idx = (ui->memberCursor >= 0 && ui->memberCursor < party->count)
+                ? ui->memberCursor : 0;
+    const Combatant *active = &party->members[idx];
     int hbx = 500, hby = 68;
-    DrawText(TextFormat("%s  HP %d/%d", jan->name, jan->hp, jan->maxHp), hbx, hby, 14, WHITE);
+    DrawText(TextFormat("%s  HP %d/%d  ([ / ] switch)",
+                        active->name, active->hp, active->maxHp),
+             hbx, hby, 14, WHITE);
     DrawRectangle(hbx, hby + 18, 200, 8, (Color){30, 30, 30, 255});
-    float pct = (float)jan->hp / (float)jan->maxHp;
+    float pct = (float)active->hp / (float)active->maxHp;
     DrawRectangle(hbx, hby + 18, (int)(200 * pct), 8, (Color){40, 200, 40, 255});
-    DrawText("Z: Use  X/I: Close", 60, 420, 14, GRAY);
+    DrawText("Z: Use  [ / ]: Switch Member  X/I: Close", 60, 420, 14, GRAY);
 }
 
 static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
 {
     const Inventory *inv  = &party->inventory;
-    const Combatant *led  = &party->members[0];
+    int idx = (ui->memberCursor >= 0 && ui->memberCursor < party->count)
+                ? ui->memberCursor : 0;
+    const Combatant *led  = &party->members[idx];
 
     // Equipped on left
     int colX = 60, y = 95;
-    DrawText(TextFormat("%s's Moves", led->name), colX, y, 18, WHITE);
+    DrawText(TextFormat("%s's Moves  ([ / ] switch)", led->name), colX, y, 18, WHITE);
     y += 26;
     // Fixed 6-slot layout with group headers between rows.
     static const char *groupTitle[MOVE_GROUP_COUNT] = {
@@ -253,8 +279,8 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
         DrawText(buf, bagX, y, 14, WHITE);
         y += 24;
     }
-    DrawText(ui->equippedFocus ? "Z: Unequip  Right: Bag  X/I: Close"
-                               : "Z: Equip    Left: Equipped  X/I: Close",
+    DrawText(ui->equippedFocus ? "Z: Unequip  Right: Bag  [ / ]: Switch Member  X/I: Close"
+                               : "Z: Equip    Left: Equipped  [ / ]: Switch Member  X/I: Close",
              60, 420, 14, GRAY);
 }
 

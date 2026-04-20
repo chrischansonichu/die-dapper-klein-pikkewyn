@@ -56,6 +56,10 @@ static inline void CombatantClearStatus(Combatant *c, CombatantStatus s) {
 
 void CombatantInit(Combatant *c, int creatureId, int level);
 int  CalculateDamage(const Combatant *attacker, const Combatant *defender, const MoveDef *move);
+// True if a hostile attack lands. Base 85%, ±4% per point of dex difference,
+// clamped to [35, 99]. Internally rolls GetRandomValue, so call once per
+// intended strike. Friendly fire and buffs should skip this and always land.
+bool RollHit(const Combatant *attacker, const Combatant *defender);
 void ApplyStatusMove(Combatant *targets[], int count, const MoveDef *move, bool isEnemy);
 int  CombatantXpReward(const Combatant *c);
 bool CombatantAddXp(Combatant *c, int amount);  // returns true if leveled up

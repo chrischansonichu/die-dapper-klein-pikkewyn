@@ -69,44 +69,68 @@ static void AITakeTurn(BattleContext *ctx)
         BattleGridMoveCombatant(&ctx->grid, true, idx, 3); // left = toward player
     }
 
-    // Pick highest power move that can reach a player
+    // Pick a random unbound living player as target (enemies avoid wasting
+    // turns on the tied-up seal — it would tick their own captive's ropes).
+    // Random instead of first-eligible so multiple enemies don't gang up on
+    // Jan every round just because he's at index 0.
     Combatant *actor = &ctx->enemies[idx];
+    ctx->targetEnemyIdx     = -1;
+    ctx->targetOnEnemySide  = false;
+    ctx->targetCell         = (GridPos){GRID_COLS - 1, 0};
+    int candidates[PARTY_MAX];
+    int candCount = 0;
+    for (int i = 0; i < ctx->party->count; i++) {
+        Combatant *m = &ctx->party->members[i];
+        if (!m->alive) continue;
+        if (CombatantHasStatus(m, STATUS_BOUND)) continue;
+        candidates[candCount++] = i;
+    }
+    // Fallback: if everyone's bound, still pick from living members.
+    if (candCount == 0) {
+        for (int i = 0; i < ctx->party->count; i++) {
+            if (!ctx->party->members[i].alive) continue;
+            candidates[candCount++] = i;
+        }
+    }
+    int pickedIdx = -1;
+    if (candCount > 0) {
+        pickedIdx = candidates[GetRandomValue(0, candCount - 1)];
+        ctx->targetEnemyIdx = pickedIdx;
+        GridPos tp;
+        if (BattleGridFind(&ctx->grid, false, pickedIdx, &tp)) ctx->targetCell = tp;
+    }
+
+    // Pick the highest-power move that can actually reach the chosen target.
+    // Without this, a front-row deckhand with both Tackle and FishingHook (both
+    // MELEE but the latter is higher power) would never switch to a RANGED
+    // alternative against a back-row player — today that's fine, but this lays
+    // the groundwork for ranged enemy weapons without a regression.
     int bestMove = 0;
     int bestPow  = -1;
     for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
         if (actor->moveIds[i] < 0) continue;
         const MoveDef *mv = GetMoveDef(actor->moveIds[i]);
+        if (mv->power <= 0) continue; // status moves not considered here yet
+        if (mv->range == RANGE_MELEE && pickedIdx >= 0) {
+            if (!BattleGridCanHit(&ctx->grid, pos, true, ctx->targetCell, false, mv->range))
+                continue;
+        }
         if (mv->power > bestPow) {
             bestPow  = mv->power;
             bestMove = i;
         }
     }
-    ctx->selectedMove = bestMove;
-
-    // Pick first unbound living player as target cell (enemies avoid wasting
-    // turns on the tied-up seal — it would tick their own captive's ropes).
-    ctx->targetEnemyIdx     = -1;
-    ctx->targetOnEnemySide  = false;
-    ctx->targetCell         = (GridPos){GRID_COLS - 1, 0};
-    for (int i = 0; i < ctx->party->count; i++) {
-        Combatant *m = &ctx->party->members[i];
-        if (!m->alive) continue;
-        if (CombatantHasStatus(m, STATUS_BOUND)) continue;
-        ctx->targetEnemyIdx = i;
-        GridPos tp;
-        if (BattleGridFind(&ctx->grid, false, i, &tp)) ctx->targetCell = tp;
-        break;
-    }
-    // Fallback: if everyone's bound, target the first living member anyway.
-    if (ctx->targetEnemyIdx < 0) {
-        for (int i = 0; i < ctx->party->count; i++) {
-            if (!ctx->party->members[i].alive) continue;
-            ctx->targetEnemyIdx = i;
-            GridPos tp;
-            if (BattleGridFind(&ctx->grid, false, i, &tp)) ctx->targetCell = tp;
-            break;
+    // Fallback: if nothing can reach, keep whatever was highest-power so the
+    // out-of-reach narration fires and the player feels the miss instead of
+    // the enemy sitting silent.
+    if (bestPow < 0) {
+        for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
+            if (actor->moveIds[i] < 0) continue;
+            const MoveDef *mv = GetMoveDef(actor->moveIds[i]);
+            if (mv->power > bestPow) { bestPow = mv->power; bestMove = i; }
         }
     }
+    ctx->selectedMove = bestMove;
 }
 
 // Try to commit the player's move at the given slot index. Returns the next
@@ -215,6 +239,23 @@ static void ApplyMoveToCell(BattleContext *ctx)
         return;
     }
 
+    // MELEE must reach — attacker in their front col AND target in their front
+    // col. Stops a front-row deckhand from flicking a FishingHook at a back-row
+    // player. RANGED and AOE are unconstrained.
+    if (mv->range == RANGE_MELEE) {
+        GridPos ap;
+        if (BattleGridFind(&ctx->grid, actorIsEn, te->idx, &ap) &&
+            !BattleGridCanHit(&ctx->grid, ap, actorIsEn,
+                              ctx->targetCell, ctx->targetOnEnemySide,
+                              mv->range)) {
+            snprintf(ctx->narration, NARRATION_LEN,
+                     "%s swung %s but couldn't reach %s!",
+                     actor->name, mv->name, target->name);
+            ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
+            return;
+        }
+    }
+
     // Sharp attack on a bound ally cuts ropes and deals zero damage.
     if (friendly && CombatantHasStatus(target, STATUS_BOUND) &&
         DamageCutsRopes(mv->damageType)) {
@@ -224,6 +265,18 @@ static void ApplyMoveToCell(BattleContext *ctx)
         BattleAnimMarkRopeCut(&ctx->anim);
         snprintf(ctx->narration, NARRATION_LEN,
                  "%s used %s and cut %s's ropes free!",
+                 actor->name, mv->name, target->name);
+        ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
+        return;
+    }
+
+    // Hostile strikes can miss — friendly fire always lands (bonking an ally
+    // on purpose shouldn't be dodgeable, and rope-cuts are handled above).
+    if (!friendly && !RollHit(actor, target)) {
+        BattleAnimPlayHitFrom(&ctx->anim, actorIsEn, te->idx,
+                              ctx->targetOnEnemySide, occ);
+        snprintf(ctx->narration, NARRATION_LEN,
+                 "%s used %s but %s dodged!",
                  actor->name, mv->name, target->name);
         ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
         return;
@@ -324,13 +377,18 @@ static void ExecuteAction(BattleContext *ctx)
         bool targetOnEnemyGrid = te->isEnemy
                                    ? !targetSideIsEnemyOfActor
                                    :  targetSideIsEnemyOfActor;
+        // Friendly-side damaging AOE (if any move ever uses it) always lands;
+        // hostile AOE rolls per-target so a dodgy target can slip a volley.
+        bool hostileAoe = targetSideIsEnemyOfActor;
         int  totalDmg = 0;
         int  hits     = 0;
+        int  misses   = 0;
         int  lastOccIdx = -1;
         if (targetOnEnemyGrid) {
             for (int i = 0; i < ctx->enemyCount; i++) {
                 Combatant *t = &ctx->enemies[i];
                 if (!t->alive) continue;
+                if (hostileAoe && !RollHit(actor, t)) { misses++; continue; }
                 int dmg = CalculateDamage(actor, t, mv);
                 t->hp -= dmg;
                 totalDmg += dmg;
@@ -345,6 +403,7 @@ static void ExecuteAction(BattleContext *ctx)
             for (int i = 0; i < ctx->party->count; i++) {
                 Combatant *t = &ctx->party->members[i];
                 if (!t->alive) continue;
+                if (hostileAoe && !RollHit(actor, t)) { misses++; continue; }
                 int dmg = CalculateDamage(actor, t, mv);
                 t->hp -= dmg;
                 totalDmg += dmg;
@@ -359,9 +418,18 @@ static void ExecuteAction(BattleContext *ctx)
         if (hits > 0)
             BattleAnimPlayHitFrom(&ctx->anim, te->isEnemy, te->idx,
                                   targetOnEnemyGrid, lastOccIdx);
-        snprintf(ctx->narration, NARRATION_LEN,
-                 "%s used %s! (%d total dmg across %d)",
-                 actor->name, mv->name, totalDmg, hits);
+        if (misses > 0 && hits == 0) {
+            snprintf(ctx->narration, NARRATION_LEN,
+                     "%s used %s but everyone dodged!", actor->name, mv->name);
+        } else if (misses > 0) {
+            snprintf(ctx->narration, NARRATION_LEN,
+                     "%s used %s! (%d dmg across %d — %d dodged)",
+                     actor->name, mv->name, totalDmg, hits, misses);
+        } else {
+            snprintf(ctx->narration, NARRATION_LEN,
+                     "%s used %s! (%d total dmg across %d)",
+                     actor->name, mv->name, totalDmg, hits);
+        }
         ConsumeMoveUse(ctx, te->isEnemy, ctx->selectedMove);
         return;
     }

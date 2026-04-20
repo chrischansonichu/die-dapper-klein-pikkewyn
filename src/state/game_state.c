@@ -10,7 +10,9 @@ void GameStateInit(GameState *gs)
 
     gs->currentMapId     = MAP_OVERWORLD_HUB;
     gs->currentMapSeed   = 0;
+    gs->currentFloor     = 0;
     gs->hasPendingMap    = false;
+    gs->pendingFloor     = 0;
     gs->tempAllyPartyIdx = -1;
     gs->tempAllyNpcIdx   = -1;
 

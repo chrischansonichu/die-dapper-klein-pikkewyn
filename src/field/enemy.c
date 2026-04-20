@@ -212,6 +212,22 @@ bool EnemyUpdate(FieldEnemy *e, const TileMap *map,
     int ady = abs(e->tileY - playerTileY);
     bool adjacent = (adx + ady == 1);
 
+    // If the player is adjacent on the enemy's front or a side tile (i.e.
+    // anywhere except directly behind), the enemy notices instantly and
+    // attacks. Only the behind tile grants a sneak opportunity; from there
+    // the player has to press Z to initiate a preemptive strike.
+    if (adjacent) {
+        int behindX = e->tileX - DIR_DX[e->dir];
+        int behindY = e->tileY - DIR_DY[e->dir];
+        bool playerBehind = (playerTileX == behindX && playerTileY == behindY);
+        if (!playerBehind) {
+            // Turn to face the player so the battle framing makes sense.
+            e->dir = DirFromDelta(playerTileX - e->tileX,
+                                  playerTileY - e->tileY);
+            return true;
+        }
+    }
+
     switch (e->aiState) {
 
     case ENEMY_IDLE:

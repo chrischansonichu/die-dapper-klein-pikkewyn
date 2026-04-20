@@ -88,6 +88,16 @@ void InitGameplayScreen(void)
     BattleResult br = GetLastBattleResult();
 
     if (br == BATTLE_DEFEAT) {
+        // A temp captive ally from a rescue battle doesn't survive a loss —
+        // by definition the rescue failed, so drop them before the village
+        // patch-up so they don't ride home as a free permanent party member.
+        // The captive NPC on the source map is untouched and will rebuild
+        // when the player re-enters the dungeon.
+        if (gGameState.tempAllyPartyIdx >= 0) {
+            PartyRemoveMember(&gGameState.party, gGameState.tempAllyPartyIdx);
+            gGameState.tempAllyPartyIdx = -1;
+            gGameState.tempAllyNpcIdx   = -1;
+        }
         // Rescue flow: the village patches the party up and sets a pending
         // transition back to the hub. The actual field swap + rescue dialogue
         // are handled by ApplyPendingMapTransition in UpdateGameplayScreen,
@@ -97,6 +107,7 @@ void InitGameplayScreen(void)
         gGameState.hasPendingMap   = true;
         gGameState.pendingMapId    = MAP_OVERWORLD_HUB;
         gGameState.pendingMapSeed  = 0;
+        gGameState.pendingFloor    = 0;
         gGameState.pendingSpawnX   = 11;  // just inside the south gate
         gGameState.pendingSpawnY   = 13;
         gGameState.pendingSpawnDir = 3;   // facing up, into the village
@@ -173,6 +184,7 @@ static void ApplyPendingMapTransition(void)
 
     gGameState.currentMapId    = gGameState.pendingMapId;
     gGameState.currentMapSeed  = gGameState.pendingMapSeed;
+    gGameState.currentFloor    = gGameState.pendingFloor;
     int sx   = gGameState.pendingSpawnX;
     int sy   = gGameState.pendingSpawnY;
     int sdir = gGameState.pendingSpawnDir;

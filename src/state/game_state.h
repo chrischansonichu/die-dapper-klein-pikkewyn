@@ -18,9 +18,11 @@ typedef struct GameState {
     Party    party;
 
     // The map the FieldState currently represents, and the seed used to build
-    // it (unused for authored maps). FieldInit reads these.
+    // it (unused for authored maps). FieldInit reads these. `currentFloor` is
+    // the dungeon depth (1..9) or 0 when on a non-dungeon map.
     int      currentMapId;
     unsigned currentMapSeed;
+    int      currentFloor;
 
     // Set by the field when the player steps on a warp tile (or later, uses
     // an escape item, or is rescued after defeat). screen_gameplay consumes
@@ -28,6 +30,7 @@ typedef struct GameState {
     bool     hasPendingMap;
     int      pendingMapId;
     unsigned pendingMapSeed;
+    int      pendingFloor;
     int      pendingSpawnX, pendingSpawnY, pendingSpawnDir;
 
     // Tracking a temporary ally added for the duration of a captive-rescue

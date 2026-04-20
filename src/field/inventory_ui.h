@@ -18,10 +18,14 @@ typedef struct InventoryUI {
     bool         active;
     InventoryTab tab;
     int          cursor;        // row within the current tab
-    // For weapons tab, the cursor also navigates between equipped slots of the party leader.
+    // For weapons tab, the cursor also navigates between equipped slots of the active member.
     // equippedFocus == true means cursor is on an equipped slot (0..CREATURE_MAX_MOVES-1);
     // false means cursor is in the bag list.
     bool         equippedFocus;
+    // Which party member is the target of use/equip actions. The inventory is
+    // shared across the party, but consumables and weapons always land on one
+    // specific combatant — cycled with [ / ] keys.
+    int          memberCursor;
     char         status[128];   // last action message, e.g. "Ate Fresh Fish +30 HP"
 } InventoryUI;
 

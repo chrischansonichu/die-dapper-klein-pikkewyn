@@ -106,20 +106,23 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
     return count;
 }
 
-// Returns the index of an active, idle (unalerted) enemy adjacent to the
-// player, or -1 if none. These enemies are vulnerable to a surprise attack.
+// Direction vectors (match enemy.c): 0=down, 1=left, 2=right, 3=up.
+static const int FIELD_DIR_DX[4] = {  0, -1,  1,  0 };
+static const int FIELD_DIR_DY[4] = {  1,  0,  0, -1 };
+
+// Returns the index of an active, idle enemy that the player is standing
+// directly BEHIND (opposite the enemy's facing direction), or -1 if none.
+// Side/front adjacency doesn't qualify — those cases trigger auto-battle
+// from the enemy side, not a sneak.
 static int FindSurpriseTarget(const FieldState *ow, int px, int py)
 {
     for (int i = 0; i < ow->enemyCount; i++) {
         const FieldEnemy *e = &ow->enemies[i];
         if (!e->active) continue;
         if (e->aiState != ENEMY_IDLE) continue;
-        int dx = e->tileX - px;
-        int dy = e->tileY - py;
-        if ((dx == 0 && (dy == 1 || dy == -1)) ||
-            (dy == 0 && (dx == 1 || dx == -1))) {
-            return i;
-        }
+        int behindX = e->tileX - FIELD_DIR_DX[e->dir];
+        int behindY = e->tileY - FIELD_DIR_DY[e->dir];
+        if (px == behindX && py == behindY) return i;
     }
     return -1;
 }
@@ -150,7 +153,7 @@ void FieldInit(FieldState *ow, GameState *gs)
         .spawnTileY  = &spawnY,
         .spawnDir    = &spawnDir,
     };
-    MapBuild((MapId)gs->currentMapId, &ctx, gs->currentMapSeed);
+    MapBuild((MapId)gs->currentMapId, gs->currentFloor, &ctx, gs->currentMapSeed);
 
     // GPU-side resources and player/camera setup live here — builders only
     // produce data.
@@ -257,7 +260,14 @@ void FieldUpdate(FieldState *ow, float dt)
                 if (w->tileX == tx && w->tileY == ty) {
                     ow->gs->hasPendingMap    = true;
                     ow->gs->pendingMapId     = w->targetMapId;
-                    ow->gs->pendingMapSeed   = 0;
+                    // Preserve the run's base seed across proc floors; when
+                    // leaving the dungeon entirely (floor == 0 target) reset
+                    // to 0 so the hub is rebuilt cleanly.
+                    ow->gs->pendingMapSeed   = (w->targetFloor > 0)
+                                                 ? (ow->gs->currentMapSeed ? ow->gs->currentMapSeed
+                                                                           : (unsigned)GetRandomValue(1, 0x7FFFFFFF))
+                                                 : 0;
+                    ow->gs->pendingFloor     = w->targetFloor;
                     ow->gs->pendingSpawnX    = w->targetSpawnX;
                     ow->gs->pendingSpawnY    = w->targetSpawnY;
                     ow->gs->pendingSpawnDir  = w->targetSpawnDir;

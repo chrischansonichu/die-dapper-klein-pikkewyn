@@ -4,12 +4,14 @@
 // Append a warp and mark its tile so the field's step-completion check can
 // fast-fail on non-warp tiles. Silently ignored if the warp array is full.
 static void AddWarp(MapBuildContext *ctx, int tx, int ty,
-                    int targetMapId, int tsx, int tsy, int tdir)
+                    int targetMapId, int targetFloor,
+                    int tsx, int tsy, int tdir)
 {
     if (*ctx->warpCount >= ctx->warpMax) return;
     FieldWarp *w = &ctx->warps[(*ctx->warpCount)++];
     w->tileX = tx; w->tileY = ty;
     w->targetMapId    = targetMapId;
+    w->targetFloor    = targetFloor;
     w->targetSpawnX   = tsx;
     w->targetSpawnY   = tsy;
     w->targetSpawnDir = tdir;
@@ -186,8 +188,8 @@ void BuildOverworldHub(MapBuildContext *ctx)
 
     // South-gate warp → harbor floor 1. Both tiles of the 2-wide gap trigger
     // so the player can approach the gate from either side.
-    AddWarp(ctx, 11, m->height - 2, MAP_HARBOR_F1, 8, 14, 3);
-    AddWarp(ctx, 12, m->height - 2, MAP_HARBOR_F1, 8, 14, 3);
+    AddWarp(ctx, 11, m->height - 2, MAP_HARBOR_F1, 1, 8, 14, 3);
+    AddWarp(ctx, 12, m->height - 2, MAP_HARBOR_F1, 1, 8, 14, 3);
 
     *ctx->spawnTileX = 11;
     *ctx->spawnTileY = 7;
@@ -231,9 +233,39 @@ void BuildHarborFloor1(MapBuildContext *ctx)
     // Descent warp at the far east end of the dock → procedural floor 2.
     // Player has to push past the patrol sailor to reach it. One-way: there
     // is no return warp from F2 back up here.
-    AddWarp(ctx, 18, 13, MAP_HARBOR_PROC_F2, 2, 2, 2);
+    AddWarp(ctx, 18, 13, MAP_HARBOR_PROC, 2, 2, 2, 2);
 
     *ctx->spawnTileX = 8;
     *ctx->spawnTileY = 14;
     *ctx->spawnDir   = 3; // facing up, toward the dock
+}
+
+// Harbor floor 9 — the deepest level. Placeholder content until the boss and
+// final-room design land: a small stone chamber with a return warp back to
+// the hub so the player can complete the loop. Entered via the stairs in
+// the last procedural floor; no enemies or NPCs yet.
+void BuildHarborFloor9(MapBuildContext *ctx)
+{
+    TileMap *m = ctx->map;
+    TileMapInit(m, 16, 14, "harbor-f9");
+
+    for (int y = 0; y < m->height; y++) {
+        for (int x = 0; x < m->width; x++) {
+            bool edge = (x == 0 || y == 0 ||
+                         x == m->width - 1 || y == m->height - 1);
+            TileMapSetTile(m, x, y, edge ? TILE_ROCK : TILE_SAND);
+        }
+    }
+
+    // A sandstone slab in the middle to break up the empty room.
+    for (int y = 6; y <= 7; y++)
+        for (int x = 7; x <= 8; x++)
+            TileMapSetTile(m, x, y, TILE_ROCK);
+
+    // Return portal — center-bottom tile warps back to the hub's south gate.
+    AddWarp(ctx, m->width / 2, m->height - 2, MAP_OVERWORLD_HUB, 0, 11, 12, 3);
+
+    *ctx->spawnTileX = 2;
+    *ctx->spawnTileY = 2;
+    *ctx->spawnDir   = 2;
 }
