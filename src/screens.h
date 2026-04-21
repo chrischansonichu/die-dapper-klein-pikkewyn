@@ -79,6 +79,12 @@ void DrawGameplayScreen(void);
 void UnloadGameplayScreen(void);
 int FinishGameplayScreen(void);
 
+// Called by the title screen before transitioning. Tells the next
+// InitGameplayScreen whether to start a fresh run or load the save file.
+// Default (no call) preserves the already-running session.
+void GameplayRequestNewGame(void);
+void GameplayRequestLoadGame(void);
+
 //----------------------------------------------------------------------------------
 // Battle Screen Functions Declaration
 //----------------------------------------------------------------------------------

@@ -9,16 +9,27 @@
 #include "screens.h"
 #include "field/field.h"
 #include "state/game_state.h"
+#include "state/save.h"
 #include <stdio.h>
 #include <string.h>
 
 //----------------------------------------------------------------------------------
 // Module Variables Definition (local)
 //----------------------------------------------------------------------------------
+typedef enum GameplayEntry {
+    ENTRY_CONTINUE = 0,  // default: keep existing session
+    ENTRY_NEW,
+    ENTRY_LOAD,
+} GameplayEntry;
+
 static int  finishScreen   = 0;
 static bool gInitialized   = false;
+static GameplayEntry gEntryMode = ENTRY_CONTINUE;
 static GameState  gGameState = {0};
 static FieldState gField    = {0};
+
+void GameplayRequestNewGame(void)  { gEntryMode = ENTRY_NEW; }
+void GameplayRequestLoadGame(void) { gEntryMode = ENTRY_LOAD; }
 
 // Rescue dialogue — shown after a battle-defeat hub rescue transition.
 #define RESCUE_MSG_PAGES 2
@@ -34,10 +45,50 @@ static const char *gRescueMsg[RESCUE_MSG_PAGES] = {
 void InitGameplayScreen(void)
 {
     finishScreen = 0;
-    if (!gInitialized) {
+
+    // ENTRY_NEW / ENTRY_LOAD rebuild from scratch; ENTRY_CONTINUE (default
+    // after the first run) keeps the existing session so this Init being
+    // called multiple times — e.g. around the battle screen transition —
+    // is idempotent.
+    bool freshStart = (!gInitialized) || (gEntryMode != ENTRY_CONTINUE);
+    if (!freshStart) return;
+
+    if (gInitialized) FieldUnload(&gField);
+
+    bool loaded = false;
+    int  loadX = 0, loadY = 0, loadDir = 0;
+    if (gEntryMode == ENTRY_LOAD) {
+        loaded = LoadGame(&gGameState, &loadX, &loadY, &loadDir);
+    }
+    if (!loaded) {
         GameStateInit(&gGameState);
-        FieldInit(&gField, &gGameState);
-        gInitialized = true;
+    }
+    FieldInit(&gField, &gGameState);
+
+    // FieldInit spawns the player at the map's default entry. If we just
+    // loaded a save, snap them back to the exact tile they saved on.
+    if (loaded) {
+        gField.player.tileX         = loadX;
+        gField.player.tileY         = loadY;
+        gField.player.targetTileX   = loadX;
+        gField.player.targetTileY   = loadY;
+        gField.player.dir           = loadDir;
+        gField.player.moving        = false;
+        gField.player.moveFrames    = 0;
+        gField.player.stepCompleted = false;
+        int mapPixW = gField.map.width  * TILE_SIZE * TILE_SCALE;
+        int mapPixH = gField.map.height * TILE_SIZE * TILE_SCALE;
+        gField.camera = CameraCreate(PlayerPixelPos(&gField.player), mapPixW, mapPixH);
+    }
+
+    gInitialized = true;
+    gEntryMode   = ENTRY_CONTINUE;
+
+    if (!loaded) {
+        // First write so a save file exists immediately — the title screen's
+        // Load button stays dark until one exists.
+        SaveGame(&gGameState, gField.player.tileX, gField.player.tileY,
+                 gField.player.dir);
     }
 }
 
@@ -74,6 +125,11 @@ static void ApplyPendingMapTransition(void)
         gGameState.rescueDialoguePending = false;
         DialogueBegin(&gField.dialogue, gRescueMsg, RESCUE_MSG_PAGES, 40.0f);
     }
+
+    // Autosave at every map boundary — warps, floor changes, and the rescue
+    // transition are all natural "safe point" moments in a turn-based game.
+    SaveGame(&gGameState, gField.player.tileX, gField.player.tileY,
+             gField.player.dir);
 }
 
 void UpdateGameplayScreen(void)

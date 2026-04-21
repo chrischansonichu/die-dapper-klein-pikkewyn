@@ -25,6 +25,7 @@
 
 #include "raylib.h"
 #include "screens.h"
+#include "state/save.h"
 #include <math.h>
 
 //----------------------------------------------------------------------------------
@@ -58,7 +59,10 @@ void UpdateTitleScreen(void) {
     }
 }
 
-void DrawButton(const char *text, const int buttonNumber, const int finScreen, bool enabled) {
+// Returns true if this button was clicked this frame — lets the caller decide
+// what side-effect to run (e.g. New vs Load both go to GAMEPLAY but need
+// different entry flags set first).
+bool DrawButton(const char *text, const int buttonNumber, const int finScreen, bool enabled) {
     const int W = GetScreenWidth();
     const int H = GetScreenHeight();
     const int btnW = W / 6;
@@ -105,7 +109,9 @@ void DrawButton(const char *text, const int buttonNumber, const int finScreen, b
     DrawText(text, textX, textY, thisFontSize, label);
     if (hovered && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
         finishScreen = finScreen;
+        return true;
     }
+    return false;
 }
 
 // Title Screen Draw logic
@@ -132,10 +138,11 @@ void DrawTitleScreen(void) {
     }
 
     // Buttons (each W/6 wide, equally spaced, overlaid on the lower strip).
-    // Options is stubbed (leads to a blank page with no way out), so it's
-    // rendered disabled until that screen exists.
-    DrawButton("New", 0, 2, true);
-    DrawButton("Load", 1, 2, true); // TODO add load screen
+    // Load is disabled when no savegame.dat exists. Options is stubbed (leads
+    // to a blank page with no way out), so it's rendered disabled too.
+    const bool hasSave = SaveGameExists();
+    if (DrawButton("New",  0, 2, true))    GameplayRequestNewGame();
+    if (DrawButton("Load", 1, 2, hasSave)) GameplayRequestLoadGame();
     DrawButton("Options", 2, 1, false);
 }
 
