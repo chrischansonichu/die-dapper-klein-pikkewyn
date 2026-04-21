@@ -31,6 +31,10 @@ static char gDropMsg[DROP_MSG_PAGES][DROP_MSG_LEN];
 #define RESCUE_GREET_LEN 160
 static char gRescueGreet[RESCUE_GREET_LEN];
 
+// Post-rescue flavor line detailing which supplies washed out of your pockets.
+#define RESCUE_LOSS_LEN 160
+static char gRescueLoss[RESCUE_LOSS_LEN];
+
 // Interact key: Z or Enter
 static bool IsInteractPressed(void)
 {
@@ -260,26 +264,44 @@ static bool FieldAggroLOS(const TileMap *m, int ax, int ay, int bx, int by)
     return true;
 }
 
+// True if this enemy is currently listed as a captor on any active captive
+// NPC. Captors are treated as "locked" for normal aggro purposes — they only
+// enter a fight when the player initiates the captive-rescue interaction.
+// Fighting them, however, is a normal battle: non-captor neighbors can still
+// be pulled in through their LOS.
+static bool FieldEnemyIsCaptor(const FieldState *ow, int enemyIdx)
+{
+    for (int i = 0; i < ow->npcCount; i++) {
+        const Npc *n = &ow->npcs[i];
+        if (!n->active || !n->isCaptive) continue;
+        for (int k = 0; k < n->captorCount; k++) {
+            if (n->captorIdxs[k] == enemyIdx) return true;
+        }
+    }
+    return false;
+}
+
 // Fill outIdxs with active enemy indices that are within FIELD_AGGRO_RADIUS
-// (Chebyshev) of ANY battle participant AND have strict line of sight to
-// that participant. Walls fully block; an enemy in an adjacent room with no
-// direct sightline does not aggro, even if a doorway lets you walk there.
-// Each recruited enemy becomes a new LOS anchor, so a visible hallway chain
-// of sailors all come together when one triggers the fight.
+// (Chebyshev) of the INITIAL battle participants (the triggering enemy and
+// every party member on the field) AND have strict line of sight to one of
+// them. Anchors do NOT expand — a recruited enemy does not pull in further
+// enemies around it, so aggro can't daisy-chain across the map.
+// Captor enemies (guarding a captive NPC) are skipped unless the seed itself
+// is a captor — i.e., a regular fight never drags captors into it, but a
+// captive-rescue fight still pulls in all captors of that scene (they're
+// adjacent to the seed by design).
 static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
                                   int *outIdxs, int maxOut)
 {
     if (seedIdx < 0 || seedIdx >= ow->enemyCount) return 0;
 
-    bool inCluster[FIELD_MAX_ENEMIES] = {0};
     int written = 0;
-    if (written < maxOut) {
-        outIdxs[written++] = seedIdx;
-        inCluster[seedIdx] = true;
-    }
+    if (written < maxOut) outIdxs[written++] = seedIdx;
 
-    int anchorX[FIELD_MAX_ENEMIES + PARTY_MAX];
-    int anchorY[FIELD_MAX_ENEMIES + PARTY_MAX];
+    bool seedIsCaptor = FieldEnemyIsCaptor(ow, seedIdx);
+
+    int anchorX[1 + PARTY_MAX];
+    int anchorY[1 + PARTY_MAX];
     int anchorCount = 0;
 
     anchorX[anchorCount] = ow->enemies[seedIdx].tileX;
@@ -292,26 +314,21 @@ static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
         anchorCount++;
     }
 
-    bool changed = true;
-    while (changed && written < maxOut) {
-        changed = false;
-        for (int i = 0; i < ow->enemyCount && written < maxOut; i++) {
-            if (inCluster[i]) continue;
-            if (!ow->enemies[i].active) continue;
-            const FieldEnemy *e = &ow->enemies[i];
-            for (int k = 0; k < anchorCount; k++) {
-                int d = Chebyshev(anchorX[k], anchorY[k], e->tileX, e->tileY);
-                if (d > FIELD_AGGRO_RADIUS) continue;
-                if (!FieldAggroLOS(&ow->map, anchorX[k], anchorY[k],
-                                   e->tileX, e->tileY)) continue;
-                outIdxs[written++]   = i;
-                inCluster[i]         = true;
-                anchorX[anchorCount] = e->tileX;
-                anchorY[anchorCount] = e->tileY;
-                anchorCount++;
-                changed = true;
-                break;
-            }
+    for (int i = 0; i < ow->enemyCount && written < maxOut; i++) {
+        if (i == seedIdx) continue;
+        if (!ow->enemies[i].active) continue;
+        bool iIsCaptor = FieldEnemyIsCaptor(ow, i);
+        // Regular fight: never drag in a captor. Captive-rescue: allow
+        // fellow captors (same scene) + regular enemies in sightline.
+        if (!seedIsCaptor && iIsCaptor) continue;
+        const FieldEnemy *e = &ow->enemies[i];
+        for (int k = 0; k < anchorCount; k++) {
+            int d = Chebyshev(anchorX[k], anchorY[k], e->tileX, e->tileY);
+            if (d > FIELD_AGGRO_RADIUS) continue;
+            if (!FieldAggroLOS(&ow->map, anchorX[k], anchorY[k],
+                               e->tileX, e->tileY)) continue;
+            outIdxs[written++] = i;
+            break;
         }
     }
     return written;
@@ -541,13 +558,48 @@ static int RollEnemyDrops(FieldEnemy *e, Inventory *inv)
     return pages;
 }
 
+// Defeat-rescue inventory penalty. Fishermen pulled you out of the water but
+// a bunch of your gear washed away. For each consumable stack of 2+, loses
+// half (rounded up); singletons are a 50/50 coin flip so the lone Krill
+// Snack you were saving doesn't always evaporate. Every unequipped weapon
+// in the bag is dropped. Equipped weapons stay on the party — losing your
+// fighting kit in addition to bag loot would make the defeat loop punishing
+// instead of inconvenient. Returns total items + weapons removed.
+static int DropInventoryOnRescue(Inventory *inv, int *outItems, int *outWeapons)
+{
+    int itemsLost = 0;
+    for (int i = 0; i < inv->itemCount; ) {
+        int count = inv->items[i].count;
+        int loss;
+        if (count <= 1) {
+            loss = (GetRandomValue(0, 1) == 0) ? 1 : 0;
+        } else {
+            loss = (count + 1) / 2;
+        }
+        inv->items[i].count -= loss;
+        itemsLost += loss;
+        if (inv->items[i].count <= 0) {
+            for (int j = i; j < inv->itemCount - 1; j++)
+                inv->items[j] = inv->items[j + 1];
+            inv->itemCount--;
+        } else {
+            i++;
+        }
+    }
+    int weaponsLost = inv->weaponCount;
+    inv->weaponCount = 0;
+    if (outItems)   *outItems   = itemsLost;
+    if (outWeapons) *outWeapons = weaponsLost;
+    return itemsLost + weaponsLost;
+}
+
 // Battle finished — sync combatant positions back to the field, roll drops,
 // resolve temp-ally, handle defeat rescue. `result` is BattleFinished()'s
 // return (1 victory, 2 defeat, 3 fled).
 static void ResolveBattleEnd(FieldState *ow, int result)
 {
     BattleContext *ctx = &ow->battle;
-    const char *ptrs[DROP_MSG_PAGES + 1];
+    const char *ptrs[DROP_MSG_PAGES + 2];
     int pageCount = 0;
 
     if (result == 1 /* victory */) {
@@ -605,6 +657,26 @@ static void ResolveBattleEnd(FieldState *ow, int result)
 
     if (result == 2 /* defeat */) {
         // Village rescue — heal up, kick to the hub with pending dialogue.
+        int itemsLost = 0, weaponsLost = 0;
+        int totalLost = DropInventoryOnRescue(&ow->gs->party.inventory,
+                                              &itemsLost, &weaponsLost);
+        if (totalLost > 0) {
+            if (itemsLost > 0 && weaponsLost > 0) {
+                snprintf(gRescueLoss, RESCUE_LOSS_LEN,
+                         "In the swim back, you lost %d item%s and %d weapon%s from your bag.",
+                         itemsLost,   itemsLost   == 1 ? "" : "s",
+                         weaponsLost, weaponsLost == 1 ? "" : "s");
+            } else if (itemsLost > 0) {
+                snprintf(gRescueLoss, RESCUE_LOSS_LEN,
+                         "In the swim back, you lost %d item%s from your bag.",
+                         itemsLost, itemsLost == 1 ? "" : "s");
+            } else {
+                snprintf(gRescueLoss, RESCUE_LOSS_LEN,
+                         "In the swim back, you lost %d weapon%s from your bag.",
+                         weaponsLost, weaponsLost == 1 ? "" : "s");
+            }
+            ptrs[pageCount++] = gRescueLoss;
+        }
         PartyHealAll(&ow->gs->party);
         ow->gs->hasPendingMap    = true;
         ow->gs->pendingMapId     = MAP_OVERWORLD_HUB;
