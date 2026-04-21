@@ -1,6 +1,7 @@
 #ifndef MAP_SOURCE_H
 #define MAP_SOURCE_H
 
+#include <stdbool.h>
 #include "tilemap.h"
 #include "npc.h"
 #include "enemy.h"
@@ -53,6 +54,11 @@ typedef struct MapBuildContext {
     int        *spawnTileX;
     int        *spawnTileY;
     int        *spawnDir;
+
+    // Persistent recruitment flags — let builders skip one-shot scenes that
+    // have already been resolved (e.g. don't re-place the captive seal if he
+    // is already in the party). Field.c fills these from the live GameState.
+    bool        sealAlreadyRecruited;
 } MapBuildContext;
 
 // Build the map identified by `id`. `floor` distinguishes dungeon depths for

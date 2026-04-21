@@ -561,6 +561,13 @@ void FieldInit(FieldState *ow, GameState *gs)
     ow->warpPromptIdx = -1;
 
     int spawnX = 0, spawnY = 0, spawnDir = 0;
+
+    bool sealRecruited = false;
+    for (int i = 0; i < gs->party.count; i++) {
+        const CreatureDef *cdef = gs->party.members[i].def;
+        if (cdef && cdef->id == CREATURE_SEAL) { sealRecruited = true; break; }
+    }
+
     MapBuildContext ctx = {
         .map         = &ow->map,
         .npcs        = ow->npcs,
@@ -575,6 +582,7 @@ void FieldInit(FieldState *ow, GameState *gs)
         .spawnTileX  = &spawnX,
         .spawnTileY  = &spawnY,
         .spawnDir    = &spawnDir,
+        .sealAlreadyRecruited = sealRecruited,
     };
     MapBuild((MapId)gs->currentMapId, gs->currentFloor, &ctx, gs->currentMapSeed);
 

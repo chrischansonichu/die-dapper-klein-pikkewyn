@@ -41,6 +41,10 @@ static void AddHarborF1Npcs(MapBuildContext *ctx)
 // recruitment check doesn't depend on global enemy counts.
 static void AddSealCaptiveScene(MapBuildContext *ctx)
 {
+    // One-shot scene: if the seal is already in the party, skip the whole
+    // captive tableau (NPC + captors). Prevents the "load + rescue again"
+    // double-recruit exploit.
+    if (ctx->sealAlreadyRecruited) return;
     if (*ctx->npcCount    + 1 > ctx->npcMax)    return;
     if (*ctx->enemyCount  + 2 > ctx->enemyMax)  return;
 

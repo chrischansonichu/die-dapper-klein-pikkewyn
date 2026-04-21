@@ -52,6 +52,7 @@ PROJECT_SOURCE_FILES  ?= \
     data/item_defs.c \
     data/move_defs.c \
     data/room_templates.c \
+    field/donation_ui.c \
     field/enemy.c \
     field/enemy_sprites.c \
     field/field.c \
@@ -63,7 +64,9 @@ PROJECT_SOURCE_FILES  ?= \
     field/player.c \
     field/stats_ui.c \
     field/tilemap.c \
+    field/village.c \
     state/game_state.c \
+    state/save.c \
     systems/camera_system.c \
     systems/dialogue.c
 
