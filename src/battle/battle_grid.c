@@ -37,6 +37,6 @@ bool TileMoveReaches(const TileMap *m, TilePos attacker, TilePos target,
     if (moveRange == RANGE_AOE || moveRange == RANGE_SELF) return true;
     int d = TileChebyshev(attacker, target);
     if (moveRange == RANGE_MELEE)  return d <= 1;
-    if (moveRange == RANGE_RANGED) return d <= 5 && TileHasLOS(m, attacker, target);
+    if (moveRange == RANGE_RANGED) return d <= 3 && TileHasLOS(m, attacker, target);
     return false;
 }

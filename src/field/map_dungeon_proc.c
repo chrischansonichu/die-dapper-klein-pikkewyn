@@ -147,7 +147,14 @@ void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
 
                 FieldEnemy *e = &ctx->enemies[(*ctx->enemyCount)++];
                 EnemyInit(e, etx, ety, 0, BEHAVIOR_STAND, creatureId, level, 4, color);
-                EnemySetDrops(e, ITEM_KRILL_SNACK, 50, -1, 0);
+                // Tier-based weapon drop — captains carry urchins, bosuns
+                // carry shells, deckhands just the hook. Food drop stays as
+                // the baseline Krill Snack.
+                int wId  = 1;  // FishingHook
+                int wPct = 55;
+                if (creatureId == CREATURE_BOSUN)   { wId = 2; wPct = 55; } // Shell
+                if (creatureId == CREATURE_CAPTAIN) { wId = 3; wPct = 60; } // Urchin
+                EnemySetDrops(e, ITEM_KRILL_SNACK, 50, wId, wPct);
             }
         }
     }

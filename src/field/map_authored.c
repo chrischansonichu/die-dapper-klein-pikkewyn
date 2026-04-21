@@ -80,7 +80,7 @@ static void AddHarborF1Enemies(MapBuildContext *ctx)
         FieldEnemy *s2 = &ctx->enemies[(*ctx->enemyCount)++];
         EnemyInit(s2, 14, 10, 0, BEHAVIOR_STAND, 1, 3, 5, (Color){200, 80, 50, 255});
         s2->wanderInterval = 110;
-        EnemySetDrops(s2, ITEM_FRESH_FISH, 60, 2, 25);  // ShellThrow
+        EnemySetDrops(s2, ITEM_FRESH_FISH, 60, 2, 60);  // ShellThrow
     }
 
     // 2x WANDER sailors in the shallow water. One is a bosun — the water is
@@ -95,7 +95,7 @@ static void AddHarborF1Enemies(MapBuildContext *ctx)
         FieldEnemy *w2 = &ctx->enemies[(*ctx->enemyCount)++];
         EnemyInit(w2, 16, 8, 2, BEHAVIOR_WANDER, 2, 4, 4, (Color){180, 60, 140, 255});
         w2->wanderInterval = 100;
-        EnemySetDrops(w2, ITEM_SARDINE, 50, 1, 30);     // FishingHook
+        EnemySetDrops(w2, ITEM_SARDINE, 50, 1, 70);     // FishingHook
     }
 
     // 1x PATROL sailor along the far end of the dock (keeps spawn safe).
@@ -107,7 +107,7 @@ static void AddHarborF1Enemies(MapBuildContext *ctx)
         FieldEnemy *p1 = &ctx->enemies[(*ctx->enemyCount)++];
         EnemyInit(p1, 15, 13, 1, BEHAVIOR_PATROL, 1, 3, 6, (Color){220, 120, 40, 255});
         EnemySetPatrol(p1, 12, 13, 17, 13);
-        EnemySetDrops(p1, ITEM_SARDINE, 70, 3, 35);     // SeaUrchinSpike
+        EnemySetDrops(p1, ITEM_SARDINE, 70, 3, 65);     // SeaUrchinSpike
     }
 }
 

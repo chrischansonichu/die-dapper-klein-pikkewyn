@@ -247,12 +247,18 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
                 DrawText(buf, colX, y, 14, GRAY);
             } else {
                 const MoveDef *mv = GetMoveDef(led->moveIds[i]);
+                const char *rs = (mv->range == RANGE_MELEE)  ? "MELEE" :
+                                 (mv->range == RANGE_RANGED) ? "RANGED" :
+                                 (mv->range == RANGE_AOE)    ? "AOE"    : "SELF";
+                char stats[32];
+                if (mv->power > 0) snprintf(stats, sizeof(stats), "PWR %d %s", mv->power, rs);
+                else               snprintf(stats, sizeof(stats), "%s", rs);
                 if (mv->isWeapon) {
                     int d = led->moveDurability[i];
-                    if (d == 0) snprintf(buf, sizeof(buf), "%d %-14s [WEAPON] BROKEN", i + 1, mv->name);
-                    else        snprintf(buf, sizeof(buf), "%d %-14s [WEAPON] dur %d", i + 1, mv->name, d);
+                    if (d == 0) snprintf(buf, sizeof(buf), "%d %-13s %s  BROKEN", i + 1, mv->name, stats);
+                    else        snprintf(buf, sizeof(buf), "%d %-13s %s  dur %d", i + 1, mv->name, stats, d);
                 } else {
-                    snprintf(buf, sizeof(buf), "%d %-14s [INNATE]", i + 1, mv->name);
+                    snprintf(buf, sizeof(buf), "%d %-13s %s", i + 1, mv->name, stats);
                 }
                 DrawText(buf, colX, y, 14, WHITE);
             }
@@ -275,7 +281,11 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
         Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
         DrawRectangle(bagX - 6, y - 2, 320, 22, bg);
         char buf[96];
-        snprintf(buf, sizeof(buf), "%-14s dur %d", mv->name, inv->weapons[i].durability);
+        const char *rs = (mv->range == RANGE_MELEE)  ? "MELEE" :
+                         (mv->range == RANGE_RANGED) ? "RANGED" :
+                         (mv->range == RANGE_AOE)    ? "AOE"    : "SELF";
+        snprintf(buf, sizeof(buf), "%-13s PWR %d %-6s dur %d",
+                 mv->name, mv->power, rs, inv->weapons[i].durability);
         DrawText(buf, bagX, y, 14, WHITE);
         y += 24;
     }

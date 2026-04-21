@@ -17,7 +17,7 @@
 // Squad radius for aggro pull — only enemies this close to the trigger, with
 // line of sight, get dragged in. Keeps distant patrollers out of the encounter
 // even if they were alerted.
-#define FIELD_AGGRO_RADIUS 2
+#define FIELD_AGGRO_RADIUS 3
 
 // Post-battle dialogue buffers. DialogueBegin keeps pointers, so these must
 // live at file scope to outlive the call.

@@ -186,15 +186,21 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
             const char *rangeStr = (mv->range == RANGE_MELEE)  ? "MELEE" :
                                    (mv->range == RANGE_RANGED) ? "RANGED" :
                                    (mv->range == RANGE_AOE)    ? "AOE"    : "SELF";
-            DrawText(rangeStr, bx + 20, by + 20, 10, GRAY);
+            char subline[32];
+            if (mv->power > 0) {
+                snprintf(subline, sizeof(subline), "%s  PWR %d", rangeStr, mv->power);
+            } else {
+                snprintf(subline, sizeof(subline), "%s", rangeStr);
+            }
+            DrawText(subline, bx + 20, by + 20, 10, GRAY);
             if (broken) {
                 DrawText("BROKEN", bx + colW - 52, by + 10, 10, RED);
             } else if (outOfRange) {
                 DrawText("TOO FAR", bx + colW - 54, by + 10, 10, (Color){220, 150, 60, 255});
             } else if (dur >= 0) {
-                char durStr[8];
-                snprintf(durStr, sizeof(durStr), "%d", dur);
-                DrawText(durStr, bx + colW - 22, by + 10, 12, (Color){200, 180, 80, 255});
+                char durStr[12];
+                snprintf(durStr, sizeof(durStr), "DUR %d", dur);
+                DrawText(durStr, bx + colW - 44, by + 10, 11, (Color){200, 180, 80, 255});
             }
         }
     }

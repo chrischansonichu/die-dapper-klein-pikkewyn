@@ -9,7 +9,7 @@
 // checks are Chebyshev distance, not 3x3 cell membership.
 //
 //   MELEE  = Chebyshev ≤ 1 (8 neighbours)
-//   RANGED = Chebyshev ≤ 5 + line of sight (walls block; water passes)
+//   RANGED = Chebyshev ≤ 3 + line of sight (walls block; water passes)
 //   AOE    = every living target on the "other" side (filtered at execute time)
 //   SELF   = actor only
 //
