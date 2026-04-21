@@ -14,10 +14,11 @@
 #include <stdlib.h>
 #include <math.h>
 
-// Squad radius for aggro pull — only enemies this close to the trigger, with
-// line of sight, get dragged in. Keeps distant patrollers out of the encounter
-// even if they were alerted.
-#define FIELD_AGGRO_RADIUS 3
+// Squad radius for aggro pull — enemies within this many walkable (8-connected,
+// walls block) tiles of any battle participant get dragged in. Each recruited
+// enemy becomes a new source, so a hallway chain pulls in together even when
+// only one of them triggered the fight. Walls fully block the pull.
+#define FIELD_AGGRO_RADIUS 5
 
 // Post-battle dialogue buffers. DialogueBegin keeps pointers, so these must
 // live at file scope to outlive the call.
@@ -212,60 +213,97 @@ static int FindSurpriseTarget(const FieldState *ow, int px, int py)
     return -1;
 }
 
-static int Chebyshev(int ax, int ay, int bx, int by)
-{
-    int dx = abs(ax - bx);
-    int dy = abs(ay - by);
-    return dx > dy ? dx : dy;
-}
-
 //----------------------------------------------------------------------------------
 // Battle startup — aggro cluster, party teleport, handoff to BattleBegin
 //----------------------------------------------------------------------------------
 
-// Fill outIdxs with active enemy indices within FIELD_AGGRO_RADIUS of the seed,
-// sorted nearest-first, capped at maxOut. The seed itself is always first.
-// Returns the number written.
+// Fill outIdxs with active enemy indices that can be reached within
+// FIELD_AGGRO_RADIUS walkable (8-connected) steps of ANY battle participant —
+// the seed enemy, any party member on the field, or any enemy already pulled
+// in. Solid tiles (walls) block propagation entirely, so an enemy on the far
+// side of a wall does not aggro even if Chebyshev distance is small. Each
+// recruited enemy joins the source set, so hallway chains cluster together.
 static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
                                   int *outIdxs, int maxOut)
 {
     if (seedIdx < 0 || seedIdx >= ow->enemyCount) return 0;
-    const FieldEnemy *seed = &ow->enemies[seedIdx];
 
-    int  count = 0;
-    int  dists[FIELD_MAX_ENEMIES];
-    int  idxs[FIELD_MAX_ENEMIES];
-    for (int i = 0; i < ow->enemyCount; i++) {
-        if (!ow->enemies[i].active) continue;
-        if (i == seedIdx) continue;
-        const FieldEnemy *e = &ow->enemies[i];
-        int d = Chebyshev(seed->tileX, seed->tileY, e->tileX, e->tileY);
-        if (d > FIELD_AGGRO_RADIUS) continue;
-        TilePos a = (TilePos){ seed->tileX, seed->tileY };
-        TilePos b = (TilePos){ e->tileX,    e->tileY    };
-        if (!TileHasLOS(&ow->map, a, b)) continue;
-        idxs[count]  = i;
-        dists[count] = d;
-        count++;
-    }
-    // Simple insertion sort by distance.
-    for (int i = 1; i < count; i++) {
-        int d = dists[i];
-        int x = idxs[i];
-        int j = i - 1;
-        while (j >= 0 && dists[j] > d) {
-            dists[j + 1] = dists[j];
-            idxs[j + 1]  = idxs[j];
-            j--;
-        }
-        dists[j + 1] = d;
-        idxs[j + 1]  = x;
-    }
-
+    bool inCluster[FIELD_MAX_ENEMIES] = {0};
     int written = 0;
-    outIdxs[written++] = seedIdx;
-    for (int i = 0; i < count && written < maxOut; i++)
-        outIdxs[written++] = idxs[i];
+    if (written < maxOut) {
+        outIdxs[written++] = seedIdx;
+        inCluster[seedIdx] = true;
+    }
+
+    // BFS scratch. Stored `static` so the ~20KB footprint stays off the
+    // stack; the function is not reentrant, and field code is single-threaded.
+    static signed char dist[MAP_MAX_W * MAP_MAX_H];
+    static short qx[MAP_MAX_W * MAP_MAX_H];
+    static short qy[MAP_MAX_W * MAP_MAX_H];
+
+    int W = ow->map.width;
+    int H = ow->map.height;
+
+    // Multi-source 8-connected BFS. Re-seed and re-run whenever an enemy joins
+    // the cluster (it becomes a fresh source), until no new enemies appear.
+    for (;;) {
+        memset(dist, -1, sizeof dist);
+        int head = 0, tail = 0;
+
+        #define PUSH_SRC(sx, sy)                                      \
+            do {                                                      \
+                int _x = (sx), _y = (sy);                             \
+                if (_x >= 0 && _x < W && _y >= 0 && _y < H            \
+                    && dist[_y * W + _x] < 0) {                       \
+                    dist[_y * W + _x] = 0;                            \
+                    qx[tail] = (short)_x; qy[tail] = (short)_y;       \
+                    tail++;                                           \
+                }                                                     \
+            } while (0)
+
+        for (int i = 0; i < ow->gs->party.count; i++) {
+            const Combatant *m = &ow->gs->party.members[i];
+            PUSH_SRC(m->tileX, m->tileY);
+        }
+        for (int i = 0; i < ow->enemyCount; i++) {
+            if (!inCluster[i]) continue;
+            PUSH_SRC(ow->enemies[i].tileX, ow->enemies[i].tileY);
+        }
+        #undef PUSH_SRC
+
+        while (head < tail) {
+            int x = qx[head], y = qy[head]; head++;
+            int d = dist[y * W + x];
+            if (d >= FIELD_AGGRO_RADIUS) continue;
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    if (dx == 0 && dy == 0) continue;
+                    int nx = x + dx, ny = y + dy;
+                    if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+                    if (dist[ny * W + nx] >= 0) continue;
+                    if (TileMapIsSolid(&ow->map, nx, ny)) continue;
+                    dist[ny * W + nx] = (signed char)(d + 1);
+                    qx[tail] = (short)nx; qy[tail] = (short)ny; tail++;
+                }
+            }
+        }
+
+        bool added = false;
+        for (int i = 0; i < ow->enemyCount && written < maxOut; i++) {
+            if (inCluster[i]) continue;
+            if (!ow->enemies[i].active) continue;
+            int ex = ow->enemies[i].tileX;
+            int ey = ow->enemies[i].tileY;
+            if (ex < 0 || ex >= W || ey < 0 || ey >= H) continue;
+            int d = dist[ey * W + ex];
+            if (d < 0 || d > FIELD_AGGRO_RADIUS) continue;
+            outIdxs[written++] = i;
+            inCluster[i] = true;
+            added = true;
+        }
+        if (!added || written >= maxOut) break;
+    }
+
     return written;
 }
 

@@ -267,6 +267,53 @@ static Combatant *OccupantAtTile(BattleContext *ctx, TilePos tp,
     return NULL;
 }
 
+// Pick the overlay kind + accent color for a move. Accent is per-weapon for
+// item attacks (hook silver / shell tan / urchin purple); innate & specials
+// fall back to the neutral white/cyan scheme.
+static void AttackAnimParams(const MoveDef *mv,
+                             BattleAttackKind *outKind, Color *outAccent)
+{
+    *outAccent = (Color){255, 255, 255, 255};
+    switch (mv->group) {
+        case MOVE_GROUP_ATTACK:
+            *outKind = BATK_MELEE;
+            break;
+        case MOVE_GROUP_ITEM_ATTACK:
+            *outKind = (mv->range == RANGE_RANGED) ? BATK_ITEM_RANGED : BATK_ITEM_MELEE;
+            switch (mv->id) {
+                case 1: *outAccent = (Color){210, 210, 220, 255}; break; // FishingHook
+                case 2: *outAccent = (Color){210, 175, 120, 255}; break; // ShellThrow
+                case 3: *outAccent = (Color){170, 110, 210, 255}; break; // SeaUrchinSpike
+                default: break;
+            }
+            break;
+        case MOVE_GROUP_SPECIAL:
+            *outKind = BATK_SPECIAL;
+            *outAccent = (Color){120, 200, 240, 255};
+            break;
+        default:
+            *outKind = BATK_MELEE;
+            break;
+    }
+}
+
+static void PlayAttackAnimFor(BattleContext *ctx, const MoveDef *mv,
+                              const Combatant *actor, bool actorIsEn, int actorIdx,
+                              const Combatant *target, bool targetIsEnemy, int targetIdx)
+{
+    BattleAttackKind kind;
+    Color accent;
+    AttackAnimParams(mv, &kind, &accent);
+    int ax = actor  ? actor->tileX  : 0;
+    int ay = actor  ? actor->tileY  : 0;
+    int tx = target ? target->tileX : ax;
+    int ty = target ? target->tileY : ay;
+    BattleAnimPlayAttack(&ctx->anim, kind, accent,
+                         ax, ay, tx, ty,
+                         actorIsEn, actorIdx,
+                         targetIsEnemy, targetIdx);
+}
+
 static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
 {
     TurnEntry *te    = &ctx->turnOrder[ctx->currentTurn];
@@ -309,8 +356,8 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
     if (friendly && CombatantHasStatus(target, STATUS_BOUND) &&
         DamageCutsRopes(mv->damageType)) {
         CombatantClearStatus(target, STATUS_BOUND);
-        BattleAnimPlayHitFrom(&ctx->anim, actorIsEn, te->idx,
-                              targetIsEnemy, targetIdx);
+        PlayAttackAnimFor(ctx, mv, actor, actorIsEn, te->idx,
+                          target, targetIsEnemy, targetIdx);
         BattleAnimMarkRopeCut(&ctx->anim);
         snprintf(ctx->narration, NARRATION_LEN,
                  "%s used %s and cut %s's ropes free!",
@@ -320,8 +367,8 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
     }
 
     if (!friendly && !RollHit(actor, target)) {
-        BattleAnimPlayHitFrom(&ctx->anim, actorIsEn, te->idx,
-                              targetIsEnemy, targetIdx);
+        PlayAttackAnimFor(ctx, mv, actor, actorIsEn, te->idx,
+                          target, targetIsEnemy, targetIdx);
         snprintf(ctx->narration, NARRATION_LEN,
                  "%s used %s but %s dodged!",
                  actor->name, mv->name, target->name);
@@ -350,8 +397,8 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
                      "%s used %s! Dealt %d dmg. %s fainted!",
                      actor->name, mv->name, dmg, target->name);
     } else {
-        BattleAnimPlayHitFrom(&ctx->anim, actorIsEn, te->idx,
-                              targetIsEnemy, targetIdx);
+        PlayAttackAnimFor(ctx, mv, actor, actorIsEn, te->idx,
+                          target, targetIsEnemy, targetIdx);
         if (friendly)
             snprintf(ctx->narration, NARRATION_LEN,
                      "%s used %s on %s (%d dmg). \"Hey, I'm on your side!\"",
@@ -429,9 +476,13 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 if (t->hp <= 0) { t->hp = 0; t->alive = false; }
             }
         }
-        if (hits > 0)
-            BattleAnimPlayHitFrom(&ctx->anim, te->isEnemy, te->idx,
-                                  targetOnEnemyGrid, lastIdx);
+        if (hits > 0) {
+            const Combatant *sample = targetOnEnemyGrid
+                ? &ctx->enemies[lastIdx]
+                : &ctx->party->members[lastIdx];
+            PlayAttackAnimFor(ctx, mv, actor, te->isEnemy, te->idx,
+                              sample, targetOnEnemyGrid, lastIdx);
+        }
         if (misses > 0 && hits == 0) {
             snprintf(ctx->narration, NARRATION_LEN,
                      "%s used %s but everyone dodged!", actor->name, mv->name);
@@ -803,6 +854,10 @@ void BattleDrawWorldOverlay(const BattleContext *ctx)
                          (float)tp, (float)tp },
             3, (Color){240, 180, 60, 255});
     }
+
+    // Attack effect (slash / projectile / ring) — drawn on top of tile
+    // sprites, in world space, so primitives snap to the fighters' cells.
+    BattleAnimDrawAttackOverlay(&ctx->anim);
 }
 
 static void DrawRosterPanel(const Combatant *roster, int count,

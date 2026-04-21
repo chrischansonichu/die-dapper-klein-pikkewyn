@@ -15,6 +15,17 @@ typedef enum BattleAnimType {
     BANIM_SHAKE,      // screen shake on big hit
 } BattleAnimType;
 
+// Attack flavor — drives which overlay shape we render on BANIM_HIT.
+// BATK_NONE is the "no attack category" case, used for legacy PlayHitFrom
+// calls that predate per-move categorization.
+typedef enum BattleAttackKind {
+    BATK_NONE = 0,
+    BATK_MELEE,          // innate melee (Tackle) — white slash on target tile
+    BATK_ITEM_MELEE,     // FishingHook, SeaUrchinSpike — accented slash + chip
+    BATK_ITEM_RANGED,    // ShellThrow — projectile actor→target, then impact
+    BATK_SPECIAL,        // WaveCall, ColonyRoar — expanding ring on actor
+} BattleAttackKind;
+
 typedef struct BattleAnim {
     BattleAnimType type;
     bool           active;
@@ -33,6 +44,14 @@ typedef struct BattleAnim {
     // Cosmetic flag: current BANIM_HIT represents a rope-cutting strike.
     // Draw layer overlays rope debris + a SNAP! tag on the target cell.
     bool           ropeCut;
+
+    // Attack overlay data — filled by BattleAnimPlayAttack. World tile coords
+    // are snapshotted so a mid-anim move (shouldn't happen, but safe) can't
+    // tear the effect. Accent colors the item-attack flourish.
+    BattleAttackKind attackKind;
+    int              actorTileX, actorTileY;
+    int              targetTileX, targetTileY;
+    Color            accent;
 } BattleAnim;
 
 void BattleAnimPlay(BattleAnim *a, BattleAnimType type, bool isEnemy, int idx);
@@ -41,6 +60,20 @@ void BattleAnimPlay(BattleAnim *a, BattleAnimType type, bool isEnemy, int idx);
 void BattleAnimPlayHitFrom(BattleAnim *a,
                            bool actorIsEnemy, int actorIdx,
                            bool targetIsEnemy, int targetIdx);
+// Attack-categorized hit anim. Records actor + target tile coords and an
+// accent color so the world-overlay can render a kind-appropriate effect
+// (slash, projectile, ring). Still a BANIM_HIT under the hood — same
+// duration/completion contract, so the battle state machine is unchanged.
+void BattleAnimPlayAttack(BattleAnim *a,
+                          BattleAttackKind kind,
+                          Color accent,
+                          int actorTileX, int actorTileY,
+                          int targetTileX, int targetTileY,
+                          bool actorIsEnemy, int actorIdx,
+                          bool targetIsEnemy, int targetIdx);
+// Draw the active attack overlay in world space (tile coords). Safe to call
+// any frame; no-ops when no attack anim is active.
+void BattleAnimDrawAttackOverlay(const BattleAnim *a);
 // Flag the current hit as a rope-cut; caller invokes this after the hit-from
 // call. Cleared automatically on the next BattleAnimPlay.
 void BattleAnimMarkRopeCut(BattleAnim *a);
