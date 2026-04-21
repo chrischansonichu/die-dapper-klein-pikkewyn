@@ -44,8 +44,14 @@ typedef struct GameState {
     // the hub is rebuilt.
     bool     rescueDialoguePending;
 
+    // Village economy — the game uses no abstract currency. The keeper runs a
+    // barter loop (bring specific loot, get leveled rewards) and the food
+    // bank accepts consumables for reputation. Rep is a one-way milestone
+    // meter today; gates on specific thresholds land when content exists.
+    int      villageReputation;
+    int      keeperQuestIdx;   // which entry in the keeper's rotating ask list is active
+
     // Additional persistent state lands here in later phases:
-    //   int       gold;
     //   Roster    dismissedMembers;
     //   uint64_t  storyFlags;
 } GameState;

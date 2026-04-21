@@ -158,12 +158,27 @@ void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
     *ctx->spawnDir   = 2; // facing right, toward the first doorway
 
     // Stairs-down warp — placed in the room diagonally opposite the spawn so
-    // the player has to traverse the floor before descending. Scan from the
-    // room interior outward until we find a floor tile to host the warp.
+    // the player has to traverse the floor before descending. We prefer a
+    // floor tile that already abuts a wall (non-floor neighbor) so the warp
+    // door reads as built into the edge of the room; it's flagged solid so
+    // the player can't accidentally step through.
     if (*ctx->warpCount < ctx->warpMax) {
         int stairsRoomX = DUNGEON_ROOMS_X - 1 - spawnRoomX;
         int stairsRoomY = DUNGEON_ROOMS_Y - 1 - spawnRoomY;
         int sx = -1, sy = -1;
+        // Prefer wall-adjacent floor tiles, scanning from the far corner in.
+        for (int oy = ROOM_H - 2; oy >= 1 && sx < 0; oy--) {
+            for (int ox = ROOM_W - 2; ox >= 1 && sx < 0; ox--) {
+                int tx = stairsRoomX * ROOM_W + ox;
+                int ty = stairsRoomY * ROOM_H + oy;
+                if (!IsFloor(m, tx, ty)) continue;
+                bool againstWall =
+                    !IsFloor(m, tx + 1, ty) || !IsFloor(m, tx - 1, ty) ||
+                    !IsFloor(m, tx, ty + 1) || !IsFloor(m, tx, ty - 1);
+                if (againstWall) { sx = tx; sy = ty; }
+            }
+        }
+        // Fallback: any interior floor if the room had no wall-adjacent one.
         for (int oy = 1; oy < ROOM_H - 1 && sx < 0; oy++) {
             for (int ox = 1; ox < ROOM_W - 1 && sx < 0; ox++) {
                 int tx = stairsRoomX * ROOM_W + ox;
@@ -183,7 +198,7 @@ void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
             w->targetSpawnX   = 2;
             w->targetSpawnY   = 2;
             w->targetSpawnDir = 2; // facing right into the new floor
-            TileMapAddFlag(m, sx, sy, TILE_FLAG_WARP);
+            TileMapAddFlag(m, sx, sy, TILE_FLAG_WARP | TILE_FLAG_SOLID);
         }
     }
 

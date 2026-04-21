@@ -72,11 +72,13 @@ void NpcTurnToFace(Npc *n, int tileX, int tileY)
     else if (dy < 0) n->dir = 3; // face up
 }
 
-// Cream-bellied old penguin in a top hat
-static void DrawPenguinElder(int px, int py, int sz, int dir)
+// Cream-bellied old penguin in a top hat. accent sets the belly/hat-band
+// color so keeper / food-bank variants can reuse this silhouette.
+// hatBand != 0 paints a colored stripe around the hat brim (keeper = green,
+// food-bank = blue); elder leaves it off.
+static void DrawPenguinPerson(int px, int py, int sz, int dir, Color belly, Color hatBand)
 {
     const Color black  = (Color){ 25,  25,  30, 255};
-    const Color cream  = (Color){235, 215, 160, 255};
     const Color orange = (Color){255, 160,  40, 255};
 
     float cx = px + sz / 2.0f;
@@ -88,14 +90,18 @@ static void DrawPenguinElder(int px, int py, int sz, int dir)
     DrawRectangleRec(crown, black);
     Rectangle brim  = { cx - hatW / 2.0f - 3, py + sz * 0.22f, hatW + 6, sz * 0.06f };
     DrawRectangleRec(brim, black);
+    if (hatBand.a > 0) {
+        Rectangle band = { cx - hatW / 2.0f, py + sz * 0.18f, hatW, sz * 0.04f };
+        DrawRectangleRec(band, hatBand);
+    }
 
     // Body (rounded rectangle)
     Rectangle body = { px + sz * 0.18f, py + sz * 0.30f, sz * 0.64f, sz * 0.60f };
     DrawRectangleRounded(body, 0.55f, 14, black);
 
-    // Cream belly
-    Rectangle belly = { px + sz * 0.30f, py + sz * 0.46f, sz * 0.40f, sz * 0.38f };
-    DrawRectangleRounded(belly, 0.6f, 12, cream);
+    // Belly (color varies by role)
+    Rectangle bellyRect = { px + sz * 0.30f, py + sz * 0.46f, sz * 0.40f, sz * 0.38f };
+    DrawRectangleRounded(bellyRect, 0.6f, 12, belly);
 
     // Eyes — small whites with black pupil, shifted by facing
     float eyeY  = py + sz * 0.40f;
@@ -131,6 +137,24 @@ static void DrawPenguinElder(int px, int py, int sz, int dir)
     // Cane
     DrawLineEx((Vector2){px + sz * 0.90f, py + sz * 0.55f},
                (Vector2){px + sz * 0.90f, py + sz * 0.92f}, 2.0f, orange);
+}
+
+static void DrawPenguinElder(int px, int py, int sz, int dir) {
+    DrawPenguinPerson(px, py, sz, dir, (Color){235, 215, 160, 255}, (Color){0, 0, 0, 0});
+}
+
+static void DrawKeeper(int px, int py, int sz, int dir) {
+    // Green-bellied + green hat-band — the trader in the village.
+    DrawPenguinPerson(px, py, sz, dir,
+                      (Color){170, 210, 130, 255},
+                      (Color){ 80, 160,  80, 255});
+}
+
+static void DrawFoodBank(int px, int py, int sz, int dir) {
+    // Blue-bellied + blue hat-band — the donation keeper.
+    DrawPenguinPerson(px, py, sz, dir,
+                      (Color){150, 190, 225, 255},
+                      (Color){ 70, 120, 200, 255});
 }
 
 // Cape fur seal — warm brown with a lighter belly
@@ -202,6 +226,8 @@ void NpcDraw(const Npc *n, Camera2D cam)
     switch (n->type) {
         case NPC_PENGUIN_ELDER: DrawPenguinElder(px, py, sz, n->dir); break;
         case NPC_SEAL:          DrawSeal(px, py, sz, n->dir);         break;
+        case NPC_KEEPER:        DrawKeeper(px, py, sz, n->dir);       break;
+        case NPC_FOOD_BANK:     DrawFoodBank(px, py, sz, n->dir);     break;
     }
 }
 

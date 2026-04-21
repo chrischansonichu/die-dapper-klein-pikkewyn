@@ -284,7 +284,7 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
              60, 420, 14, GRAY);
 }
 
-void InventoryUIDraw(const InventoryUI *ui, const Party *party)
+void InventoryUIDraw(const InventoryUI *ui, const Party *party, int villageReputation)
 {
     if (!ui->active) return;
 
@@ -295,6 +295,8 @@ void InventoryUIDraw(const InventoryUI *ui, const Party *party)
     DrawRectangleLines(40, 30, GetScreenWidth() - 80, GetScreenHeight() - 60, (Color){120, 140, 220, 255});
 
     DrawText("INVENTORY", 60, 36, 18, WHITE);
+    DrawText(TextFormat("Village Rep: %d", villageReputation),
+             GetScreenWidth() - 220, 36, 16, (Color){200, 220, 120, 255});
     DrawTabHeader(ui->tab);
 
     if (ui->tab == INV_TAB_ITEMS) DrawItemsTab(ui, party);

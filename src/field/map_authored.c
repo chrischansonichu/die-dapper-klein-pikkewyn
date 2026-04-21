@@ -1,8 +1,9 @@
 #include "map_source.h"
 #include "../data/item_defs.h"
 
-// Append a warp and mark its tile so the field's step-completion check can
-// fast-fail on non-warp tiles. Silently ignored if the warp array is full.
+// Append a warp and mark its tile as both WARP and SOLID. Warps are now
+// door-like — the player can't walk through them; they have to face the
+// tile and press Z, which opens a confirmation prompt.
 static void AddWarp(MapBuildContext *ctx, int tx, int ty,
                     int targetMapId, int targetFloor,
                     int tsx, int tsy, int tdir)
@@ -15,7 +16,7 @@ static void AddWarp(MapBuildContext *ctx, int tx, int ty,
     w->targetSpawnX   = tsx;
     w->targetSpawnY   = tsy;
     w->targetSpawnDir = tdir;
-    TileMapAddFlag(ctx->map, tx, ty, TILE_FLAG_WARP);
+    TileMapAddFlag(ctx->map, tx, ty, TILE_FLAG_WARP | TILE_FLAG_SOLID);
 }
 
 //----------------------------------------------------------------------------------
@@ -125,11 +126,17 @@ static void AddHubNpcs(MapBuildContext *ctx)
     NpcAddDialogue(elder, "The sailors have moved up the coast. The harbor is through the south gate.");
     NpcAddDialogue(elder, "Rest here whenever you need to. You'll always find your way back.");
 
-    // Shopkeeper placeholder — the shop isn't built yet, but seeing a villager
-    // there tells the player the hub is meant to grow.
+    // The Keeper — hub barter NPC. His dialogue is built on-the-fly in
+    // KeeperInteract based on the current quest + Jan's level, so we don't
+    // pre-populate any static pages here.
     Npc *keeper = &ctx->npcs[(*ctx->npcCount)++];
-    NpcInit(keeper, 14, 11, 2, NPC_PENGUIN_ELDER);
-    NpcAddDialogue(keeper, "Shop's not open yet. Come back later — I'll have wares.");
+    NpcInit(keeper, 14, 11, 2, NPC_KEEPER);
+
+    // Food bank — accepts food donations for village reputation.
+    if (*ctx->npcCount < ctx->npcMax) {
+        Npc *bank = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(bank, 9, 11, 2, NPC_FOOD_BANK);
+    }
 }
 
 void BuildOverworldHub(MapBuildContext *ctx)
@@ -176,9 +183,10 @@ void BuildOverworldHub(MapBuildContext *ctx)
     // Sand path: plaza → south gate.
     for (int y = 9; y <= 13; y++) TileMapSetTile(m, 11, y, TILE_SAND);
 
-    // South gate — a 2-tile gap in the south wall. In step 7 these tiles
-    // become the warp to the harbor dungeon; for now they're just sand so the
-    // gap is visible.
+    // South gate — a 2-tile-wide sand opening up to the outer wall row. The
+    // wall-row tiles (height-1) are the warp doors themselves: drawn as sand
+    // so the gap reads visually, but flagged solid by AddWarp so the player
+    // has to face + Z to use them.
     TileMapSetTile(m, 11, m->height - 1, TILE_SAND);
     TileMapSetTile(m, 12, m->height - 1, TILE_SAND);
     TileMapSetTile(m, 11, m->height - 2, TILE_SAND);
@@ -188,8 +196,8 @@ void BuildOverworldHub(MapBuildContext *ctx)
 
     // South-gate warp → harbor floor 1. Both tiles of the 2-wide gap trigger
     // so the player can approach the gate from either side.
-    AddWarp(ctx, 11, m->height - 2, MAP_HARBOR_F1, 1, 8, 14, 3);
-    AddWarp(ctx, 12, m->height - 2, MAP_HARBOR_F1, 1, 8, 14, 3);
+    AddWarp(ctx, 11, m->height - 1, MAP_HARBOR_F1, 1, 8, 14, 3);
+    AddWarp(ctx, 12, m->height - 1, MAP_HARBOR_F1, 1, 8, 14, 3);
 
     *ctx->spawnTileX = 11;
     *ctx->spawnTileY = 7;
@@ -231,9 +239,10 @@ void BuildHarborFloor1(MapBuildContext *ctx)
     AddSealCaptiveScene(ctx);
 
     // Descent warp at the far east end of the dock → procedural floor 2.
-    // Player has to push past the patrol sailor to reach it. One-way: there
-    // is no return warp from F2 back up here.
-    AddWarp(ctx, 18, 13, MAP_HARBOR_PROC, 2, 2, 2, 2);
+    // Placed against the east ocean wall so the player has to push past the
+    // patrol sailor and walk all the way east before facing + interacting.
+    // One-way: there is no return warp from F2 back up here.
+    AddWarp(ctx, m->width - 2, 13, MAP_HARBOR_PROC, 2, 2, 2, 2);
 
     *ctx->spawnTileX = 8;
     *ctx->spawnTileY = 14;
@@ -262,8 +271,11 @@ void BuildHarborFloor9(MapBuildContext *ctx)
         for (int x = 7; x <= 8; x++)
             TileMapSetTile(m, x, y, TILE_ROCK);
 
-    // Return portal — center-bottom tile warps back to the hub's south gate.
-    AddWarp(ctx, m->width / 2, m->height - 2, MAP_OVERWORLD_HUB, 0, 11, 12, 3);
+    // Return portal — center-bottom wall tile warps back to the hub's south
+    // gate. Sits on the outer wall row so the player walks up and interacts
+    // rather than stepping onto it.
+    TileMapSetTile(m, m->width / 2, m->height - 1, TILE_SAND);
+    AddWarp(ctx, m->width / 2, m->height - 1, MAP_OVERWORLD_HUB, 0, 11, 12, 3);
 
     *ctx->spawnTileX = 2;
     *ctx->spawnTileY = 2;

@@ -13,6 +13,7 @@
 #include "../battle/battle.h"
 #include "inventory_ui.h"
 #include "stats_ui.h"
+#include "donation_ui.h"
 
 // Forward declaration — field.c reads/writes the persistent party + inventory
 // through this pointer; ownership lives in screen_gameplay.c.
@@ -58,6 +59,14 @@ typedef struct FieldState {
 
     // Stats/Layout overlay
     StatsUI       statsUi;
+
+    // Food-bank donation picker (opened by NPC_FOOD_BANK interaction).
+    DonationUI    donationUi;
+
+    // Warp confirmation prompt — -1 when no prompt is open, otherwise an
+    // index into warps[]. Set by facing + Z'ing a warp tile; confirmed with
+    // Z/Enter (applies the transition) or cancelled with X/Esc.
+    int           warpPromptIdx;
 
     // Inline battle sub-state. FIELD_BATTLE pauses enemy patrol AI and routes
     // input through BattleUpdate; the battle writes back into party combatants

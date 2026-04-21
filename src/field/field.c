@@ -1,6 +1,7 @@
 #include "field.h"
 #include "enemy_sprites.h"
 #include "map_source.h"
+#include "village.h"
 #include "../state/game_state.h"
 #include "../data/item_defs.h"
 #include "../data/move_defs.h"
@@ -74,6 +75,9 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
 {
     Npc *n = &ow->npcs[npcIdx];
 
+    if (n->type == NPC_KEEPER) return KeeperInteract(ow->gs, pages, scratch);
+    // NPC_FOOD_BANK is handled by a dedicated picker UI (see BeginNpcInteraction).
+
     if (n->type == NPC_SEAL) {
         if (NpcCurrentlyCaptive(n, ow->enemies, ow->enemyCount)) {
             snprintf(scratch[0], NPC_DIALOGUE_LEN,
@@ -115,6 +119,61 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
     for (int p = 0; p < count; p++)
         pages[p] = n->dialogue[p];
     return count;
+}
+
+// Apply a confirmed warp — copies the warp's target into the pending-map
+// fields on GameState so screen_gameplay's next tick runs the map swap.
+static void ApplyWarp(FieldState *ow, int warpIdx)
+{
+    const FieldWarp *w = &ow->warps[warpIdx];
+    ow->gs->hasPendingMap   = true;
+    ow->gs->pendingMapId    = w->targetMapId;
+    ow->gs->pendingMapSeed  = (w->targetFloor > 0)
+                                ? (ow->gs->currentMapSeed
+                                     ? ow->gs->currentMapSeed
+                                     : (unsigned)GetRandomValue(1, 0x7FFFFFFF))
+                                : 0;
+    ow->gs->pendingFloor    = w->targetFloor;
+    ow->gs->pendingSpawnX   = w->targetSpawnX;
+    ow->gs->pendingSpawnY   = w->targetSpawnY;
+    ow->gs->pendingSpawnDir = w->targetSpawnDir;
+}
+
+// If the tile directly in front of the player is flagged as a warp, open the
+// confirmation prompt for it. Returns true iff a prompt was opened.
+static bool TryInteractWarp(FieldState *ow, int tx, int ty)
+{
+    int fx = tx, fy = ty;
+    switch (ow->player.dir) {
+        case 0: fy += 1; break;
+        case 1: fx -= 1; break;
+        case 2: fx += 1; break;
+        case 3: fy -= 1; break;
+    }
+    if (fx < 0 || fy < 0 || fx >= ow->map.width || fy >= ow->map.height) return false;
+    if (!(TileMapGetFlags(&ow->map, fx, fy) & TILE_FLAG_WARP))           return false;
+    for (int i = 0; i < ow->warpCount; i++) {
+        if (ow->warps[i].tileX == fx && ow->warps[i].tileY == fy) {
+            ow->warpPromptIdx = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+// Dispatch an NPC interaction: food bank opens the donation picker; everything
+// else goes through the regular dialogue pipeline.
+static void BeginNpcInteraction(FieldState *ow, int npcIdx)
+{
+    Npc *n = &ow->npcs[npcIdx];
+    if (n->type == NPC_FOOD_BANK) {
+        DonationUIOpen(&ow->donationUi, &ow->gs->party);
+        return;
+    }
+    const char *pages[NPC_MAX_DIALOGUE_PAGES];
+    char scratch[4][NPC_DIALOGUE_LEN];
+    int count = BuildNpcInteraction(ow, npcIdx, pages, scratch);
+    DialogueBegin(&ow->dialogue, pages, count, 30.0f);
 }
 
 // Direction vectors: 0=down, 1=left, 2=right, 3=up.
@@ -480,6 +539,7 @@ void FieldInit(FieldState *ow, GameState *gs)
     memset(ow, 0, sizeof(FieldState));
     ow->gs = gs;
     ow->mode = FIELD_FREE;
+    ow->warpPromptIdx = -1;
 
     int spawnX = 0, spawnY = 0, spawnDir = 0;
     MapBuildContext ctx = {
@@ -504,6 +564,7 @@ void FieldInit(FieldState *ow, GameState *gs)
     ow->player.dir = spawnDir;
     InventoryUIInit(&ow->invUi);
     StatsUIInit(&ow->statsUi);
+    DonationUIInit(&ow->donationUi);
 
     int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;
     int mapPixH = ow->map.height * TILE_SIZE * TILE_SCALE;
@@ -556,6 +617,19 @@ void FieldUpdate(FieldState *ow, float dt)
         return;
     }
 
+    // Warp confirmation prompt captures input while open.
+    if (ow->warpPromptIdx >= 0) {
+        if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
+            ApplyWarp(ow, ow->warpPromptIdx);
+            ow->warpPromptIdx = -1;
+            return;
+        }
+        if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)) {
+            ow->warpPromptIdx = -1;
+        }
+        return;
+    }
+
     // Inventory overlay captures all input while open
     if (ow->invUi.active) {
         InventoryUIUpdate(&ow->invUi, &ow->gs->party);
@@ -564,6 +638,11 @@ void FieldUpdate(FieldState *ow, float dt)
     // Stats overlay captures all input while open
     if (ow->statsUi.active) {
         StatsUIUpdate(&ow->statsUi, &ow->gs->party);
+        return;
+    }
+    // Food bank donation picker captures input while open
+    if (ow->donationUi.active) {
+        DonationUIUpdate(&ow->donationUi, &ow->gs->party, &ow->gs->villageReputation);
         return;
     }
     // Open inventory with I (only while not moving / no dialogue)
@@ -586,46 +665,25 @@ void FieldUpdate(FieldState *ow, float dt)
     // Update player movement
     PlayerUpdate(&ow->player, &ow->map, ow);
 
-    // After step completes, check warp tiles then NPC interaction.
-    if (ow->player.stepCompleted) {
+    // After step completes, check NPC or warp interaction. Warp tiles are
+    // solid — the player can't step onto one, so they're only entered via
+    // facing + Z, never passively by walking.
+    if (ow->player.stepCompleted && IsInteractPressed()) {
         int tx = ow->player.tileX;
         int ty = ow->player.tileY;
 
-        if (TileMapGetFlags(&ow->map, tx, ty) & TILE_FLAG_WARP) {
-            for (int i = 0; i < ow->warpCount; i++) {
-                const FieldWarp *w = &ow->warps[i];
-                if (w->tileX == tx && w->tileY == ty) {
-                    ow->gs->hasPendingMap    = true;
-                    ow->gs->pendingMapId     = w->targetMapId;
-                    ow->gs->pendingMapSeed   = (w->targetFloor > 0)
-                                                 ? (ow->gs->currentMapSeed ? ow->gs->currentMapSeed
-                                                                           : (unsigned)GetRandomValue(1, 0x7FFFFFFF))
-                                                 : 0;
-                    ow->gs->pendingFloor     = w->targetFloor;
-                    ow->gs->pendingSpawnX    = w->targetSpawnX;
-                    ow->gs->pendingSpawnY    = w->targetSpawnY;
-                    ow->gs->pendingSpawnDir  = w->targetSpawnDir;
+        for (int i = 0; i < ow->npcCount; i++) {
+            if (NpcIsInteractable(&ow->npcs[i], tx, ty, ow->player.dir)) {
+                NpcTurnToFace(&ow->npcs[i], tx, ty);
+                if (NpcCurrentlyCaptive(&ow->npcs[i], ow->enemies, ow->enemyCount)) {
+                    TriggerCaptiveRescueBattle(ow, i);
                     return;
                 }
+                BeginNpcInteraction(ow, i);
+                return;
             }
         }
-
-        if (IsInteractPressed()) {
-            for (int i = 0; i < ow->npcCount; i++) {
-                if (NpcIsInteractable(&ow->npcs[i], tx, ty, ow->player.dir)) {
-                    NpcTurnToFace(&ow->npcs[i], tx, ty);
-                    if (NpcCurrentlyCaptive(&ow->npcs[i], ow->enemies, ow->enemyCount)) {
-                        TriggerCaptiveRescueBattle(ow, i);
-                        return;
-                    }
-                    const char *pages[NPC_MAX_DIALOGUE_PAGES];
-                    char scratch[4][NPC_DIALOGUE_LEN];
-                    int count = BuildNpcInteraction(ow, i, pages, scratch);
-                    DialogueBegin(&ow->dialogue, pages, count, 30.0f);
-                    return;
-                }
-            }
-        }
+        if (TryInteractWarp(ow, tx, ty)) return;
     }
 
     // Non-step: check interact key for adjacent NPCs or surprise attacks
@@ -640,13 +698,12 @@ void FieldUpdate(FieldState *ow, float dt)
                     TriggerCaptiveRescueBattle(ow, i);
                     return;
                 }
-                const char *pages[NPC_MAX_DIALOGUE_PAGES];
-                char scratch[4][NPC_DIALOGUE_LEN];
-                int count = BuildNpcInteraction(ow, i, pages, scratch);
-                DialogueBegin(&ow->dialogue, pages, count, 30.0f);
+                BeginNpcInteraction(ow, i);
                 return;
             }
         }
+
+        if (TryInteractWarp(ow, tx, ty)) return;
 
         // Surprise strike on an unaware adjacent enemy
         int surpriseIdx = FindSurpriseTarget(ow, tx, ty);
@@ -807,11 +864,37 @@ void FieldDraw(const FieldState *ow)
     }
 
     if (ow->invUi.active) {
-        InventoryUIDraw(&ow->invUi, &ow->gs->party);
+        InventoryUIDraw(&ow->invUi, &ow->gs->party, ow->gs->villageReputation);
     }
 
     if (ow->statsUi.active) {
         StatsUIDraw(&ow->statsUi, &ow->gs->party);
+    }
+
+    if (ow->donationUi.active) {
+        DonationUIDraw(&ow->donationUi, &ow->gs->party, ow->gs->villageReputation);
+    }
+
+    if (ow->warpPromptIdx >= 0) {
+        const FieldWarp *w = &ow->warps[ow->warpPromptIdx];
+        const char *title = (w->targetMapId == MAP_OVERWORLD_HUB)
+                              ? "Return to the village?"
+                              : "Continue to the next area?";
+        const char *warn  = (w->targetMapId == MAP_OVERWORLD_HUB)
+                              ? ""
+                              : "You won't be able to return.";
+        int sw = GetScreenWidth(), sh = GetScreenHeight();
+        int boxW = 560, boxH = 140;
+        int bx = (sw - boxW) / 2;
+        int by = (sh - boxH) / 2;
+        DrawRectangle(0, 0, sw, sh, (Color){0, 0, 0, 150});
+        DrawRectangle(bx, by, boxW, boxH, (Color){15, 15, 35, 235});
+        DrawRectangleLines(bx, by, boxW, boxH, (Color){120, 140, 220, 255});
+        DrawText(title, bx + 20, by + 20, 20, WHITE);
+        if (warn[0] != '\0')
+            DrawText(warn, bx + 20, by + 52, 16, (Color){220, 180, 100, 255});
+        DrawText("Z / Enter: Yes    X / Esc: No",
+                 bx + 20, by + boxH - 30, 14, (Color){200, 220, 220, 255});
     }
 }
 

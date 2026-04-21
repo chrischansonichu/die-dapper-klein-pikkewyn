@@ -16,6 +16,8 @@
 typedef enum NpcType {
     NPC_PENGUIN_ELDER,
     NPC_SEAL,
+    NPC_KEEPER,      // hub barter NPC — trades loot for leveled rewards
+    NPC_FOOD_BANK,   // hub donation NPC — accepts consumables for reputation
 } NpcType;
 
 struct FieldEnemy;

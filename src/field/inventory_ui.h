@@ -42,6 +42,6 @@ void InventoryUIClose(InventoryUI *ui);
 bool InventoryUIUpdate(InventoryUI *ui, Party *party);
 
 // Draw overlay (screen space, call after world draw).
-void InventoryUIDraw(const InventoryUI *ui, const Party *party);
+void InventoryUIDraw(const InventoryUI *ui, const Party *party, int villageReputation);
 
 #endif // INVENTORY_UI_H
