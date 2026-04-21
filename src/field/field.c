@@ -14,10 +14,12 @@
 #include <stdlib.h>
 #include <math.h>
 
-// Squad radius for aggro pull — enemies within this many walkable (8-connected,
-// walls block) tiles of any battle participant get dragged in. Each recruited
-// enemy becomes a new source, so a hallway chain pulls in together even when
-// only one of them triggered the fight. Walls fully block the pull.
+// Squad radius for aggro pull — enemies within this many tiles (Chebyshev) of
+// any battle participant WITH line of sight get dragged in. Walls fully block
+// LOS including diagonal corner-squeeze, so an enemy in an adjacent room
+// without a direct sightline does not aggro even when a door exists nearby.
+// Each recruited enemy becomes a new LOS anchor, so a visible hallway chain
+// pulls together.
 #define FIELD_AGGRO_RADIUS 5
 
 // Post-battle dialogue buffers. DialogueBegin keeps pointers, so these must
@@ -217,12 +219,53 @@ static int FindSurpriseTarget(const FieldState *ow, int px, int py)
 // Battle startup — aggro cluster, party teleport, handoff to BattleBegin
 //----------------------------------------------------------------------------------
 
-// Fill outIdxs with active enemy indices that can be reached within
-// FIELD_AGGRO_RADIUS walkable (8-connected) steps of ANY battle participant —
-// the seed enemy, any party member on the field, or any enemy already pulled
-// in. Solid tiles (walls) block propagation entirely, so an enemy on the far
-// side of a wall does not aggro even if Chebyshev distance is small. Each
-// recruited enemy joins the source set, so hallway chains cluster together.
+static int Chebyshev(int ax, int ay, int bx, int by)
+{
+    int dx = abs(ax - bx);
+    int dy = abs(ay - by);
+    return dx > dy ? dx : dy;
+}
+
+// Strict LOS: Amanatides-Woo voxel traversal from the center of (ax, ay) to
+// the center of (bx, by). Visits every tile the straight line passes through
+// and blocks on any solid tile — including the "corner squeeze" where a line
+// threads the diagonal seam between two wall tiles. Unlike the Bresenham in
+// battle_grid.c this cannot skip through wall corners. Endpoints themselves
+// are not tested (a participant might stand next to the map edge, etc.).
+static bool FieldAggroLOS(const TileMap *m, int ax, int ay, int bx, int by)
+{
+    if (ax == bx && ay == by) return true;
+
+    float dx = (float)(bx - ax);
+    float dy = (float)(by - ay);
+    int stepX = (dx > 0) - (dx < 0);
+    int stepY = (dy > 0) - (dy < 0);
+    float tDeltaX = stepX != 0 ? fabsf(1.0f / dx) : 1e30f;
+    float tDeltaY = stepY != 0 ? fabsf(1.0f / dy) : 1e30f;
+    float tMaxX = tDeltaX * 0.5f;
+    float tMaxY = tDeltaY * 0.5f;
+    int x = ax, y = ay;
+
+    while (x != bx || y != by) {
+        if (tMaxX < tMaxY) {
+            x += stepX;
+            tMaxX += tDeltaX;
+        } else {
+            y += stepY;
+            tMaxY += tDeltaY;
+        }
+        if (x == bx && y == by) return true;
+        if (TileMapIsSolid(m, x, y)) return false;
+    }
+    return true;
+}
+
+// Fill outIdxs with active enemy indices that are within FIELD_AGGRO_RADIUS
+// (Chebyshev) of ANY battle participant AND have strict line of sight to
+// that participant. Walls fully block; an enemy in an adjacent room with no
+// direct sightline does not aggro, even if a doorway lets you walk there.
+// Each recruited enemy becomes a new LOS anchor, so a visible hallway chain
+// of sailors all come together when one triggers the fight.
 static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
                                   int *outIdxs, int maxOut)
 {
@@ -235,75 +278,42 @@ static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
         inCluster[seedIdx] = true;
     }
 
-    // BFS scratch. Stored `static` so the ~20KB footprint stays off the
-    // stack; the function is not reentrant, and field code is single-threaded.
-    static signed char dist[MAP_MAX_W * MAP_MAX_H];
-    static short qx[MAP_MAX_W * MAP_MAX_H];
-    static short qy[MAP_MAX_W * MAP_MAX_H];
+    int anchorX[FIELD_MAX_ENEMIES + PARTY_MAX];
+    int anchorY[FIELD_MAX_ENEMIES + PARTY_MAX];
+    int anchorCount = 0;
 
-    int W = ow->map.width;
-    int H = ow->map.height;
+    anchorX[anchorCount] = ow->enemies[seedIdx].tileX;
+    anchorY[anchorCount] = ow->enemies[seedIdx].tileY;
+    anchorCount++;
+    for (int i = 0; i < ow->gs->party.count; i++) {
+        const Combatant *mb = &ow->gs->party.members[i];
+        anchorX[anchorCount] = mb->tileX;
+        anchorY[anchorCount] = mb->tileY;
+        anchorCount++;
+    }
 
-    // Multi-source 8-connected BFS. Re-seed and re-run whenever an enemy joins
-    // the cluster (it becomes a fresh source), until no new enemies appear.
-    for (;;) {
-        memset(dist, -1, sizeof dist);
-        int head = 0, tail = 0;
-
-        #define PUSH_SRC(sx, sy)                                      \
-            do {                                                      \
-                int _x = (sx), _y = (sy);                             \
-                if (_x >= 0 && _x < W && _y >= 0 && _y < H            \
-                    && dist[_y * W + _x] < 0) {                       \
-                    dist[_y * W + _x] = 0;                            \
-                    qx[tail] = (short)_x; qy[tail] = (short)_y;       \
-                    tail++;                                           \
-                }                                                     \
-            } while (0)
-
-        for (int i = 0; i < ow->gs->party.count; i++) {
-            const Combatant *m = &ow->gs->party.members[i];
-            PUSH_SRC(m->tileX, m->tileY);
-        }
-        for (int i = 0; i < ow->enemyCount; i++) {
-            if (!inCluster[i]) continue;
-            PUSH_SRC(ow->enemies[i].tileX, ow->enemies[i].tileY);
-        }
-        #undef PUSH_SRC
-
-        while (head < tail) {
-            int x = qx[head], y = qy[head]; head++;
-            int d = dist[y * W + x];
-            if (d >= FIELD_AGGRO_RADIUS) continue;
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dx = -1; dx <= 1; dx++) {
-                    if (dx == 0 && dy == 0) continue;
-                    int nx = x + dx, ny = y + dy;
-                    if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
-                    if (dist[ny * W + nx] >= 0) continue;
-                    if (TileMapIsSolid(&ow->map, nx, ny)) continue;
-                    dist[ny * W + nx] = (signed char)(d + 1);
-                    qx[tail] = (short)nx; qy[tail] = (short)ny; tail++;
-                }
-            }
-        }
-
-        bool added = false;
+    bool changed = true;
+    while (changed && written < maxOut) {
+        changed = false;
         for (int i = 0; i < ow->enemyCount && written < maxOut; i++) {
             if (inCluster[i]) continue;
             if (!ow->enemies[i].active) continue;
-            int ex = ow->enemies[i].tileX;
-            int ey = ow->enemies[i].tileY;
-            if (ex < 0 || ex >= W || ey < 0 || ey >= H) continue;
-            int d = dist[ey * W + ex];
-            if (d < 0 || d > FIELD_AGGRO_RADIUS) continue;
-            outIdxs[written++] = i;
-            inCluster[i] = true;
-            added = true;
+            const FieldEnemy *e = &ow->enemies[i];
+            for (int k = 0; k < anchorCount; k++) {
+                int d = Chebyshev(anchorX[k], anchorY[k], e->tileX, e->tileY);
+                if (d > FIELD_AGGRO_RADIUS) continue;
+                if (!FieldAggroLOS(&ow->map, anchorX[k], anchorY[k],
+                                   e->tileX, e->tileY)) continue;
+                outIdxs[written++]   = i;
+                inCluster[i]         = true;
+                anchorX[anchorCount] = e->tileX;
+                anchorY[anchorCount] = e->tileY;
+                anchorCount++;
+                changed = true;
+                break;
+            }
         }
-        if (!added || written >= maxOut) break;
     }
-
     return written;
 }
 
