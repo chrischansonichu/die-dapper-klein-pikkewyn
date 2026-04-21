@@ -44,6 +44,13 @@ typedef struct GameState {
     // the hub is rebuilt.
     bool     rescueDialoguePending;
 
+    // Optional trailing page appended after the rescue dialogue — details
+    // what inventory was lost / damaged on the swim back. Staged through
+    // GameState (not a local in the defeat handler) so it survives the
+    // FieldUnload that tears down the battle map before the hub loads.
+    bool     rescueLossPending;
+    char     rescueLossMsg[160];
+
     // Village economy — the game uses no abstract currency. The keeper runs a
     // barter loop (bring specific loot, get leveled rewards) and the food
     // bank accepts consumables for reputation. Rep is a one-way milestone

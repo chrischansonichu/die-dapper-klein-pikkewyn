@@ -72,12 +72,22 @@ typedef struct BattleContext {
     char  narration[NARRATION_LEN];
     bool  xpNarrationShown;
     bool  preemptiveAttack;  // consumed by Begin
+    // Which move slot on Jan the sneak attack uses, and which enemy it lands
+    // on. StartDungeonBattle sets these from FindSurpriseTarget before calling
+    // BattleBegin. -1 / -1 fall back to slot 0 (Tackle) and enemy 0.
+    int   preemptiveMoveSlot;
+    int   preemptiveTargetIdx;
 
     // End-of-battle XP summary. Populated at BS_ROUND_END when the last enemy
     // faints; drawn on each party roster row. levelUpFlashT > 0 animates a
     // golden pulse to flag who just dinged.
     int   xpGained[PARTY_MAX];
     float levelUpFlashT[PARTY_MAX];
+
+    // Remembered move-menu cursor per party member so the highlight doesn't
+    // bleed across actors when the turn order switches. Updated on every
+    // successful TrySelectMove; restored when a player's turn begins.
+    int   partyMoveCursor[PARTY_MAX];
 } BattleContext;
 
 // Compute the per-turn movement budget from a combatant's speed:

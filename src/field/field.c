@@ -31,10 +31,6 @@ static char gDropMsg[DROP_MSG_PAGES][DROP_MSG_LEN];
 #define RESCUE_GREET_LEN 160
 static char gRescueGreet[RESCUE_GREET_LEN];
 
-// Post-rescue flavor line detailing which supplies washed out of your pockets.
-#define RESCUE_LOSS_LEN 160
-static char gRescueLoss[RESCUE_LOSS_LEN];
-
 // Interact key: Z or Enter
 static bool IsInteractPressed(void)
 {
@@ -206,15 +202,71 @@ static void BeginNpcInteraction(FieldState *ow, int npcIdx)
 static const int FIELD_DIR_DX[4] = {  0, -1,  1,  0 };
 static const int FIELD_DIR_DY[4] = {  1,  0,  0, -1 };
 
-static int FindSurpriseTarget(const FieldState *ow, int px, int py)
+// Find a sneak-attack target. The adjacent-behind case is the classic melee
+// sneak and falls back to slot 0 (Tackle) so it always works. If the player
+// isn't adjacent but has a RANGE_RANGED weapon equipped, we also look for an
+// IDLE enemy further down the "straight line behind" (same axis as the enemy's
+// facing), within the weapon's reach and LOS, and require the player to be
+// facing the enemy so it doesn't read as a random shot over the shoulder.
+// outMoveSlot receives the slot used for the strike (0 for melee fallback, or
+// the chosen ranged-weapon slot).
+static bool FieldAggroLOS(const TileMap *m, int ax, int ay, int bx, int by);
+
+static int FindSurpriseTarget(const FieldState *ow, int px, int py,
+                              int playerDir, int *outMoveSlot)
 {
+    if (outMoveSlot) *outMoveSlot = -1;
+
+    // Melee case — adjacent, directly behind. Same rule as before.
     for (int i = 0; i < ow->enemyCount; i++) {
         const FieldEnemy *e = &ow->enemies[i];
         if (!e->active) continue;
         if (e->aiState != ENEMY_IDLE) continue;
         int behindX = e->tileX - FIELD_DIR_DX[e->dir];
         int behindY = e->tileY - FIELD_DIR_DY[e->dir];
-        if (px == behindX && py == behindY) return i;
+        if (px == behindX && py == behindY) {
+            if (outMoveSlot) *outMoveSlot = 0;
+            return i;
+        }
+    }
+
+    if (ow->gs->party.count <= 0) return -1;
+    const Combatant *jan = &ow->gs->party.members[0];
+
+    // Pick Jan's strongest equipped ranged weapon slot.
+    int rangedSlot = -1;
+    int rangedPow  = 0;
+    for (int s = 0; s < CREATURE_MAX_MOVES; s++) {
+        if (jan->moveIds[s] < 0) continue;
+        if (jan->moveDurability[s] == 0) continue;
+        const MoveDef *mv = GetMoveDef(jan->moveIds[s]);
+        if (!mv->isWeapon) continue;
+        if (mv->range != RANGE_RANGED) continue;
+        if (mv->power > rangedPow) { rangedPow = mv->power; rangedSlot = s; }
+    }
+    if (rangedSlot < 0) return -1;
+
+    // Ranged case — k=2..3 tiles directly behind the enemy. Require the player
+    // to be facing the enemy (same dir as enemy's facing, since looking at the
+    // enemy's back means looking the same way they do) and the line to be
+    // clear. RANGE_RANGED caps at Chebyshev 3 — see TileMoveReaches.
+    if (playerDir != -1) {
+        for (int i = 0; i < ow->enemyCount; i++) {
+            const FieldEnemy *e = &ow->enemies[i];
+            if (!e->active) continue;
+            if (e->aiState != ENEMY_IDLE) continue;
+            if (playerDir != e->dir) continue; // aiming somewhere else
+            int dx = FIELD_DIR_DX[e->dir];
+            int dy = FIELD_DIR_DY[e->dir];
+            for (int k = 2; k <= 3; k++) {
+                int bx = e->tileX - dx * k;
+                int by = e->tileY - dy * k;
+                if (px != bx || py != by) continue;
+                if (!FieldAggroLOS(&ow->map, px, py, e->tileX, e->tileY)) continue;
+                if (outMoveSlot) *outMoveSlot = rangedSlot;
+                return i;
+            }
+        }
     }
     return -1;
 }
@@ -385,10 +437,14 @@ static bool FindBattlePlacement(const FieldState *ow,
 // teleport non-Jan party members next to Jan, and call BattleBegin.
 // allyNpcIdx >= 0 means a captive-rescue — add the NPC as a bound party member.
 static void StartDungeonBattle(FieldState *ow, int seedIdx,
-                               bool preemptive, int allyNpcIdx)
+                               bool preemptive, int allyNpcIdx,
+                               int preemptiveMoveSlot,
+                               int preemptiveFieldEnemyIdx)
 {
     BattleContext *ctx = &ow->battle;
     memset(ctx, 0, sizeof(*ctx));
+    ctx->preemptiveMoveSlot   = preemptiveMoveSlot;
+    ctx->preemptiveTargetIdx  = -1; // filled in below once we know the cluster index
 
     // Aggro cluster into battle enemy slots. CombatantInit copies stats from
     // the creature def; tile position comes from the FieldEnemy.
@@ -439,6 +495,13 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
         ctx->enemies[i].tileX = fe->tileX;
         ctx->enemies[i].tileY = fe->tileY;
         ctx->enemyFieldIdx[i] = clusterIdxs[i];
+        // Map the surprise target's field index onto the cluster index so
+        // BattleBegin knows which combatant to hit. Falls through to 0 if the
+        // caller didn't specify a preemptive target.
+        if (preemptiveFieldEnemyIdx >= 0 &&
+            clusterIdxs[i] == preemptiveFieldEnemyIdx) {
+            ctx->preemptiveTargetIdx = i;
+        }
         // Snap the field sprite out of any mid-step tween so it draws where
         // the combatant actually is.
         fe->targetTileX = fe->tileX;
@@ -556,12 +619,15 @@ static int RollEnemyDrops(FieldEnemy *e, Inventory *inv)
 }
 
 // Defeat-rescue inventory penalty. Fishermen pulled you out of the water but
-// a bunch of your gear washed away. For each consumable stack of 2+, loses
+// some of your gear took a beating. For each consumable stack of 2+, loses
 // half (rounded up); singletons are a 50/50 coin flip so the lone Krill
-// Snack you were saving doesn't always evaporate. Every unequipped weapon
-// in the bag is dropped. Equipped weapons stay on the party — losing your
+// Snack you were saving doesn't always evaporate. Unequipped weapons in the
+// bag take a 25% durability hit (rounded up, min 1); they're only removed
+// if that pushes durability to 0. Equipped weapons live on the combatants,
+// not in inv->weapons, so they're untouched by this function — losing your
 // fighting kit in addition to bag loot would make the defeat loop punishing
-// instead of inconvenient. Returns total items + weapons removed.
+// instead of inconvenient. *outWeapons receives the count of weapons that
+// were damaged (not just removed).
 static int DropInventoryOnRescue(Inventory *inv, int *outItems, int *outWeapons)
 {
     int itemsLost = 0;
@@ -583,11 +649,24 @@ static int DropInventoryOnRescue(Inventory *inv, int *outItems, int *outWeapons)
             i++;
         }
     }
-    int weaponsLost = inv->weaponCount;
-    inv->weaponCount = 0;
+    int weaponsDamaged = 0;
+    for (int i = 0; i < inv->weaponCount; ) {
+        int dur = inv->weapons[i].durability;
+        int loss = (dur * 25 + 99) / 100; // ceil(dur * 0.25)
+        if (loss < 1) loss = 1;
+        inv->weapons[i].durability = dur - loss;
+        weaponsDamaged++;
+        if (inv->weapons[i].durability <= 0) {
+            for (int j = i; j < inv->weaponCount - 1; j++)
+                inv->weapons[j] = inv->weapons[j + 1];
+            inv->weaponCount--;
+        } else {
+            i++;
+        }
+    }
     if (outItems)   *outItems   = itemsLost;
-    if (outWeapons) *outWeapons = weaponsLost;
-    return itemsLost + weaponsLost;
+    if (outWeapons) *outWeapons = weaponsDamaged;
+    return itemsLost + weaponsDamaged;
 }
 
 // Battle finished — sync combatant positions back to the field, roll drops,
@@ -654,27 +733,33 @@ static void ResolveBattleEnd(FieldState *ow, int result)
 
     if (result == 2 /* defeat */) {
         // Village rescue — heal up, kick to the hub with pending dialogue.
-        int itemsLost = 0, weaponsLost = 0;
+        // The dialogue is staged through GameState (rescueDialoguePending +
+        // rescueLossMsg) because this FieldState is about to be torn down by
+        // ApplyPendingMapTransition — calling DialogueBegin on it here would
+        // be wiped on the next frame.
+        int itemsLost = 0, weaponsDamaged = 0;
         int totalLost = DropInventoryOnRescue(&ow->gs->party.inventory,
-                                              &itemsLost, &weaponsLost);
+                                              &itemsLost, &weaponsDamaged);
+        ow->gs->rescueLossPending = false;
         if (totalLost > 0) {
-            if (itemsLost > 0 && weaponsLost > 0) {
-                snprintf(gRescueLoss, RESCUE_LOSS_LEN,
-                         "In the swim back, you lost %d item%s and %d weapon%s from your bag.",
-                         itemsLost,   itemsLost   == 1 ? "" : "s",
-                         weaponsLost, weaponsLost == 1 ? "" : "s");
+            if (itemsLost > 0 && weaponsDamaged > 0) {
+                snprintf(ow->gs->rescueLossMsg, sizeof(ow->gs->rescueLossMsg),
+                         "In the swim back, you lost %d item%s from your bag and %d weapon%s took a beating.",
+                         itemsLost,      itemsLost      == 1 ? "" : "s",
+                         weaponsDamaged, weaponsDamaged == 1 ? "" : "s");
             } else if (itemsLost > 0) {
-                snprintf(gRescueLoss, RESCUE_LOSS_LEN,
+                snprintf(ow->gs->rescueLossMsg, sizeof(ow->gs->rescueLossMsg),
                          "In the swim back, you lost %d item%s from your bag.",
                          itemsLost, itemsLost == 1 ? "" : "s");
             } else {
-                snprintf(gRescueLoss, RESCUE_LOSS_LEN,
-                         "In the swim back, you lost %d weapon%s from your bag.",
-                         weaponsLost, weaponsLost == 1 ? "" : "s");
+                snprintf(ow->gs->rescueLossMsg, sizeof(ow->gs->rescueLossMsg),
+                         "In the swim back, %d weapon%s in your bag took a beating.",
+                         weaponsDamaged, weaponsDamaged == 1 ? "" : "s");
             }
-            ptrs[pageCount++] = gRescueLoss;
+            ow->gs->rescueLossPending = true;
         }
         PartyHealAll(&ow->gs->party);
+        ow->gs->rescueDialoguePending = true;
         ow->gs->hasPendingMap    = true;
         ow->gs->pendingMapId     = MAP_OVERWORLD_HUB;
         ow->gs->pendingMapSeed   = 0;
@@ -687,7 +772,9 @@ static void ResolveBattleEnd(FieldState *ow, int result)
     ow->mode = FIELD_FREE;
     memset(&ow->battle, 0, sizeof(ow->battle));
 
-    if (pageCount > 0)
+    // Defeat dialogue is staged through GameState (see above), so only fire
+    // field-level dialogue for victory/flee drop & rescue-greet pages.
+    if (result != 2 && pageCount > 0)
         DialogueBegin(&ow->dialogue, ptrs, pageCount, 40.0f);
 }
 
@@ -698,7 +785,7 @@ static void TriggerCaptiveRescueBattle(FieldState *ow, int npcIdx)
     // automatically (they're adjacent to each other by design).
     int seed = n->captorCount > 0 ? n->captorIdxs[0] : -1;
     if (seed < 0) return;
-    StartDungeonBattle(ow, seed, false, npcIdx);
+    StartDungeonBattle(ow, seed, false, npcIdx, -1, -1);
 }
 
 void FieldInit(FieldState *ow, GameState *gs)
@@ -780,6 +867,17 @@ void FieldUpdate(FieldState *ow, float dt)
             fe->targetTileX = fe->tileX;
             fe->targetTileY = fe->tileY;
             fe->moving      = false;
+            // EnemyUpdate is the only other place that refreshes onWater, and
+            // it doesn't run during FIELD_BATTLE — so a sailor that swam onto
+            // land in-battle would keep its bobbing swim animation until the
+            // fight ended. Recompute from the current tile every frame, and
+            // kick dryingFrames on the water→land transition so the visual
+            // matches the overworld behavior.
+            bool wasOnWater = fe->onWater;
+            fe->onWater = TileMapIsWater(&ow->map, fe->tileX, fe->tileY);
+            if (wasOnWater && !fe->onWater && fe->dryingFrames == 0) {
+                fe->dryingFrames = 24;
+            }
             if (!ow->battle.enemies[k].alive) fe->active = false;
         }
 
@@ -880,10 +978,14 @@ void FieldUpdate(FieldState *ow, float dt)
 
         if (TryInteractWarp(ow, tx, ty)) return;
 
-        // Surprise strike on an unaware adjacent enemy
-        int surpriseIdx = FindSurpriseTarget(ow, tx, ty);
+        // Surprise strike on an unaware enemy — melee adjacent-behind, or
+        // ranged down the same-axis line if Jan has a ranged weapon equipped.
+        int surpriseSlot = -1;
+        int surpriseIdx  = FindSurpriseTarget(ow, tx, ty, ow->player.dir,
+                                              &surpriseSlot);
         if (surpriseIdx >= 0) {
-            StartDungeonBattle(ow, surpriseIdx, true, -1);
+            StartDungeonBattle(ow, surpriseIdx, true, -1,
+                               surpriseSlot, surpriseIdx);
             return;
         }
     }
@@ -895,7 +997,7 @@ void FieldUpdate(FieldState *ow, float dt)
         if (!ow->enemies[i].active) continue;
         bool triggered = EnemyUpdate(&ow->enemies[i], &ow->map, px, py, dt, ow, i);
         if (triggered) {
-            StartDungeonBattle(ow, i, false, -1);
+            StartDungeonBattle(ow, i, false, -1, -1, -1);
             return;
         }
     }
@@ -997,7 +1099,8 @@ void FieldDraw(const FieldState *ow)
                     DrawText("Z", px, py, 20, YELLOW);
                 }
             }
-            int surpriseIdx = FindSurpriseTarget(ow, ow->player.tileX, ow->player.tileY);
+            int surpriseIdx = FindSurpriseTarget(ow, ow->player.tileX, ow->player.tileY,
+                                                 ow->player.dir, NULL);
             if (surpriseIdx >= 0) {
                 const FieldEnemy *e = &ow->enemies[surpriseIdx];
                 int px = e->tileX * tilePixels + tilePixels / 2 - 6;

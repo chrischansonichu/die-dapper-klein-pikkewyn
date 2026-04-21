@@ -24,6 +24,19 @@ static TilePos TileOf(const Combatant *c)
     return (TilePos){ c->tileX, c->tileY };
 }
 
+// Ranged weapons swung at melee distance (Chebyshev ≤ 1) do half damage — a
+// thrown shell to the face has no arc to pick up speed. Non-ranged moves are
+// pass-through. Always floors to at least 1 so a glancing hit still registers.
+static int ApplyRangeFalloff(int dmg, const Combatant *actor,
+                             const Combatant *target, const MoveDef *mv)
+{
+    if (!mv || mv->range != RANGE_RANGED) return dmg;
+    if (TileChebyshev(TileOf(actor), TileOf(target)) > 1) return dmg;
+    int reduced = dmg / 2;
+    if (reduced < 1) reduced = 1;
+    return reduced;
+}
+
 static Combatant *GetCurrentActor(BattleContext *ctx)
 {
     if (ctx->currentTurn >= ctx->turnCount) return NULL;
@@ -201,32 +214,47 @@ static BattleState TrySelectMove(BattleContext *ctx, const TileMap *m, int slot)
     const MoveDef *mv = GetMoveDef(actor->moveIds[slot]);
     ctx->selectedMove = slot;
 
+    // Remember this slot for the player actor so the move-menu highlight
+    // returns here next turn instead of drifting to whatever slot another
+    // party member used.
+    if (!CurrentActorIsEnemy(ctx)) {
+        int idx = CurrentActorIdx(ctx);
+        if (idx >= 0 && idx < PARTY_MAX) ctx->partyMoveCursor[idx] = slot;
+    }
+
     if (mv->range == RANGE_AOE || mv->range == RANGE_SELF) {
         ctx->targetTile = TileOf(actor);
         return BS_EXECUTE;
     }
 
-    // Seed the target cursor on the nearest living opposite-side combatant.
+    // Seed the target cursor on the nearest in-range living opponent. Filtering
+    // by TileMoveReaches (not just Chebyshev) ensures the cursor can never start
+    // outside the move's reach — the cursor-step clamp below does the rest, so
+    // the player can never accept an unreachable target by pressing Z.
+    // If nothing is in range, fall back to the actor's own tile (d=0, always
+    // reachable for any non-SELF move).
     bool actorIsEn = CurrentActorIsEnemy(ctx);
-    TilePos best   = TileOf(actor);
-    int bestDist   = 0x7fffffff;
+    TilePos actorTile = TileOf(actor);
+    TilePos best      = actorTile;
+    int bestDist      = 0x7fffffff;
     if (actorIsEn) {
         for (int i = 0; i < ctx->party->count; i++) {
             const Combatant *c = &ctx->party->members[i];
             if (!c->alive) continue;
-            int d = TileChebyshev(TileOf(actor), TileOf(c));
+            if (!TileMoveReaches(m, actorTile, TileOf(c), mv->range)) continue;
+            int d = TileChebyshev(actorTile, TileOf(c));
             if (d < bestDist) { bestDist = d; best = TileOf(c); }
         }
     } else {
         for (int i = 0; i < ctx->enemyCount; i++) {
             const Combatant *c = &ctx->enemies[i];
             if (!c->alive) continue;
-            int d = TileChebyshev(TileOf(actor), TileOf(c));
+            if (!TileMoveReaches(m, actorTile, TileOf(c), mv->range)) continue;
+            int d = TileChebyshev(actorTile, TileOf(c));
             if (d < bestDist) { bestDist = d; best = TileOf(c); }
         }
     }
     ctx->targetTile = best;
-    (void)m;
     return BS_TARGET_SELECT;
 }
 
@@ -377,6 +405,7 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
     }
 
     int dmg = CalculateDamage(actor, target, mv);
+    dmg = ApplyRangeFalloff(dmg, actor, target, mv);
     if (friendly) {
         dmg = dmg / 10;
         if (dmg < 1) dmg = 1;
@@ -542,26 +571,37 @@ void BattleBegin(BattleContext *ctx, Party *party, bool preemptive)
     ctx->preemptiveAttack = preemptive;
     ctx->menu             = (BattleMenuState){0};
     ctx->anim             = (BattleAnim){0};
+    for (int i = 0; i < PARTY_MAX; i++) ctx->partyMoveCursor[i] = 0;
 
     BuildTurnOrder(ctx);
 
     if (preemptive && party->count > 0 && ctx->enemyCount > 0) {
-        Combatant *jan    = &party->members[0];
-        Combatant *target = &ctx->enemies[0];
+        Combatant *jan = &party->members[0];
+        int targetIdx = ctx->preemptiveTargetIdx;
+        if (targetIdx < 0 || targetIdx >= ctx->enemyCount) targetIdx = 0;
+        Combatant *target = &ctx->enemies[targetIdx];
+        int slot = ctx->preemptiveMoveSlot;
+        if (slot < 0 || slot >= CREATURE_MAX_MOVES || jan->moveIds[slot] < 0)
+            slot = 0; // Tackle fallback
         if (jan->alive && target->alive) {
-            const MoveDef *tackle = GetMoveDef(jan->moveIds[0]);
-            int dmg = CalculateDamage(jan, target, tackle);
+            const MoveDef *mv = GetMoveDef(jan->moveIds[slot]);
+            int dmg = CalculateDamage(jan, target, mv);
+            dmg = ApplyRangeFalloff(dmg, jan, target, mv);
             target->hp -= dmg;
+            // Consumable-weapon durability is spent on the sneak too, matching
+            // how the regular FIGHT path treats weapon use.
+            if (jan->moveDurability[slot] > 0) jan->moveDurability[slot]--;
+            const char *verb = (mv->range == RANGE_RANGED) ? "sniped" : "ambushed";
             if (target->hp <= 0) {
                 target->hp    = 0;
                 target->alive = false;
                 snprintf(ctx->narration, NARRATION_LEN,
-                         "Surprise strike! %s dealt %d and took down %s!",
-                         jan->name, dmg, target->name);
+                         "Surprise %s! %s's %s dealt %d and took down %s!",
+                         verb, jan->name, mv->name, dmg, target->name);
             } else {
                 snprintf(ctx->narration, NARRATION_LEN,
-                         "Surprise strike! %s dealt %d damage to %s!",
-                         jan->name, dmg, target->name);
+                         "Surprise %s! %s's %s dealt %d damage to %s!",
+                         verb, jan->name, mv->name, dmg, target->name);
             }
         }
     }
@@ -610,6 +650,11 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
             // reposition, they pick MOVE (which spends a movement budget).
             ctx->moveBudget    = 0;
             ctx->movedThisTurn = false;
+            // Restore this combatant's remembered move-menu cursor so the
+            // highlight doesn't carry over from whoever acted last turn.
+            if (te->idx >= 0 && te->idx < PARTY_MAX) {
+                ctx->menu.moveCursor = ctx->partyMoveCursor[te->idx];
+            }
             ctx->state         = BS_ACTION_MENU;
         }
         break;
@@ -710,7 +755,18 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
     }
 
     case BS_TARGET_SELECT: {
-        // Tile cursor — clamp to map bounds.
+        // Tile cursor — clamp to map bounds AND to tiles the selected move
+        // can actually reach from the actor. Without this the player can
+        // wander the cursor across the whole map and get a silent reject
+        // on confirm; blocking the step at the reach boundary is clearer.
+        Combatant *actor = GetCurrentActor(ctx);
+        const MoveDef *mv = NULL;
+        if (actor && ctx->selectedMove >= 0 &&
+            ctx->selectedMove < CREATURE_MAX_MOVES &&
+            actor->moveIds[ctx->selectedMove] >= 0) {
+            mv = GetMoveDef(actor->moveIds[ctx->selectedMove]);
+        }
+
         int dx = 0, dy = 0;
         if (IsKeyPressed(KEY_UP)    || IsKeyPressed(KEY_W)) dy = -1;
         else if (IsKeyPressed(KEY_DOWN)  || IsKeyPressed(KEY_S)) dy = 1;
@@ -720,7 +776,14 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
         if (dx != 0 || dy != 0) {
             int nx = ctx->targetTile.x + dx;
             int ny = ctx->targetTile.y + dy;
-            if (nx >= 0 && ny >= 0 && nx < map->width && ny < map->height) {
+            bool inBounds = nx >= 0 && ny >= 0 &&
+                            nx < map->width && ny < map->height;
+            bool inRange = true;
+            if (inBounds && actor && mv) {
+                inRange = TileMoveReaches(map, TileOf(actor),
+                                          (TilePos){nx, ny}, mv->range);
+            }
+            if (inBounds && inRange) {
                 ctx->targetTile.x = nx;
                 ctx->targetTile.y = ny;
             }

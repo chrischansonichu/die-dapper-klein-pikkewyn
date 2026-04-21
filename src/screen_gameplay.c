@@ -123,7 +123,18 @@ static void ApplyPendingMapTransition(void)
 
     if (gGameState.rescueDialoguePending) {
         gGameState.rescueDialoguePending = false;
-        DialogueBegin(&gField.dialogue, gRescueMsg, RESCUE_MSG_PAGES, 40.0f);
+        // Combine the rescue flavor pages with an optional trailing "what you
+        // lost" page staged by the battle-defeat handler. Pages array must
+        // outlive DialogueBegin — dialogue copies text per-page, so static
+        // strings + a pointer into gGameState both work.
+        const char *pages[RESCUE_MSG_PAGES + 1];
+        int n = 0;
+        for (int i = 0; i < RESCUE_MSG_PAGES; i++) pages[n++] = gRescueMsg[i];
+        if (gGameState.rescueLossPending) {
+            pages[n++] = gGameState.rescueLossMsg;
+            gGameState.rescueLossPending = false;
+        }
+        DialogueBegin(&gField.dialogue, pages, n, 40.0f);
     }
 
     // Autosave at every map boundary — warps, floor changes, and the rescue
