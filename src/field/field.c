@@ -282,14 +282,17 @@ static bool FieldEnemyIsCaptor(const FieldState *ow, int enemyIdx)
 }
 
 // Fill outIdxs with active enemy indices that are within FIELD_AGGRO_RADIUS
-// (Chebyshev) of the INITIAL battle participants (the triggering enemy and
-// every party member on the field) AND have strict line of sight to one of
-// them. Anchors do NOT expand — a recruited enemy does not pull in further
+// (Chebyshev) of the initial battle trigger AND have strict line of sight to
+// it. Anchors are the seed enemy's tile and the player's current tile — the
+// only two positions that actually exist on the field (followers have no
+// field sprite; their Combatant tileX/Y is stale until StartDungeonBattle
+// places them, so reading it here would use leftover data from the previous
+// battle). Anchors do NOT expand — a recruited enemy does not pull in more
 // enemies around it, so aggro can't daisy-chain across the map.
 // Captor enemies (guarding a captive NPC) are skipped unless the seed itself
-// is a captor — i.e., a regular fight never drags captors into it, but a
-// captive-rescue fight still pulls in all captors of that scene (they're
-// adjacent to the seed by design).
+// is a captor: a regular fight never drags captors in, but a captive-rescue
+// fight still pulls in all captors of that scene (adjacent to the seed by
+// design) plus any regular enemies within sight.
 static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
                                   int *outIdxs, int maxOut)
 {
@@ -300,26 +303,20 @@ static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
 
     bool seedIsCaptor = FieldEnemyIsCaptor(ow, seedIdx);
 
-    int anchorX[1 + PARTY_MAX];
-    int anchorY[1 + PARTY_MAX];
+    int anchorX[2];
+    int anchorY[2];
     int anchorCount = 0;
-
     anchorX[anchorCount] = ow->enemies[seedIdx].tileX;
     anchorY[anchorCount] = ow->enemies[seedIdx].tileY;
     anchorCount++;
-    for (int i = 0; i < ow->gs->party.count; i++) {
-        const Combatant *mb = &ow->gs->party.members[i];
-        anchorX[anchorCount] = mb->tileX;
-        anchorY[anchorCount] = mb->tileY;
-        anchorCount++;
-    }
+    anchorX[anchorCount] = ow->player.tileX;
+    anchorY[anchorCount] = ow->player.tileY;
+    anchorCount++;
 
     for (int i = 0; i < ow->enemyCount && written < maxOut; i++) {
         if (i == seedIdx) continue;
         if (!ow->enemies[i].active) continue;
         bool iIsCaptor = FieldEnemyIsCaptor(ow, i);
-        // Regular fight: never drag in a captor. Captive-rescue: allow
-        // fellow captors (same scene) + regular enemies in sightline.
         if (!seedIsCaptor && iIsCaptor) continue;
         const FieldEnemy *e = &ow->enemies[i];
         for (int k = 0; k < anchorCount; k++) {
