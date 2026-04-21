@@ -137,6 +137,12 @@ static void AddHubNpcs(MapBuildContext *ctx)
         Npc *bank = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(bank, 9, 11, 2, NPC_FOOD_BANK);
     }
+
+    // Scribe — writes the player's progress to disk on demand.
+    if (*ctx->npcCount < ctx->npcMax) {
+        Npc *scribe = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(scribe, 13, 6, 0, NPC_SCRIBE);
+    }
 }
 
 void BuildOverworldHub(MapBuildContext *ctx)

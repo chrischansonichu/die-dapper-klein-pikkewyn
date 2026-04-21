@@ -3,6 +3,7 @@
 #include "map_source.h"
 #include "village.h"
 #include "../state/game_state.h"
+#include "../state/save.h"
 #include "../data/item_defs.h"
 #include "../data/move_defs.h"
 #include "../data/creature_defs.h"
@@ -77,6 +78,24 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
 
     if (n->type == NPC_KEEPER) return KeeperInteract(ow->gs, pages, scratch);
     // NPC_FOOD_BANK is handled by a dedicated picker UI (see BeginNpcInteraction).
+
+    if (n->type == NPC_SCRIBE) {
+        bool ok = SaveGame(ow->gs, ow->player.tileX, ow->player.tileY, ow->player.dir);
+        if (ok) {
+            snprintf(scratch[0], NPC_DIALOGUE_LEN,
+                     "I've recorded your journey in the village log.");
+            snprintf(scratch[1], NPC_DIALOGUE_LEN,
+                     "Rest easy — you can pick up here next time.");
+        } else {
+            snprintf(scratch[0], NPC_DIALOGUE_LEN,
+                     "My quill slipped — the log wouldn't take.");
+            snprintf(scratch[1], NPC_DIALOGUE_LEN,
+                     "Come see me again in a moment.");
+        }
+        pages[0] = scratch[0];
+        pages[1] = scratch[1];
+        return 2;
+    }
 
     if (n->type == NPC_SEAL) {
         if (NpcCurrentlyCaptive(n, ow->enemies, ow->enemyCount)) {
@@ -877,12 +896,22 @@ void FieldDraw(const FieldState *ow)
 
     if (ow->warpPromptIdx >= 0) {
         const FieldWarp *w = &ow->warps[ow->warpPromptIdx];
-        const char *title = (w->targetMapId == MAP_OVERWORLD_HUB)
-                              ? "Return to the village?"
-                              : "Continue to the next area?";
-        const char *warn  = (w->targetMapId == MAP_OVERWORLD_HUB)
-                              ? ""
-                              : "You won't be able to return.";
+        // Hub → F1 is the dungeon entrance — no "point of no return" warning,
+        // since that's the normal way into the game. Deeper descents (F1→F2,
+        // proc→proc, proc→F9) do warn. Hub-return shows its own friendly
+        // line.
+        const char *title;
+        const char *warn;
+        if (w->targetMapId == MAP_OVERWORLD_HUB) {
+            title = "Return to the village?";
+            warn  = "";
+        } else if (w->targetMapId == MAP_HARBOR_F1) {
+            title = "Enter the harbor?";
+            warn  = "";
+        } else {
+            title = "Continue to the next area?";
+            warn  = "You won't be able to return.";
+        }
         int sw = GetScreenWidth(), sh = GetScreenHeight();
         int boxW = 560, boxH = 140;
         int bx = (sw - boxW) / 2;

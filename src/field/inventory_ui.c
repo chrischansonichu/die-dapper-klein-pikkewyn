@@ -209,13 +209,13 @@ static void DrawItemsTab(const InventoryUI *ui, const Party *party)
                 ? ui->memberCursor : 0;
     const Combatant *active = &party->members[idx];
     int hbx = 500, hby = 68;
-    DrawText(TextFormat("%s  HP %d/%d  ([ / ] switch)",
+    DrawText(TextFormat("%s  HP %d/%d  ([ or ] switch)",
                         active->name, active->hp, active->maxHp),
              hbx, hby, 14, WHITE);
     DrawRectangle(hbx, hby + 18, 200, 8, (Color){30, 30, 30, 255});
     float pct = (float)active->hp / (float)active->maxHp;
     DrawRectangle(hbx, hby + 18, (int)(200 * pct), 8, (Color){40, 200, 40, 255});
-    DrawText("Z: Use  [ / ]: Switch Member  X/I: Close", 60, 420, 14, GRAY);
+    DrawText("Z: Use    [ or ]: Switch Member    X/I: Close", 60, 420, 14, GRAY);
 }
 
 static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
@@ -227,7 +227,7 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
 
     // Equipped on left
     int colX = 60, y = 95;
-    DrawText(TextFormat("%s's Moves  ([ / ] switch)", led->name), colX, y, 18, WHITE);
+    DrawText(TextFormat("%s's Moves  ([ or ] switch)", led->name), colX, y, 18, WHITE);
     y += 26;
     // Fixed 6-slot layout with group headers between rows.
     static const char *groupTitle[MOVE_GROUP_COUNT] = {
@@ -279,8 +279,8 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
         DrawText(buf, bagX, y, 14, WHITE);
         y += 24;
     }
-    DrawText(ui->equippedFocus ? "Z: Unequip  Right: Bag  [ / ]: Switch Member  X/I: Close"
-                               : "Z: Equip    Left: Equipped  [ / ]: Switch Member  X/I: Close",
+    DrawText(ui->equippedFocus ? "Z: Unequip  Right: Bag  [ or ]: Switch Member  X/I: Close"
+                               : "Z: Equip    Left: Equipped  [ or ]: Switch Member  X/I: Close",
              60, 420, 14, GRAY);
 }
 

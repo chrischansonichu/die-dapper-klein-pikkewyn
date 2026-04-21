@@ -939,9 +939,17 @@ void BattleDrawUI(const BattleContext *ctx)
     case BS_ITEM_SELECT:
         BattleMenuDrawItemSelect(&ctx->menu, &ctx->party->inventory);
         break;
-    case BS_TARGET_SELECT:
-        BattleMenuDrawNarration("Target: Arrows | Z=Confirm | X=Back");
+    case BS_TARGET_SELECT: {
+        // Don't draw the bottom narration panel — the target cursor lives in
+        // the world, and when the actor/target is near the bottom of the
+        // screen the panel hides them. Render a thin top-screen hint strip
+        // instead so the player can see the whole grid.
+        const char *hint = "Target: Arrows | Z=Confirm | X=Back";
+        int th = 22;
+        DrawRectangle(0, 0, GetScreenWidth(), th, (Color){10, 10, 30, 180});
+        DrawText(hint, 10, 3, 16, WHITE);
         break;
+    }
     case BS_NARRATION:
     case BS_PREEMPTIVE_NARRATION:
         BattleMenuDrawNarration(ctx->narration);

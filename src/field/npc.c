@@ -157,6 +157,14 @@ static void DrawFoodBank(int px, int py, int sz, int dir) {
                       (Color){ 70, 120, 200, 255});
 }
 
+static void DrawScribe(int px, int py, int sz, int dir) {
+    // Parchment-belly + burgundy hat-band — the village archivist who saves
+    // the player's journey.
+    DrawPenguinPerson(px, py, sz, dir,
+                      (Color){225, 210, 175, 255},
+                      (Color){130,  40,  60, 255});
+}
+
 // Cape fur seal — warm brown with a lighter belly
 static void DrawSeal(int px, int py, int sz, int dir)
 {
@@ -228,6 +236,7 @@ void NpcDraw(const Npc *n, Camera2D cam)
         case NPC_SEAL:          DrawSeal(px, py, sz, n->dir);         break;
         case NPC_KEEPER:        DrawKeeper(px, py, sz, n->dir);       break;
         case NPC_FOOD_BANK:     DrawFoodBank(px, py, sz, n->dir);     break;
+        case NPC_SCRIBE:        DrawScribe(px, py, sz, n->dir);       break;
     }
 }
 
