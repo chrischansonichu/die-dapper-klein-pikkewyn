@@ -349,6 +349,7 @@ static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
                                   int *outIdxs, int maxOut)
 {
     if (seedIdx < 0 || seedIdx >= ow->enemyCount) return 0;
+    if (!ow->enemies[seedIdx].active) return 0;
 
     int written = 0;
     if (written < maxOut) outIdxs[written++] = seedIdx;
@@ -781,9 +782,18 @@ static void ResolveBattleEnd(FieldState *ow, int result)
 static void TriggerCaptiveRescueBattle(FieldState *ow, int npcIdx)
 {
     Npc *n = &ow->npcs[npcIdx];
-    // Pick the first captor as the seed so the aggro cluster pulls the others
-    // automatically (they're adjacent to each other by design).
-    int seed = n->captorCount > 0 ? n->captorIdxs[0] : -1;
+    // Pick the first *active* captor as the seed. Using captorIdxs[0] blindly
+    // is wrong once a prior rescue attempt has killed the first captor but
+    // left the other alive — the dead enemy would seed the cluster (aggro
+    // always includes the seed) and appear as an invisible-but-fighting ghost.
+    int seed = -1;
+    for (int i = 0; i < n->captorCount; i++) {
+        int ei = n->captorIdxs[i];
+        if (ei < 0 || ei >= ow->enemyCount) continue;
+        if (!ow->enemies[ei].active) continue;
+        seed = ei;
+        break;
+    }
     if (seed < 0) return;
     StartDungeonBattle(ow, seed, false, npcIdx, -1, -1);
 }
