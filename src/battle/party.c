@@ -42,6 +42,16 @@ bool PartyAllFainted(const Party *p)
     return true;
 }
 
+bool PartyIsDefeated(const Party *p)
+{
+    // Defeat condition: Jan (slot 0, the protagonist) going down ends the
+    // run — we don't want the player controlling a seal solo after losing
+    // the main character. Empty parties count as defeat too.
+    if (p->count == 0) return true;
+    if (!p->members[0].alive) return true;
+    return PartyAllFainted(p);
+}
+
 Combatant *PartyGetActive(Party *p)
 {
     if (p->activeIndex < p->count && p->members[p->activeIndex].alive)

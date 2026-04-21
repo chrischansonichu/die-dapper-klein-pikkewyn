@@ -29,6 +29,10 @@ void PartyAddMember(Party *p, int creatureId, int level);
 // Returns true on success.
 bool PartyRemoveMember(Party *p, int idx);
 bool PartyAllFainted(const Party *p);
+// Defeat condition for the run: true if Jan (slot 0) is down OR the whole
+// party is fainted. Other members can fall and the fight keeps going, but
+// losing the protagonist ends the encounter and triggers the village rescue.
+bool PartyIsDefeated(const Party *p);
 // Returns pointer to first living member, or NULL
 Combatant *PartyGetActive(Party *p);
 // Restore every member to full HP (used by the defeat-rescue path — the

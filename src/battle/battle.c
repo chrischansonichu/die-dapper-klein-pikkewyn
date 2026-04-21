@@ -737,7 +737,7 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
             }
             break;
         }
-        if (PartyAllFainted(ctx->party)) { ctx->state = BS_DEFEAT; break; }
+        if (PartyIsDefeated(ctx->party)) { ctx->state = BS_DEFEAT; break; }
         AdvanceTurn(ctx);
         ctx->state = BS_TURN_START;
         break;

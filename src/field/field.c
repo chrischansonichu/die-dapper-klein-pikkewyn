@@ -272,13 +272,20 @@ static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
 // BFS outward from (cx, cy) for a tile that is walkable in the field sense
 // (non-solid, non-warp) and not already claimed by Jan, an enemy-in-battle, or
 // a previously-placed party tile. Returns true on success.
+// Place a follower on a walkable tile adjacent (or nearby) to Jan. Within
+// each expanding ring, prefer the candidate closest to (preferTX, preferTY)
+// — pass the enemy centroid so the seal spawns on the fight side of Jan
+// instead of always popping out at the up-left diagonal (the lexicographic
+// first ring cell).
 static bool FindBattlePlacement(const FieldState *ow,
                                 int cx, int cy,
+                                int preferTX, int preferTY,
                                 const int *avoidX, const int *avoidY, int avoidCount,
                                 int *outX, int *outY)
 {
-    // Rings of increasing Chebyshev distance.
     for (int r = 0; r <= 6; r++) {
+        int bestX = 0, bestY = 0;
+        long bestD = -1;
         for (int dy = -r; dy <= r; dy++) {
             for (int dx = -r; dx <= r; dx++) {
                 if (abs(dx) != r && abs(dy) != r) continue; // ring only
@@ -293,10 +300,20 @@ static bool FindBattlePlacement(const FieldState *ow,
                     if (avoidX[i] == x && avoidY[i] == y) { taken = true; break; }
                 }
                 if (taken) continue;
-                *outX = x;
-                *outY = y;
-                return true;
+                long ddx = x - preferTX;
+                long ddy = y - preferTY;
+                long d = ddx * ddx + ddy * ddy;
+                if (bestD < 0 || d < bestD) {
+                    bestD = d;
+                    bestX = x;
+                    bestY = y;
+                }
             }
+        }
+        if (bestD >= 0) {
+            *outX = bestX;
+            *outY = bestY;
+            return true;
         }
     }
     return false;
@@ -389,6 +406,19 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
         avoidY[avoidCount] = ctx->enemies[i].tileY;
         avoidCount++;
     }
+    // Enemy centroid — followers should spawn between Jan and the fight, not
+    // behind him. Fall back to Jan's tile if (somehow) the cluster is empty.
+    int preferTX = ow->player.tileX;
+    int preferTY = ow->player.tileY;
+    if (clusterCount > 0) {
+        long sx = 0, sy = 0;
+        for (int i = 0; i < clusterCount; i++) {
+            sx += ctx->enemies[i].tileX;
+            sy += ctx->enemies[i].tileY;
+        }
+        preferTX = (int)(sx / clusterCount);
+        preferTY = (int)(sy / clusterCount);
+    }
     for (int i = 0; i < ow->gs->party.count; i++) {
         Combatant *m = &ow->gs->party.members[i];
         if (i == 0) {
@@ -412,6 +442,7 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
         }
         int px, py;
         if (FindBattlePlacement(ow, ow->player.tileX, ow->player.tileY,
+                                preferTX, preferTY,
                                 avoidX, avoidY, avoidCount, &px, &py)) {
             m->tileX = px;
             m->tileY = py;
