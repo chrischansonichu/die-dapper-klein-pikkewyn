@@ -2,14 +2,16 @@
 #include <string.h>
 #include <math.h>
 
-// Tile colors for the procedural tileset
+// Tile colors for the procedural tileset. These are the "average" read a
+// player gets from a tile; TilesetBuild bakes directional shading and
+// per-pixel jitter on top for texture.
 static const Color TILE_COLORS[TILE_COUNT] = {
-    {15,  30,  80,  255},  // OCEAN    - deep blue
-    {30,  80,  160, 255},  // SHALLOW  - mid blue
-    {210, 190, 130, 255},  // SAND     - sandy yellow
-    {100, 70,  40,  255},  // DOCK     - brown wood
-    {80,  80,  90,  255},  // ROCK     - dark gray
-    {60,  140, 60,  255},  // GRASS    - green
+    { 18,  42,  95, 255},  // OCEAN    - deeper blue with a touch of warmth
+    { 58, 120, 180, 255},  // SHALLOW  - mid blue
+    {214, 188, 130, 255},  // SAND     - warm sandy tan
+    {118,  80,  45, 255},  // DOCK     - stained brown plank
+    { 96,  96, 104, 255},  // ROCK     - cool stone gray
+    { 72, 146,  66, 255},  // GRASS    - sunlit green
 };
 
 // Per-tile default flags
@@ -32,51 +34,148 @@ static unsigned HashTile(int x, int y, int f)
     return h;
 }
 
+// 0..1 hash for tile texture jitter. Thin wrapper over HashTile so the
+// tileset baker and the runtime overlay share the same pattern.
+static float Hash01(int x, int y, int salt)
+{
+    return (float)(HashTile(x, y, salt) & 0xFFFF) / 65535.0f;
+}
+
+static inline unsigned char ClampByte(int v)
+{
+    if (v < 0)   return 0;
+    if (v > 255) return 255;
+    return (unsigned char)v;
+}
+
+static inline Color ShadeColor(Color base, int delta)
+{
+    return (Color){ ClampByte(base.r + delta),
+                    ClampByte(base.g + delta),
+                    ClampByte(base.b + delta),
+                    base.a };
+}
+
+// Bake a single pixel of tile `t` at local (x, y). Split out so each tile
+// kind reads as its own recipe and TilesetBuild stays a simple loop.
+static Color TilePixel(int t, int x, int y)
+{
+    Color c = TILE_COLORS[t];
+
+    switch (t) {
+        case TILE_OCEAN:
+        case TILE_SHALLOW: {
+            // Subtle top-to-bottom shade so the atlas frame has depth even
+            // before the animated wave overlay kicks in. Ridges are kept
+            // light so foam/crest lines in TileMapDraw can sit on top.
+            int shade = (y - TILE_SIZE / 2) / 3; // darker as y grows
+            c = ShadeColor(c, -shade);
+            bool ridge = ((y + x / 4) % 5) == 0;
+            if (ridge)               c = ShadeColor(c, +22);
+            else if ((x ^ y) & 1)    c = ShadeColor(c, -6);
+            // Occasional bright speck for a hint of chop.
+            if (Hash01(x, y, 2) < 0.006f) c = (Color){200, 225, 245, 255};
+            break;
+        }
+        case TILE_SAND: {
+            // Warm tonal noise — grains of two shades mixed in — plus
+            // occasional darker granule. Subtle so runtime overlays (foam,
+            // shells, seaweed) still pop against it.
+            float n = Hash01(x, y, 1);
+            int jitter = (int)(n * 16.0f) - 8;
+            c = (Color){ ClampByte(c.r + jitter),
+                         ClampByte(c.g + jitter - 2),
+                         ClampByte(c.b + jitter - 5),
+                         255 };
+            if (n < 0.04f) c = (Color){168, 140,  88, 255};
+            else if (n > 0.96f) c = (Color){238, 218, 170, 255};
+            break;
+        }
+        case TILE_DOCK: {
+            // Vertical wood grain with plank seams every 5 rows. Per-plank
+            // tonal offset so adjacent planks read distinctly; vertical
+            // streaks bake in the grain.
+            int plank = y / 5;
+            int within = y % 5;
+            float plankNoise = Hash01(0, plank, 3);
+            int plankShift = (int)(plankNoise * 16.0f) - 8;
+            c = ShadeColor(c, plankShift);
+            if (within == 0) {
+                c = ShadeColor(c, -28); // dark seam between planks
+            } else if (within == 4) {
+                c = ShadeColor(c, -10); // soft shadow under plank lip
+            }
+            // Grain streaks — darker vertical lines.
+            float grain = Hash01(x, 0, 4);
+            if (grain < 0.18f) c = ShadeColor(c, -10);
+            else if (grain > 0.92f) c = ShadeColor(c, +8);
+            // Subtle knot: rare darker dot.
+            if (Hash01(x, y, 5) < 0.01f) c = ShadeColor(c, -22);
+            break;
+        }
+        case TILE_ROCK: {
+            // 8x8 stone blocks laid in offset courses (top row flush, bottom
+            // row shifted 4px). Dark mortar between, light bevel on top row
+            // of each block, shadow on the bottom row, and per-block tonal
+            // jitter so the wall doesn't look tiled.
+            int by = y / 8;               // 0 (top) or 1 (bottom) block row
+            int blockOffset = (by == 1) ? 4 : 0;
+            int localX = (x + blockOffset) % 8;
+            int localY = y % 8;
+            int bx = (x + blockOffset) / 8;
+            float blockNoise = Hash01(bx, by, 6);
+            int blockShift = (int)(blockNoise * 22.0f) - 11;
+            c = ShadeColor(c, blockShift);
+            // Mortar grout (2px wide via localX == 0 OR 7 / localY == 0 OR 7).
+            if (localX == 0 || localY == 0) {
+                c = ShadeColor(c, -40);
+            } else if (localY == 1) {
+                c = ShadeColor(c, +28); // top-edge highlight
+            } else if (localY == 7) {
+                c = ShadeColor(c, -24); // bottom-edge shadow
+            } else if (localX == 1) {
+                c = ShadeColor(c, +12); // left-edge soft light
+            } else if (localX == 7) {
+                c = ShadeColor(c, -14); // right-edge soft shadow
+            }
+            // Per-pixel mottle: scattered darker speckles + occasional chip.
+            float sp = Hash01(x, y, 7);
+            if (sp < 0.07f)      c = ShadeColor(c, -16);
+            else if (sp > 0.96f) c = ShadeColor(c, +10);
+            break;
+        }
+        case TILE_GRASS: {
+            // Green base with per-pixel tonal noise and thin darker blades
+            // hinted in every few columns.
+            float n = Hash01(x, y, 8);
+            int jitter = (int)(n * 22.0f) - 11;
+            c = (Color){ ClampByte(c.r + jitter - 6),
+                         ClampByte(c.g + jitter + 6),
+                         ClampByte(c.b + jitter - 6),
+                         255 };
+            // Vertical blade strokes on sparse columns.
+            float col = Hash01(x, 0, 9);
+            if (col < 0.18f && (y & 1)) c = ShadeColor(c, -14);
+            // Occasional small flower: bright dot, very rare.
+            if (Hash01(x, y, 10) < 0.004f) {
+                c = (Color){240, 235, 120, 255};
+            }
+            break;
+        }
+    }
+    return c;
+}
+
 Texture2D TilesetBuild(void)
 {
-    // One row of TILE_COUNT tiles
     const int W = TILE_SIZE * TILE_COUNT;
     const int H = TILE_SIZE;
     Image img = GenImageColor(W, H, (Color){0, 0, 0, 255});
 
     for (int t = 0; t < TILE_COUNT; t++) {
-        Color base = TILE_COLORS[t];
         for (int y = 0; y < TILE_SIZE; y++) {
             for (int x = 0; x < TILE_SIZE; x++) {
-                Color c = base;
-
-                // Water tiles: add animated ripple look (use frame 0 for atlas)
-                if (t == TILE_OCEAN || t == TILE_SHALLOW) {
-                    bool ridge = ((y + x / 4) % 4) == 0;
-                    if (ridge) {
-                        c.r = (unsigned char)(c.r + 40 > 255 ? 255 : c.r + 40);
-                        c.g = (unsigned char)(c.g + 40 > 255 ? 255 : c.g + 40);
-                        c.b = (unsigned char)(c.b + 40 > 255 ? 255 : c.b + 40);
-                    } else if ((x ^ y) & 1) {
-                        c.r = (unsigned char)(c.r > 10 ? c.r - 10 : 0);
-                        c.g = (unsigned char)(c.g > 10 ? c.g - 10 : 0);
-                        c.b = (unsigned char)(c.b > 10 ? c.b - 10 : 0);
-                    }
-                    // Sparse sparkle
-                    if ((HashTile(x, y, 0) & 0x3FF) == 0 && (y % 6 == 0)) {
-                        c = (Color){180, 220, 255, 255};
-                    }
-                }
-
-                // Dock tile: wood plank lines
-                if (t == TILE_DOCK && y % 5 == 0) {
-                    c.r = (unsigned char)(c.r > 15 ? c.r - 15 : 0);
-                    c.g = (unsigned char)(c.g > 10 ? c.g - 10 : 0);
-                }
-
-                // Rock tile: subtle texture
-                if (t == TILE_ROCK && ((x + y) % 3 == 0)) {
-                    c.r = (unsigned char)(c.r + 20 > 255 ? 255 : c.r + 20);
-                    c.g = (unsigned char)(c.g + 20 > 255 ? 255 : c.g + 20);
-                    c.b = (unsigned char)(c.b + 20 > 255 ? 255 : c.b + 20);
-                }
-
-                ImageDrawPixel(&img, t * TILE_SIZE + x, y, c);
+                ImageDrawPixel(&img, t * TILE_SIZE + x, y, TilePixel(t, x, y));
             }
         }
     }
