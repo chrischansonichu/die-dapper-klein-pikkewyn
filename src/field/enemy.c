@@ -320,6 +320,14 @@ void EnemyDraw(const FieldEnemy *e)
         fpx += sinf((float)e->dryingFrames * 0.9f) * 2.0f;
     }
 
+    // Idle bob — sailors breathe while patrolling / during battle action
+    // menus. Phase-offset per tile so neighboring sailors don't sync.
+    if (!e->moving && e->dryingFrames == 0) {
+        float phase = (float)GetTime() * 2.2f +
+                      (float)e->tileX * 0.7f + (float)e->tileY * 1.3f;
+        fpy += sinf(phase) * 0.9f;
+    }
+
     float sz   = (float)tile;
     float cx   = fpx + sz * 0.5f;
     float top  = fpy;

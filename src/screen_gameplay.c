@@ -34,7 +34,7 @@ void GameplayRequestLoadGame(void) { gEntryMode = ENTRY_LOAD; }
 // Rescue dialogue — shown after a battle-defeat hub rescue transition.
 #define RESCUE_MSG_PAGES 2
 static const char *gRescueMsg[RESCUE_MSG_PAGES] = {
-    "A fisherman pulled you out of the water and carried you back to the village.",
+    "We found you floating in the water and carried you back to the village.",
     "You're safe. Rest up, gather your courage, and head back when you're ready.",
 };
 

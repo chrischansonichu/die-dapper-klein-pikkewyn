@@ -168,7 +168,7 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
                 DrawRectangle(bx, by, colW, btnH, bg);
                 DrawRectangleLines(bx, by, colW, btnH, (Color){70, 70, 100, 255});
                 DrawText(hotkeyStr, bx + 4, by + 4, 10, (Color){70, 80, 110, 255});
-                DrawText("—", bx + colW / 2 - 4, by + 10, 18, (Color){80, 80, 110, 255});
+                DrawText("--", bx + colW / 2 - 6, by + 10, 18, (Color){80, 80, 110, 255});
                 continue;
             }
 

@@ -198,7 +198,7 @@ static void DrawStatsTab(const StatsUI *ui, const Party *party)
         for (int n = 0; n < MOVE_SLOTS_PER_GROUP; n++) {
             int slot = MOVE_GROUP_SLOT(g, n);
             if (m->moveIds[slot] < 0) {
-                DrawText("  —", mx, my, 14, GRAY);
+                DrawText("  --", mx, my, 14, GRAY);
             } else {
                 const MoveDef *mv = GetMoveDef(m->moveIds[slot]);
                 if (mv->isWeapon) {

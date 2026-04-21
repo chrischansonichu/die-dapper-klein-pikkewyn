@@ -363,7 +363,7 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
 
     if (!target) {
         snprintf(ctx->narration, NARRATION_LEN,
-                 "%s used %s — but the strike hit nothing!", actor->name, mv->name);
+                 "%s used %s - but the strike hit nothing!", actor->name, mv->name);
         ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
         return;
     }
@@ -397,6 +397,7 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
     if (!friendly && !RollHit(actor, target)) {
         PlayAttackAnimFor(ctx, mv, actor, actorIsEn, te->idx,
                           target, targetIsEnemy, targetIdx);
+        BattleAnimMarkMiss(&ctx->anim);
         snprintf(ctx->narration, NARRATION_LEN,
                  "%s used %s but %s dodged!",
                  actor->name, mv->name, target->name);
@@ -419,7 +420,7 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
         BattleAnimPlay(&ctx->anim, BANIM_FAINT, targetIsEnemy, targetIdx);
         if (friendly)
             snprintf(ctx->narration, NARRATION_LEN,
-                     "%s used %s on %s?! %d dmg — %s fainted!",
+                     "%s used %s on %s?! %d dmg - %s fainted!",
                      actor->name, mv->name, target->name, dmg, target->name);
         else
             snprintf(ctx->narration, NARRATION_LEN,
@@ -511,13 +512,32 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 : &ctx->party->members[lastIdx];
             PlayAttackAnimFor(ctx, mv, actor, te->isEnemy, te->idx,
                               sample, targetOnEnemyGrid, lastIdx);
+        } else if (misses > 0) {
+            // Everyone dodged — still play the anim on any live target so the
+            // whiff reads visually, with the miss flag set.
+            int sampleIdx = -1;
+            if (targetOnEnemyGrid) {
+                for (int i = 0; i < ctx->enemyCount; i++)
+                    if (ctx->enemies[i].alive) { sampleIdx = i; break; }
+            } else {
+                for (int i = 0; i < ctx->party->count; i++)
+                    if (ctx->party->members[i].alive) { sampleIdx = i; break; }
+            }
+            if (sampleIdx >= 0) {
+                const Combatant *sample = targetOnEnemyGrid
+                    ? &ctx->enemies[sampleIdx]
+                    : &ctx->party->members[sampleIdx];
+                PlayAttackAnimFor(ctx, mv, actor, te->isEnemy, te->idx,
+                                  sample, targetOnEnemyGrid, sampleIdx);
+                BattleAnimMarkMiss(&ctx->anim);
+            }
         }
         if (misses > 0 && hits == 0) {
             snprintf(ctx->narration, NARRATION_LEN,
                      "%s used %s but everyone dodged!", actor->name, mv->name);
         } else if (misses > 0) {
             snprintf(ctx->narration, NARRATION_LEN,
-                     "%s used %s! (%d dmg across %d — %d dodged)",
+                     "%s used %s! (%d dmg across %d - %d dodged)",
                      actor->name, mv->name, totalDmg, hits, misses);
         } else {
             snprintf(ctx->narration, NARRATION_LEN,

@@ -207,6 +207,14 @@ void PlayerDraw(const Player *p)
         px += sinf(phase) * 2.0f;
     }
 
+    // Idle bob — subtle vertical breathing while stationary so Jan doesn't
+    // look frozen during the action menu / standing around. Suppressed while
+    // walking (walk cycle does the visual work) and while drying (shake + droplet
+    // animation already play there).
+    if (!p->moving && p->dryingFrames == 0) {
+        py += sinf((float)GetTime() * 2.2f) * 0.9f;
+    }
+
     float sz = (float)tilePixels;
     float cx = px + sz * 0.5f;
 

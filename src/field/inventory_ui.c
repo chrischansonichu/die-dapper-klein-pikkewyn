@@ -243,7 +243,7 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
             DrawRectangle(colX - 6, y - 2, 320, 22, bg);
             char buf[96];
             if (led->moveIds[i] < 0) {
-                snprintf(buf, sizeof(buf), "  [slot %d]  —", i + 1);
+                snprintf(buf, sizeof(buf), "  [slot %d]  --", i + 1);
                 DrawText(buf, colX, y, 14, GRAY);
             } else {
                 const MoveDef *mv = GetMoveDef(led->moveIds[i]);

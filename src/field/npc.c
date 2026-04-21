@@ -1,6 +1,7 @@
 #include "npc.h"
 #include "enemy.h"
 #include <string.h>
+#include <math.h>
 
 void NpcInit(Npc *n, int tileX, int tileY, int dir, NpcType type)
 {
@@ -230,6 +231,12 @@ void NpcDraw(const Npc *n, Camera2D cam)
     int px = n->tileX * tilePixels;
     int py = n->tileY * tilePixels;
     int sz = NPC_SPRITE_SIZE * TILE_SCALE;
+
+    // Idle bob so NPCs don't look frozen. Phase is per-tile so a row of NPCs
+    // (keeper, scribe, food bank stall) doesn't breathe in unison.
+    float phase = (float)GetTime() * 2.0f +
+                  (float)n->tileX * 0.7f + (float)n->tileY * 1.3f;
+    py += (int)(sinf(phase) * 1.0f);
 
     switch (n->type) {
         case NPC_PENGUIN_ELDER: DrawPenguinElder(px, py, sz, n->dir); break;

@@ -44,6 +44,10 @@ typedef struct BattleAnim {
     // Cosmetic flag: current BANIM_HIT represents a rope-cutting strike.
     // Draw layer overlays rope debris + a SNAP! tag on the target cell.
     bool           ropeCut;
+    // Cosmetic flag: current BANIM_HIT landed as a miss. Draw layer arcs the
+    // slash past the target / lets projectiles fly through / dims specials,
+    // and skips the white impact flash.
+    bool           missed;
 
     // Attack overlay data — filled by BattleAnimPlayAttack. World tile coords
     // are snapshotted so a mid-anim move (shouldn't happen, but safe) can't
@@ -77,6 +81,9 @@ void BattleAnimDrawAttackOverlay(const BattleAnim *a);
 // Flag the current hit as a rope-cut; caller invokes this after the hit-from
 // call. Cleared automatically on the next BattleAnimPlay.
 void BattleAnimMarkRopeCut(BattleAnim *a);
+// Flag the current hit as a miss. Caller invokes this after the attack-play
+// call. Cleared automatically on the next BattleAnimPlay.
+void BattleAnimMarkMiss(BattleAnim *a);
 void BattleAnimUpdate(BattleAnim *a, float dt);
 bool BattleAnimDone(const BattleAnim *a);
 // Apply shake offset to a draw position

@@ -17,6 +17,7 @@ void BattleAnimPlay(BattleAnim *a, BattleAnimType type, bool isEnemy, int idx)
     a->actorIdx      = -1;
     a->actorSlideX   = 0.0f;
     a->ropeCut       = false;
+    a->missed        = false;
     a->attackKind    = BATK_NONE;
     a->actorTileX    = 0;
     a->actorTileY    = 0;
@@ -48,6 +49,11 @@ void BattleAnimMarkRopeCut(BattleAnim *a)
     // Stretch the duration a touch so the debris + SNAP! has time to read.
     a->ropeCut  = true;
     a->duration = 0.7f;
+}
+
+void BattleAnimMarkMiss(BattleAnim *a)
+{
+    a->missed = true;
 }
 
 void BattleAnimPlayAttack(BattleAnim *a,
@@ -154,11 +160,19 @@ void BattleAnimDrawAttackOverlay(const BattleAnim *a)
     float acx = a->actorTileX  * tp + tp * 0.5f;
     float acy = a->actorTileY  * tp + tp * 0.5f;
 
-    // White target-tile flash during the impact window. For ranged this kicks
-    // in only after the projectile arrives (t > 0.6); everything else flashes
-    // from the first frame.
+    // Vector actor→target normalized to a tile-length; used to arc the slash
+    // past the target / carry the projectile through when the attack missed.
+    float dvx = tcx - acx, dvy = tcy - acy;
+    float dlen = sqrtf(dvx * dvx + dvy * dvy);
+    if (dlen < 0.0001f) { dvx = 0.0f; dvy = 1.0f; dlen = 1.0f; }
+    float nvx = dvx / dlen, nvy = dvy / dlen;
+
+    // White target-tile flash during the impact window. Suppressed on miss —
+    // the attack never actually connected. For ranged this kicks in only
+    // after the projectile arrives (t > 0.55); everything else flashes from
+    // the first frame.
     bool impactWindow = (a->attackKind == BATK_ITEM_RANGED) ? (t > 0.55f) : true;
-    if (impactWindow && BattleAnimIsFlashFrame(a)) {
+    if (!a->missed && impactWindow && BattleAnimIsFlashFrame(a)) {
         float u = (a->attackKind == BATK_ITEM_RANGED) ? (t - 0.55f) / 0.45f : t;
         unsigned char alpha = (unsigned char)(FadeAlpha(u) * 0.45f);
         DrawRectangle(a->targetTileX * tp, a->targetTileY * tp, tp, tp,
@@ -170,15 +184,24 @@ void BattleAnimDrawAttackOverlay(const BattleAnim *a)
         case BATK_ITEM_MELEE: {
             // Diagonal slash drawn on the target tile, shrinking as it fades.
             // ITEM_MELEE uses the accent color; MELEE uses white.
+            // On miss, offset the slash past the target along the attack
+            // vector and drop the alpha so it reads as a whiffed swing.
             Color c = (a->attackKind == BATK_ITEM_MELEE) ? a->accent : WHITE;
-            c.a = FadeAlpha(t);
+            float missFade = a->missed ? 0.55f : 1.0f;
+            c.a = (unsigned char)(FadeAlpha(t) * missFade);
             float half = tp * 0.42f * (0.6f + 0.4f * sinf(t * PI));
             float thick = (a->attackKind == BATK_ITEM_MELEE) ? 4.0f : 3.0f;
-            DrawLineEx((Vector2){tcx - half, tcy - half},
-                       (Vector2){tcx + half, tcy + half}, thick, c);
-            DrawLineEx((Vector2){tcx + half, tcy - half},
-                       (Vector2){tcx - half, tcy + half}, thick, c);
-            if (a->attackKind == BATK_ITEM_MELEE && t < 0.7f) {
+            float sx = tcx, sy = tcy;
+            if (a->missed) {
+                float offset = tp * (0.45f + 0.25f * t);
+                sx += nvx * offset;
+                sy += nvy * offset;
+            }
+            DrawLineEx((Vector2){sx - half, sy - half},
+                       (Vector2){sx + half, sy + half}, thick, c);
+            DrawLineEx((Vector2){sx + half, sy - half},
+                       (Vector2){sx - half, sy + half}, thick, c);
+            if (a->attackKind == BATK_ITEM_MELEE && !a->missed && t < 0.7f) {
                 // Little accent chip so the weapon flourish reads different
                 // from a bare innate swing.
                 float chipSize = tp * 0.18f;
@@ -191,9 +214,22 @@ void BattleAnimDrawAttackOverlay(const BattleAnim *a)
             break;
         }
         case BATK_ITEM_RANGED: {
-            // Projectile lerps actor→target over the first ~55%, then impact
-            // shows as an expanding ring + flash on the target tile.
-            if (t < 0.55f) {
+            // Hit: projectile lerps actor→target over the first ~55%, then
+            // impact shows as an expanding ring + flash on the target tile.
+            // Miss: projectile travels the full duration and sails past the
+            // target, no impact ring.
+            if (a->missed) {
+                // End point = one tile past target, along the attack vector.
+                float ex = tcx + nvx * tp;
+                float ey = tcy + nvy * tp;
+                float px = acx + (ex - acx) * t;
+                float py = acy + (ey - acy) * t;
+                Color c = a->accent;
+                c.a = (unsigned char)(FadeAlpha(t) * 0.85f);
+                DrawCircle((int)px, (int)py, tp * 0.11f, c);
+                DrawCircleLines((int)px, (int)py, tp * 0.11f + 2.0f,
+                                (Color){c.r, c.g, c.b, 100});
+            } else if (t < 0.55f) {
                 float u = t / 0.55f;
                 float px = acx + (tcx - acx) * u;
                 float py = acy + (tcy - acy) * u;
@@ -214,13 +250,14 @@ void BattleAnimDrawAttackOverlay(const BattleAnim *a)
         }
         case BATK_SPECIAL: {
             // Expanding pulse ring on the actor tile — placeholder flavor for
-            // the not-yet-individualized Specials group.
+            // the not-yet-individualized Specials group. Dimmed on miss.
             float u = t;
             float r = tp * 0.15f + u * tp * 0.5f;
             Color c = a->accent;
-            c.a = FadeAlpha(u);
+            float missFade = a->missed ? 0.45f : 1.0f;
+            c.a = (unsigned char)(FadeAlpha(u) * missFade);
             DrawCircleLines((int)acx, (int)acy, r, c);
-            c.a = (unsigned char)(FadeAlpha(u) * 0.6f);
+            c.a = (unsigned char)(FadeAlpha(u) * 0.6f * missFade);
             DrawCircleLines((int)acx, (int)acy, r * 0.7f, c);
             break;
         }

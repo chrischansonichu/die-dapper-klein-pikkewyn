@@ -88,10 +88,10 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
             snprintf(scratch[0], NPC_DIALOGUE_LEN,
                      "I've recorded your journey in the village log.");
             snprintf(scratch[1], NPC_DIALOGUE_LEN,
-                     "Rest easy — you can pick up here next time.");
+                     "Rest easy - you can pick up here next time.");
         } else {
             snprintf(scratch[0], NPC_DIALOGUE_LEN,
-                     "My quill slipped — the log wouldn't take.");
+                     "My quill slipped - the log wouldn't take.");
             snprintf(scratch[1], NPC_DIALOGUE_LEN,
                      "Come see me again in a moment.");
         }
@@ -112,7 +112,7 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
             PartyAddMember(&ow->gs->party, CREATURE_SEAL, janLevel);
             n->active = false;
             snprintf(scratch[0], NPC_DIALOGUE_LEN,
-                     "Arf! Thanks for the rescue — let's teach them a lesson!");
+                     "Arf! Thanks for the rescue - let's teach them a lesson!");
             snprintf(scratch[1], NPC_DIALOGUE_LEN,
                      "The seal joins your party. (XP is now split evenly.)");
             pages[0] = scratch[0];
@@ -130,7 +130,7 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
         snprintf(scratch[1], NPC_DIALOGUE_LEN,
                  "Rumor is more sailors are stalking the tidal pools further up the coast...");
         snprintf(scratch[2], NPC_DIALOGUE_LEN,
-                 "(Next level coming soon.)");
+                 "Don't stop here - press on up the coast. There's more waiting for you.");
         pages[0] = scratch[0];
         pages[1] = scratch[1];
         pages[2] = scratch[2];
@@ -217,7 +217,28 @@ static int FindSurpriseTarget(const FieldState *ow, int px, int py,
 {
     if (outMoveSlot) *outMoveSlot = -1;
 
-    // Melee case — adjacent, directly behind. Same rule as before.
+    if (ow->gs->party.count <= 0) return -1;
+    const Combatant *jan = &ow->gs->party.members[0];
+
+    // Pick Jan's strongest usable MELEE and RANGED moves. Weapons (FishingHook,
+    // SeaUrchinSpike, ShellThrow) slot into whichever list their .range says;
+    // Tackle is the base MELEE fallback and is always present with infinite
+    // durability. Durability == 0 is "broken" — skip it.
+    int meleeSlot  = -1, meleePow  = -1;
+    int rangedSlot = -1, rangedPow = 0;
+    for (int s = 0; s < CREATURE_MAX_MOVES; s++) {
+        if (jan->moveIds[s] < 0) continue;
+        if (jan->moveDurability[s] == 0) continue;
+        const MoveDef *mv = GetMoveDef(jan->moveIds[s]);
+        if (mv->range == RANGE_MELEE) {
+            if (mv->power > meleePow)  { meleePow  = mv->power; meleeSlot  = s; }
+        } else if (mv->range == RANGE_RANGED && mv->isWeapon) {
+            if (mv->power > rangedPow) { rangedPow = mv->power; rangedSlot = s; }
+        }
+    }
+
+    // Melee case — adjacent, directly behind. Uses Jan's strongest MELEE move
+    // so an equipped FishingHook / SeaUrchinSpike trumps the bare Tackle.
     for (int i = 0; i < ow->enemyCount; i++) {
         const FieldEnemy *e = &ow->enemies[i];
         if (!e->active) continue;
@@ -225,25 +246,11 @@ static int FindSurpriseTarget(const FieldState *ow, int px, int py,
         int behindX = e->tileX - FIELD_DIR_DX[e->dir];
         int behindY = e->tileY - FIELD_DIR_DY[e->dir];
         if (px == behindX && py == behindY) {
-            if (outMoveSlot) *outMoveSlot = 0;
+            if (outMoveSlot) *outMoveSlot = (meleeSlot >= 0) ? meleeSlot : 0;
             return i;
         }
     }
 
-    if (ow->gs->party.count <= 0) return -1;
-    const Combatant *jan = &ow->gs->party.members[0];
-
-    // Pick Jan's strongest equipped ranged weapon slot.
-    int rangedSlot = -1;
-    int rangedPow  = 0;
-    for (int s = 0; s < CREATURE_MAX_MOVES; s++) {
-        if (jan->moveIds[s] < 0) continue;
-        if (jan->moveDurability[s] == 0) continue;
-        const MoveDef *mv = GetMoveDef(jan->moveIds[s]);
-        if (!mv->isWeapon) continue;
-        if (mv->range != RANGE_RANGED) continue;
-        if (mv->power > rangedPow) { rangedPow = mv->power; rangedSlot = s; }
-    }
     if (rangedSlot < 0) return -1;
 
     // Ranged case — k=2..3 tiles directly behind the enemy. Require the player
@@ -860,23 +867,94 @@ void FieldUpdate(FieldState *ow, float dt)
         // Sync field-side sprites from combatant tiles so the player + enemy
         // sprites track the fight. Without this the yellow actor highlight
         // and attack targeting drift away from where things visually appear.
+        // Instead of snapping instantly, drive the walk-cycle slide so an
+        // in-battle step reads the same as an overworld step: detect a tile
+        // delta between combatant state and the field sprite, seed a slide,
+        // and advance moveFrames + animFrame each frame.
         if (ow->gs->party.count > 0) {
             const Combatant *jan = &ow->gs->party.members[0];
-            ow->player.tileX       = jan->tileX;
-            ow->player.tileY       = jan->tileY;
-            ow->player.targetTileX = jan->tileX;
-            ow->player.targetTileY = jan->tileY;
-            ow->player.moving      = false;
+            Player *pl = &ow->player;
+            if (pl->moving) {
+                pl->moveFrames++;
+                pl->animT    += pl->animFps / 60.0f;
+                pl->animFrame = ((int)pl->animT) % 2;
+                if (pl->moveFrames >= PLAYER_MOVE_FRAMES) {
+                    pl->tileX      = pl->targetTileX;
+                    pl->tileY      = pl->targetTileY;
+                    pl->moving     = false;
+                    pl->moveFrames = 0;
+                }
+            }
+            if (jan->tileX != pl->tileX || jan->tileY != pl->tileY) {
+                // New combatant position. If a slide is already running (user
+                // mashed keys faster than one tile per PLAYER_MOVE_FRAMES),
+                // snap-commit it before starting the next one so the slide
+                // always begins from a whole tile.
+                if (pl->moving) {
+                    pl->tileX = pl->targetTileX;
+                    pl->tileY = pl->targetTileY;
+                }
+                int dx = jan->tileX - pl->tileX;
+                int dy = jan->tileY - pl->tileY;
+                if (dy > 0)      pl->dir = 0;
+                else if (dy < 0) pl->dir = 3;
+                else if (dx < 0) pl->dir = 1;
+                else if (dx > 0) pl->dir = 2;
+                pl->targetTileX = jan->tileX;
+                pl->targetTileY = jan->tileY;
+                pl->moving      = true;
+                pl->moveFrames  = 0;
+            }
+            if (!pl->moving) {
+                pl->animFrame = 0;
+                pl->animT     = 0.0f;
+            }
         }
+        // While an attack animation is playing, face the actor's field sprite
         for (int k = 0; k < ow->battle.enemyCount; k++) {
             int idx = ow->battle.enemyFieldIdx[k];
             if (idx < 0 || idx >= ow->enemyCount) continue;
             FieldEnemy *fe = &ow->enemies[idx];
-            fe->tileX       = ow->battle.enemies[k].tileX;
-            fe->tileY       = ow->battle.enemies[k].tileY;
-            fe->targetTileX = fe->tileX;
-            fe->targetTileY = fe->tileY;
-            fe->moving      = false;
+            int newX = ow->battle.enemies[k].tileX;
+            int newY = ow->battle.enemies[k].tileY;
+
+            // Same slide + walk-cycle pattern as the player above. AI moves
+            // multiple tiles per turn in a single BattleUpdate frame; the
+            // detected delta can exceed 1 tile and the slide will glide
+            // across it in ENEMY_MOVE_FRAMES — visually better than a snap
+            // and still plays the walk animation.
+            if (fe->moving) {
+                fe->moveFrames++;
+                fe->animT    += 8.0f / 60.0f;
+                fe->animFrame = ((int)fe->animT) % 2;
+                if (fe->moveFrames >= ENEMY_MOVE_FRAMES) {
+                    fe->tileX      = fe->targetTileX;
+                    fe->tileY      = fe->targetTileY;
+                    fe->moving     = false;
+                    fe->moveFrames = 0;
+                }
+            }
+            if (newX != fe->tileX || newY != fe->tileY) {
+                if (fe->moving) {
+                    fe->tileX = fe->targetTileX;
+                    fe->tileY = fe->targetTileY;
+                }
+                int dx = newX - fe->tileX;
+                int dy = newY - fe->tileY;
+                if (dy > 0)      fe->dir = 0;
+                else if (dy < 0) fe->dir = 3;
+                else if (dx < 0) fe->dir = 1;
+                else if (dx > 0) fe->dir = 2;
+                fe->targetTileX = newX;
+                fe->targetTileY = newY;
+                fe->moving      = true;
+                fe->moveFrames  = 0;
+            }
+            if (!fe->moving) {
+                fe->animFrame = 0;
+                fe->animT     = 0.0f;
+            }
+
             // EnemyUpdate is the only other place that refreshes onWater, and
             // it doesn't run during FIELD_BATTLE — so a sailor that swam onto
             // land in-battle would keep its bobbing swim animation until the
@@ -889,6 +967,34 @@ void FieldUpdate(FieldState *ow, float dt)
                 fe->dryingFrames = 24;
             }
             if (!ow->battle.enemies[k].alive) fe->active = false;
+        }
+
+        // While an attack animation is playing, face the actor's field sprite
+        // toward the target tile — directional sprites (Jan, sailors) look
+        // wrong when they swing backwards. Runs after the slide sync so the
+        // attack's aim-direction wins over whichever direction the actor last
+        // stepped in.
+        const BattleAnim *anim = &ow->battle.anim;
+        if (anim->active && anim->hasActor) {
+            int dx = anim->targetTileX - anim->actorTileX;
+            int dy = anim->targetTileY - anim->actorTileY;
+            int dir = 0;
+            if (dy > 0)       dir = 0; // down
+            else if (dy < 0)  dir = 3; // up
+            else if (dx < 0)  dir = 1; // left
+            else if (dx > 0)  dir = 2; // right
+            if (anim->actorIsEnemy) {
+                if (anim->actorIdx >= 0 && anim->actorIdx < ow->battle.enemyCount) {
+                    int efi = ow->battle.enemyFieldIdx[anim->actorIdx];
+                    if (efi >= 0 && efi < ow->enemyCount)
+                        ow->enemies[efi].dir = dir;
+                }
+            } else {
+                // Only Jan (party idx 0) has a directional field sprite; the
+                // follower draw path is isEnemy-flipped only, so there's
+                // nothing to steer for other party members today.
+                if (anim->actorIdx == 0) ow->player.dir = dir;
+            }
         }
 
         int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;
@@ -1021,29 +1127,77 @@ void FieldUpdate(FieldState *ow, float dt)
 static void DrawWarpMarkers(const FieldState *ow)
 {
     int tp = TILE_SIZE * TILE_SCALE;
-    float pulse = 0.5f + 0.5f * sinf((float)GetTime() * 3.0f);
-    Color border = (Color){120, 230, 255, (unsigned char)(140 + 80 * pulse)};
-    Color fill   = (Color){200, 240, 255, (unsigned char)(200 + 40 * pulse)};
+    float time = (float)GetTime();
+
+    // Palette — weathered wood + brass, sits against the sand/wall tiles.
+    const Color stone     = (Color){ 92,  80,  64, 255};
+    const Color stoneEdge = (Color){ 56,  46,  36, 255};
+    const Color wood      = (Color){138,  92,  52, 255};
+    const Color woodMid   = (Color){108,  70,  36, 255};
+    const Color woodDark  = (Color){ 60,  38,  20, 255};
+    const Color hinge     = (Color){170, 150, 110, 255};
+    const Color knob      = (Color){220, 180,  70, 255};
 
     for (int i = 0; i < ow->warpCount; i++) {
         const FieldWarp *w = &ow->warps[i];
         float px = (float)(w->tileX * tp);
         float py = (float)(w->tileY * tp);
 
-        DrawRectangleLinesEx((Rectangle){px + 2, py + 2,
-                                         (float)tp - 4, (float)tp - 4},
-                             2.0f, border);
+        // Stone threshold behind the door — a slightly inset rounded panel so
+        // the door reads as sitting inside a frame in the wall.
+        Rectangle frame = { px + 1, py + 1, (float)tp - 2, (float)tp - 2 };
+        DrawRectangleRounded(frame, 0.22f, 6, stone);
+        DrawRectangleRoundedLinesEx(frame, 0.22f, 6, 2.0f, stoneEdge);
 
-        float cx = px + tp * 0.5f;
-        float chevW = tp * 0.22f;
-        float chevH = tp * 0.12f;
-        float rowsY[2] = { py + tp * 0.38f, py + tp * 0.60f };
-        for (int r = 0; r < 2; r++) {
-            float ry = rowsY[r];
-            DrawTriangle((Vector2){cx - chevW, ry - chevH},
-                         (Vector2){cx,         ry + chevH},
-                         (Vector2){cx + chevW, ry - chevH}, fill);
+        // Door panel — vertical planks. Leaves a sliver of stone visible at
+        // top + sides for the frame effect.
+        float doorX = px + tp * 0.16f;
+        float doorY = py + tp * 0.18f;
+        float doorW = tp * 0.68f;
+        float doorH = tp * 0.74f;
+        DrawRectangle((int)doorX, (int)doorY, (int)doorW, (int)doorH, wood);
+
+        // Plank seams.
+        int planks = 3;
+        for (int p = 1; p < planks; p++) {
+            float plankX = doorX + doorW * (float)p / (float)planks;
+            DrawLineEx((Vector2){plankX, doorY + 2.0f},
+                       (Vector2){plankX, doorY + doorH - 2.0f},
+                       1.5f, woodDark);
         }
+
+        // Upper + lower crossbeams.
+        DrawRectangle((int)doorX, (int)(doorY + doorH * 0.18f),
+                      (int)doorW, 2, woodMid);
+        DrawRectangle((int)doorX, (int)(doorY + doorH * 0.78f),
+                      (int)doorW, 2, woodMid);
+
+        // Door outline.
+        DrawRectangleLines((int)doorX, (int)doorY, (int)doorW, (int)doorH,
+                           woodDark);
+
+        // Hinges on the left edge.
+        DrawRectangle((int)(doorX - 1),
+                      (int)(doorY + doorH * 0.22f), 3, 6, hinge);
+        DrawRectangle((int)(doorX - 1),
+                      (int)(doorY + doorH * 0.72f), 3, 6, hinge);
+
+        // Brass knob on the right, centered vertically.
+        float knobX = doorX + doorW * 0.82f;
+        float knobY = doorY + doorH * 0.52f;
+        DrawCircle((int)knobX, (int)knobY, 2.8f, knob);
+        DrawCircle((int)knobX, (int)knobY, 1.4f, (Color){255, 230, 140, 255});
+
+        // Soft pulsing light-bleed from under the door — hints that the other
+        // side is a different place. Offset per-warp so adjacent gates don't
+        // throb in lockstep.
+        float phase = time * 2.2f +
+                      (float)w->tileX * 0.31f + (float)w->tileY * 0.47f;
+        float pulse = 0.5f + 0.5f * sinf(phase);
+        unsigned char glowA = (unsigned char)(50 + 70 * pulse);
+        DrawRectangle((int)doorX, (int)(doorY + doorH - 3),
+                      (int)doorW, 3,
+                      (Color){255, 220, 140, glowA});
     }
 }
 
@@ -1057,7 +1211,13 @@ static void DrawPartyFollowersInBattle(const FieldState *ow)
     for (int i = 1; i < ow->gs->party.count; i++) {
         const Combatant *m = &ow->gs->party.members[i];
         if (!m->alive) continue;
-        Rectangle r = { (float)(m->tileX * tp), (float)(m->tileY * tp),
+        // Idle bob — same treatment as the overworld draws so followers
+        // don't sit perfectly still during the action menu.
+        float phase = (float)GetTime() * 2.2f +
+                      (float)m->tileX * 0.7f + (float)m->tileY * 1.3f;
+        float bob = sinf(phase) * 0.9f;
+        Rectangle r = { (float)(m->tileX * tp),
+                        (float)(m->tileY * tp) + bob,
                         (float)tp, (float)tp };
         DrawCombatantSprite(m->def->id, r, false, 1.0f, 0, 0, false);
     }
@@ -1109,13 +1269,75 @@ void FieldDraw(const FieldState *ow)
                     DrawText("Z", px, py, 20, YELLOW);
                 }
             }
+            int surpriseSlot = -1;
             int surpriseIdx = FindSurpriseTarget(ow, ow->player.tileX, ow->player.tileY,
-                                                 ow->player.dir, NULL);
+                                                 ow->player.dir, &surpriseSlot);
             if (surpriseIdx >= 0) {
                 const FieldEnemy *e = &ow->enemies[surpriseIdx];
-                int px = e->tileX * tilePixels + tilePixels / 2 - 6;
-                int py = e->tileY * tilePixels - 20;
-                DrawText("Z!", px, py, 18, (Color){255, 180, 60, 255});
+                // Distinguish melee (slot 0 = Tackle) from ranged: melee gets
+                // a warm amber palette + a knife glyph; ranged gets a cool
+                // cyan palette + a chevron arrow that points at the target.
+                bool isRanged = false;
+                if (surpriseSlot >= 0 && ow->gs->party.count > 0) {
+                    const Combatant *jan = &ow->gs->party.members[0];
+                    if (jan->moveIds[surpriseSlot] >= 0) {
+                        const MoveDef *mv = GetMoveDef(jan->moveIds[surpriseSlot]);
+                        isRanged = (mv->range == RANGE_RANGED);
+                    }
+                }
+                Color warn = isRanged ? (Color){ 90, 220, 255, 255}
+                                      : (Color){255, 160,  60, 255};
+                float pulse = 0.5f + 0.5f * sinf((float)GetTime() * 5.0f);
+                unsigned char ringA = (unsigned char)(140 + 80 * pulse);
+                Color ring = { warn.r, warn.g, warn.b, ringA };
+
+                // Pulsing outline on the enemy tile.
+                Rectangle er = { (float)(e->tileX * tilePixels) + 1.0f,
+                                 (float)(e->tileY * tilePixels) + 1.0f,
+                                 (float)tilePixels - 2.0f,
+                                 (float)tilePixels - 2.0f };
+                DrawRectangleLinesEx(er, 2.0f, ring);
+
+                // Ranged: crosshair-like reticle ticks on each side of the tile.
+                if (isRanged) {
+                    float cx = er.x + er.width * 0.5f;
+                    float cy = er.y + er.height * 0.5f;
+                    float reach = er.width * 0.45f;
+                    float tick  = er.width * 0.10f;
+                    DrawLineEx((Vector2){cx - reach, cy},
+                               (Vector2){cx - reach + tick, cy}, 2.0f, ring);
+                    DrawLineEx((Vector2){cx + reach - tick, cy},
+                               (Vector2){cx + reach, cy}, 2.0f, ring);
+                    DrawLineEx((Vector2){cx, cy - reach},
+                               (Vector2){cx, cy - reach + tick}, 2.0f, ring);
+                    DrawLineEx((Vector2){cx, cy + reach - tick},
+                               (Vector2){cx, cy + reach}, 2.0f, ring);
+                }
+
+                // Floating "Z!" prompt above the enemy, color-matched, with a
+                // small glyph to reinforce melee vs ranged intent.
+                int px = e->tileX * tilePixels + tilePixels / 2 - 10;
+                int py = e->tileY * tilePixels - 22
+                         + (int)(sinf((float)GetTime() * 3.0f) * 1.5f);
+                DrawText("Z!", px, py, 18, warn);
+
+                if (isRanged) {
+                    // Chevron arrow points at the target (downward, since the
+                    // prompt floats above the enemy tile).
+                    float ax = (float)(px + 26);
+                    float ay = (float)(py + 6);
+                    DrawTriangle((Vector2){ax - 5.0f, ay - 5.0f},
+                                 (Vector2){ax + 5.0f, ay - 5.0f},
+                                 (Vector2){ax,         ay + 5.0f}, warn);
+                } else {
+                    // Small knife glyph — diamond body + tip.
+                    float kx = (float)(px + 26);
+                    float ky = (float)(py + 6);
+                    DrawTriangle((Vector2){kx - 4.0f, ky - 2.0f},
+                                 (Vector2){kx,         ky - 6.0f},
+                                 (Vector2){kx + 4.0f, ky - 2.0f}, warn);
+                    DrawRectangle((int)(kx - 2), (int)(ky - 2), 4, 6, warn);
+                }
             }
         }
     EndMode2D();

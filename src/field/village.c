@@ -94,7 +94,7 @@ int KeeperInteract(GameState *gs, const char **pages, char scratch[4][NPC_DIALOG
 
     if (have < Q->wantCount) {
         snprintf(scratch[0], NPC_DIALOGUE_LEN,
-                 "I'm collecting %s — bring me %d and I'll trade you something nice.",
+                 "I'm collecting %s - bring me %d and I'll trade you something nice.",
                  Q->plural, Q->wantCount);
         snprintf(scratch[1], NPC_DIALOGUE_LEN,
                  "(You have %d of %d.)", have, Q->wantCount);
@@ -120,7 +120,7 @@ int KeeperInteract(GameState *gs, const char **pages, char scratch[4][NPC_DIALOG
              rwMv->name, r.fishCount, rfIt->name);
     if (!gotWeapon || !gotFish) {
         snprintf(scratch[2], NPC_DIALOGUE_LEN,
-                 "(Your bag was full — some of the reward couldn't fit.)");
+                 "(Your bag was full - some of the reward couldn't fit.)");
         pages[0] = scratch[0];
         pages[1] = scratch[1];
         pages[2] = scratch[2];
