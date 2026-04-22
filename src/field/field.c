@@ -952,6 +952,7 @@ void FieldInit(FieldState *ow, GameState *gs)
     BlacksmithUIInit(&ow->blacksmithUi);
     DiscardUIInit(&ow->discardUi);
     DevWarpUIInit(&ow->devWarpUi);
+    StylePreviewInit(&ow->stylePreview);
 
     int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;
     int mapPixH = ow->map.height * TILE_SIZE * TILE_SCALE;
@@ -1168,6 +1169,15 @@ void FieldUpdate(FieldState *ow, float dt)
     }
     if (IsKeyPressed(KEY_F9) && !ow->dialogue.active && !ow->player.moving) {
         DevWarpUIOpen(&ow->devWarpUi);
+        return;
+    }
+    // Style preview overlay — F10 toggles, TAB cycles inside.
+    if (ow->stylePreview.active) {
+        StylePreviewUpdate(&ow->stylePreview, dt);
+        return;
+    }
+    if (IsKeyPressed(KEY_F10) && !ow->dialogue.active && !ow->player.moving) {
+        StylePreviewOpen(&ow->stylePreview);
         return;
     }
 #endif
@@ -1571,6 +1581,9 @@ void FieldDraw(const FieldState *ow)
 #ifdef DEV_BUILD
     if (ow->devWarpUi.active) {
         DevWarpUIDraw(&ow->devWarpUi);
+    }
+    if (ow->stylePreview.active) {
+        StylePreviewDraw(&ow->stylePreview);
     }
 #endif
 

@@ -18,6 +18,7 @@
 #include "blacksmith_ui.h"
 #include "discard_ui.h"
 #include "dev_warp_ui.h"
+#include "../dev/style_preview.h"
 
 // Forward declaration — field.c reads/writes the persistent party + inventory
 // through this pointer; ownership lives in screen_gameplay.c.
@@ -83,6 +84,11 @@ typedef struct FieldState {
     // so we can jump straight to a floor for testing. Gated by DEV_BUILD at
     // the input site in field.c; the struct field compiles unconditionally.
     DevWarpUI     devWarpUi;
+
+    // Developer-only visual-style preview room — F10 toggles a full-screen
+    // overlay that renders the same mini-scene in each candidate style, so we
+    // can pick a direction by looking. Does not touch GameState.
+    StylePreview  stylePreview;
 
     // Warp confirmation prompt — -1 when no prompt is open, otherwise an
     // index into warps[]. Set by facing + Z'ing a warp tile; confirmed with
