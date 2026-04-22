@@ -159,6 +159,8 @@ int CombatantEffectiveSpeed(const Combatant *c, const TileMap *map)
             int slowed = c->spd / 2;
             return slowed < 1 ? 1 : slowed;
         }
+        case CLASS_DIVER:
+            return c->spd; // trained for water — no penalty, no boost
         default: return c->spd;
     }
 }

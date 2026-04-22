@@ -1,5 +1,6 @@
 #include "map_source.h"
 #include "../data/item_defs.h"
+#include "../data/creature_defs.h"
 
 // Append a warp and mark its tile as both WARP and SOLID. Warps are now
 // door-like — the player can't walk through them; they have to face the
@@ -83,17 +84,20 @@ static void AddHarborF1Enemies(MapBuildContext *ctx)
         EnemySetDrops(s2, ITEM_FRESH_FISH, 60, 2, 60);  // ShellThrow
     }
 
-    // 2x WANDER sailors in the shallow water. One is a bosun — the water is
-    // where the tougher fights live; the dock is the starter zone.
+    // 2x WANDER Abalone Poachers in the shallow water. Divers by trade, they
+    // ignore the usual water speed penalty — the shallows are their element,
+    // not an obstacle like they are for the dockside sailors.
     if (*ctx->enemyCount < ctx->enemyMax) {
         FieldEnemy *w1 = &ctx->enemies[(*ctx->enemyCount)++];
-        EnemyInit(w1, 6, 6, 0, BEHAVIOR_WANDER, 2, 3, 4, (Color){160, 80, 180, 255});
+        EnemyInit(w1, 6, 6, 0, BEHAVIOR_WANDER, CREATURE_POACHER, 3, 4,
+                  (Color){ 60, 140, 160, 255});
         w1->wanderInterval = 70;
         EnemySetDrops(w1, ITEM_KRILL_SNACK, 80, -1, 0);
     }
     if (*ctx->enemyCount < ctx->enemyMax) {
         FieldEnemy *w2 = &ctx->enemies[(*ctx->enemyCount)++];
-        EnemyInit(w2, 16, 8, 2, BEHAVIOR_WANDER, 2, 4, 4, (Color){180, 60, 140, 255});
+        EnemyInit(w2, 16, 8, 2, BEHAVIOR_WANDER, CREATURE_POACHER, 4, 4,
+                  (Color){ 70, 155, 175, 255});
         w2->wanderInterval = 100;
         EnemySetDrops(w2, ITEM_SARDINE, 50, 1, 70);     // FishingHook
     }

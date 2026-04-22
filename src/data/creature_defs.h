@@ -12,12 +12,13 @@
 #define MOVE_SLOTS_PER_GROUP 2
 #define CREATURE_MAX_MOVES (MOVE_SLOTS_PER_GROUP * 3)
 #define MOVE_GROUP_SLOT(group, n) ((group) * MOVE_SLOTS_PER_GROUP + (n))
-#define CREATURE_DEF_COUNT 5
+#define CREATURE_DEF_COUNT 6
 
 typedef enum CreatureClass {
     CLASS_PENGUIN = 0,
     CLASS_HUMAN,
     CLASS_PINNIPED,
+    CLASS_DIVER,       // human anatomy trained for water — no water speed penalty
     CLASS_COUNT,
 } CreatureClass;
 
@@ -55,5 +56,6 @@ const ClassGrowth *GetClassGrowth(CreatureClass cclass);
 #define CREATURE_BOSUN    2
 #define CREATURE_CAPTAIN  3
 #define CREATURE_SEAL     4
+#define CREATURE_POACHER  5
 
 #endif // CREATURE_DEFS_H

@@ -11,7 +11,7 @@
 #define ROOM_W              10
 #define ROOM_H              10
 #define ROOM_MAX_ENEMIES    3
-#define ROOM_TEMPLATE_COUNT 3
+#define ROOM_TEMPLATE_COUNT 8
 
 typedef struct RoomTemplate {
     int tiles[ROOM_H][ROOM_W]; // TILE_* ids, row-major

@@ -74,11 +74,21 @@ static void CarveVerticalDoor(TileMap *m, int rx, int ry, int doorOffsetX)
     TileMapSetTile(m, x, wallY + 1, TILE_SAND);
 }
 
-// True if tile at (x,y) is a floor tile we can safely stand an enemy on.
+// True if tile at (x,y) is a land-floor tile (for warp placement — stairs
+// never land in water).
 static bool IsFloor(const TileMap *m, int x, int y)
 {
     int t = TileMapGetTile(m, x, y);
     return t == TILE_SAND || t == TILE_DOCK || t == TILE_GRASS;
+}
+
+// True if an enemy can spawn here. Same as IsFloor plus shallow water — the
+// shallow strip doubles as poacher habitat.
+static bool IsEnemyAnchor(const TileMap *m, int x, int y)
+{
+    int t = TileMapGetTile(m, x, y);
+    return t == TILE_SAND || t == TILE_DOCK || t == TILE_GRASS ||
+           t == TILE_SHALLOW;
 }
 
 static bool HasEnemyAt(const MapBuildContext *ctx, int x, int y)
@@ -100,11 +110,21 @@ void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
 
     // Place rooms first — walls and all. Door carving happens after so we
     // don't immediately paint back over the carved openings.
+    // Spawn room pinned to template 0 (plain sand): every other template has
+    // walls or water that could trap the spawn tile at (2,2). Other rooms
+    // roll freely for variety.
+    const int spawnRoomX = 0, spawnRoomY = 0;
     int pickedTpl[DUNGEON_ROOMS_Y][DUNGEON_ROOMS_X];
     for (int ry = 0; ry < DUNGEON_ROOMS_Y; ry++) {
         for (int rx = 0; rx < DUNGEON_ROOMS_X; rx++) {
-            unsigned r = XorShift(&rng);
-            int idx = (int)(r % ROOM_TEMPLATE_COUNT);
+            int idx;
+            if (rx == spawnRoomX && ry == spawnRoomY) {
+                idx = 0;
+                (void)XorShift(&rng); // burn a roll to keep later seeds stable
+            } else {
+                unsigned r = XorShift(&rng);
+                idx = (int)(r % ROOM_TEMPLATE_COUNT);
+            }
             pickedTpl[ry][rx] = idx;
             const RoomTemplate *tpl = GetRoomTemplate(idx);
             PlaceRoom(m, tpl, rx * ROOM_W, ry * ROOM_H);
@@ -124,7 +144,6 @@ void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
     // Enemy population — sample anchors from each room's template, skip anchors
     // whose tile got overwritten by a carved door, and skip the spawn room so
     // the player isn't jumped at t=0.
-    const int spawnRoomX = 0, spawnRoomY = 0;
     for (int ry = 0; ry < DUNGEON_ROOMS_Y; ry++) {
         for (int rx = 0; rx < DUNGEON_ROOMS_X; rx++) {
             if (rx == spawnRoomX && ry == spawnRoomY) continue;
@@ -138,13 +157,19 @@ void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
                 if ((int)(r % 100) < emptyChance) continue;
                 int etx = rx * ROOM_W + tpl->enemyX[i];
                 int ety = ry * ROOM_H + tpl->enemyY[i];
-                if (!IsFloor(m, etx, ety)) continue;
+                if (!IsEnemyAnchor(m, etx, ety)) continue;
 
-                // Creature tier weights by depth (PickEnemyCreature). Level
-                // bumps +1 per floor past F2 so the stat curve also climbs,
-                // not just the roster.
-                unsigned r2 = XorShift(&rng);
-                int creatureId = PickEnemyCreature(floor, r2);
+                // Shallow-water anchors spawn abalone poachers (trained
+                // divers, CLASS_DIVER). Land anchors roll the sailor tier
+                // table weighted by floor depth.
+                bool onWater = TileMapGetTile(m, etx, ety) == TILE_SHALLOW;
+                unsigned r2  = XorShift(&rng);
+                int creatureId;
+                if (onWater) {
+                    creatureId = CREATURE_POACHER;
+                } else {
+                    creatureId = PickEnemyCreature(floor, r2);
+                }
                 int depthBonus = floor - 2;
                 if (depthBonus < 0) depthBonus = 0;
                 int level = 3 + (int)((r2 >> 1) & 1) + depthBonus;
@@ -156,11 +181,17 @@ void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
                 switch (creatureId) {
                     case CREATURE_CAPTAIN: color = (Color){230, 200,  80, 255}; break;
                     case CREATURE_BOSUN:   color = (Color){160,  80, 180, 255}; break;
+                    case CREATURE_POACHER: color = (Color){ 60, 140, 160, 255}; break;
                     default:               color = (Color){200,  70,  60, 255}; break;
                 }
 
                 FieldEnemy *e = &ctx->enemies[(*ctx->enemyCount)++];
-                EnemyInit(e, etx, ety, 0, BEHAVIOR_STAND, creatureId, level, 4, color);
+                // Poachers patrol the water they spawned in; sailors hold
+                // the line on dry tiles.
+                EnemyBehavior behavior = onWater ? BEHAVIOR_WANDER
+                                                 : BEHAVIOR_STAND;
+                EnemyInit(e, etx, ety, 0, behavior, creatureId, level, 4, color);
+                if (onWater) e->wanderInterval = 80;
                 // Tier-based weapon drop — captains carry urchins, bosuns
                 // carry shells, deckhands just the hook. Food drop stays as
                 // the baseline Krill Snack.
@@ -168,6 +199,7 @@ void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
                 int wPct = 55;
                 if (creatureId == CREATURE_BOSUN)   { wId = 2; wPct = 55; } // Shell
                 if (creatureId == CREATURE_CAPTAIN) { wId = 3; wPct = 60; } // Urchin
+                if (creatureId == CREATURE_POACHER) { wId = 1; wPct = 70; } // Hook
                 EnemySetDrops(e, ITEM_KRILL_SNACK, 50, wId, wPct);
             }
         }

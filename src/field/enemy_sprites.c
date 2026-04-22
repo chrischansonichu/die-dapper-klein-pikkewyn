@@ -79,6 +79,22 @@ static SailorStyle StyleForCreature(int creatureId, float alpha, bool flash)
         s.hatStyle   = 2;
         s.hasBeard   = true;
         break;
+    case CREATURE_POACHER:
+        // Wetsuit black with a teal stripe, no hat. Bare head reads as the
+        // goggle silhouette once the face layer lands on top.
+        s.coat       = Tint((Color){ 18,  22,  28, 255}, alpha, flash);
+        s.coatShade  = Tint((Color){  8,  10,  14, 255}, alpha, flash);
+        s.collar     = Tint((Color){ 40,  52,  58, 255}, alpha, flash);
+        s.stripe     = Tint((Color){ 70, 195, 190, 255}, alpha, flash);   // teal
+        s.tie        = Tint((Color){ 25,  32,  38, 255}, alpha, flash);
+        s.hat        = Tint((Color){  0,   0,   0,   0}, alpha, flash);   // no hat
+        s.hatBand    = Tint((Color){  0,   0,   0,   0}, alpha, flash);
+        s.pants      = Tint((Color){ 18,  22,  28, 255}, alpha, flash);
+        s.pantsShade = Tint((Color){  8,  10,  14, 255}, alpha, flash);
+        s.boots      = Tint((Color){ 35,  55,  60, 255}, alpha, flash);   // neoprene fins
+        s.hatStyle   = 3;  // "none" — hat-drawing branch handles this
+        s.hasBeard   = false;
+        break;
     case CREATURE_DECKHAND:
     default:
         s.coat       = Tint((Color){ 40,  60, 120, 255}, alpha, flash);   // navy
@@ -230,7 +246,33 @@ void EnemySpritesDrawSailor(int creatureId, Rectangle r, int dir, int frame,
     // HAT — style varies by rank. Hat sits above the head circle.
     // ====================================================================
     float hatCx = headCx;
-    if (s.hatStyle == 0) {
+    if (s.hatStyle == 3) {
+        // Poacher — no hat. Draw goggles + snorkel mouthpiece instead. Dark
+        // twin lenses ride over the eyes on the facing direction; the back of
+        // the head gets a single strap line across the skull.
+        if (dir == 0) {
+            DrawCircle((int)(headCx - sz * 0.07f), (int)(headCy - sz * 0.02f),
+                       sz * 0.055f, s.coat);
+            DrawCircle((int)(headCx + sz * 0.07f), (int)(headCy - sz * 0.02f),
+                       sz * 0.055f, s.coat);
+            // Lens highlight.
+            DrawCircle((int)(headCx - sz * 0.085f), (int)(headCy - sz * 0.035f),
+                       sz * 0.018f, s.stripe);
+            DrawCircle((int)(headCx + sz * 0.055f), (int)(headCy - sz * 0.035f),
+                       sz * 0.018f, s.stripe);
+        } else if (dir == 1 || dir == 2) {
+            float side = (dir == 2) ? +1.0f : -1.0f;
+            DrawCircle((int)(headCx + sz * 0.07f * side), (int)(headCy - sz * 0.02f),
+                       sz * 0.055f, s.coat);
+            DrawCircle((int)(headCx + sz * 0.085f * side), (int)(headCy - sz * 0.035f),
+                       sz * 0.018f, s.stripe);
+        } else {
+            // Back: strap across skull.
+            DrawRectangle((int)(headCx - sz * 0.18f),
+                          (int)(headCy - sz * 0.04f),
+                          (int)(sz * 0.36f), (int)(sz * 0.03f), s.coat);
+        }
+    } else if (s.hatStyle == 0) {
         // Sailor cap: rounded white crown + navy band, rounded brim.
         Rectangle crown = { hatCx - sz * 0.17f, py + sz * 0.04f,
                             sz * 0.34f, sz * 0.10f };
