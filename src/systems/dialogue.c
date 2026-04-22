@@ -1,4 +1,5 @@
 #include "dialogue.h"
+#include "../render/paper_harbor.h"
 #include <string.h>
 
 #define PANEL_X    20
@@ -60,9 +61,7 @@ void DialogueDraw(const DialogueBox *d)
 {
     if (!d->active) return;
 
-    // Background panel
-    DrawRectangle(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){10, 10, 30, 230});
-    DrawRectangleLines(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){80, 80, 140, 255});
+    PHDrawPanel((Rectangle){PANEL_X, PANEL_Y, PANEL_W, PANEL_H}, 0x101);
 
     // Draw visible portion of current page using substring
     const char *text = d->pages[d->currentPage];
@@ -71,14 +70,14 @@ void DialogueDraw(const DialogueBox *d)
     strncpy(buf, text, len);
     buf[len] = '\0';
 
-    DrawText(buf, PANEL_X + PANEL_PAD, PANEL_Y + PANEL_PAD, TEXT_SIZE, WHITE);
+    DrawText(buf, PANEL_X + PANEL_PAD, PANEL_Y + PANEL_PAD, TEXT_SIZE, gPH.ink);
 
     // Prompt indicator
     int fullLen = (int)TextLength(text);
     if (d->visibleChars >= fullLen) {
         bool showArrow = ((int)(GetTime() * 3.0) % 2 == 0);
         if (showArrow)
-            DrawText("v", PANEL_X + PANEL_W - 24, PANEL_Y + PANEL_H - 22, 16, YELLOW);
+            DrawText("v", PANEL_X + PANEL_W - 24, PANEL_Y + PANEL_H - 22, 16, gPH.inkLight);
     }
 }
 

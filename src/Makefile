@@ -72,6 +72,7 @@ PROJECT_SOURCE_FILES  ?= \
     field/stats_ui.c \
     field/tilemap.c \
     field/village.c \
+    render/paper_harbor.c \
     state/game_state.c \
     state/save.c \
     systems/camera_system.c \

@@ -14,6 +14,7 @@
 
 #include "raylib.h"
 #include "screens.h"    // NOTE: Declares global (extern) variables and screens functions
+#include "render/paper_harbor.h"
 
 #if defined(PLATFORM_WEB)
     #include <emscripten/emscripten.h>
@@ -78,6 +79,10 @@ int main(void)
     //music = LoadMusicStream("resources/ambient.ogg"); // TODO: Load music
     fxCoin = LoadSound("resources/coin.wav");
 
+    // Paper Harbor paper-grain texture. Baked once at the screen's logical
+    // resolution; blitted in a single GPU draw at the end of each screen.
+    PHInit(screenWidth, screenHeight);
+
     // Setup and init first screen
     currentScreen = TITLE;
     InitTitleScreen();
@@ -112,6 +117,7 @@ int main(void)
     // Unload global data loaded
     UnloadFont(font);
     UnloadSound(fxCoin);
+    PHUnload();
 
     CloseAudioDevice();     // Close audio context
 
@@ -297,7 +303,7 @@ static void UpdateDrawFrame(void)
         // Black clear so camera scrolls past the tilemap edge (which happens
         // briefly during movement when the camera follows the player) don't
         // flash a white bar.
-        ClearBackground(BLACK);
+        ClearBackground(gPH.bg);
 
         switch(currentScreen)
         {

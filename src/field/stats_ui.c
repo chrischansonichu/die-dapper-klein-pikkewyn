@@ -2,6 +2,7 @@
 #include "raylib.h"
 #include "../data/move_defs.h"
 #include "../data/creature_defs.h"
+#include "../render/paper_harbor.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -127,7 +128,7 @@ static void DrawTabHeader(StatsTab tab)
 static void DrawMemberList(const StatsUI *ui, const Party *party)
 {
     int x = 60, y = 95;
-    DrawText("Party", x, y, 18, WHITE);
+    DrawText("Party", x, y, 18, gPH.ink);
     y += 26;
     for (int i = 0; i < party->count; i++) {
         const Combatant *m = &party->members[i];
@@ -136,7 +137,7 @@ static void DrawMemberList(const StatsUI *ui, const Party *party)
         DrawRectangle(x - 6, y - 2, 180, 22, bg);
         char buf[64];
         snprintf(buf, sizeof(buf), "%-10s Lv %d", m->name, m->level);
-        DrawText(buf, x, y, 14, m->alive ? WHITE : (Color){180, 100, 100, 255});
+        DrawText(buf, x, y, 14, m->alive ? WHITE : (Color){220, 140, 140, 255});
         y += 24;
     }
 }
@@ -154,52 +155,52 @@ static void DrawStatsTab(const StatsUI *ui, const Party *party)
     int x = 260, y = 95;
     char buf[128];
     snprintf(buf, sizeof(buf), "%s", m->name);
-    DrawText(buf, x, y, 22, WHITE);
+    DrawText(buf, x, y, 22, gPH.ink);
     y += 28;
 
     const char *cls = kClassNames[def->creatureClass];
     snprintf(buf, sizeof(buf), "%s   Lv %d", cls, m->level);
-    DrawText(buf, x, y, 14, (Color){180, 200, 220, 255});
+    DrawText(buf, x, y, 14, gPH.inkLight);
     y += 22;
 
     // HP bar
     snprintf(buf, sizeof(buf), "HP  %d / %d", m->hp, m->maxHp);
-    DrawText(buf, x, y, 14, WHITE);
-    DrawRectangle(x, y + 18, 200, 8, (Color){30, 30, 30, 255});
+    DrawText(buf, x, y, 14, gPH.ink);
+    DrawRectangle(x, y + 18, 200, 8, (Color){60, 50, 40, 180});
     float hpPct = m->maxHp > 0 ? (float)m->hp / (float)m->maxHp : 0.0f;
     if (hpPct < 0) hpPct = 0;
-    DrawRectangle(x, y + 18, (int)(200 * hpPct), 8, (Color){40, 200, 40, 255});
+    DrawRectangle(x, y + 18, (int)(200 * hpPct), 8, (Color){110, 160, 80, 255});
     y += 34;
 
     // Stats block
     snprintf(buf, sizeof(buf), "ATK %-3d   DEF %-3d", m->atk, m->defense);
-    DrawText(buf, x, y, 14, WHITE);
+    DrawText(buf, x, y, 14, gPH.ink);
     y += 18;
     snprintf(buf, sizeof(buf), "SPD %-3d   DEX %-3d", m->spd, m->dex);
-    DrawText(buf, x, y, 14, WHITE);
+    DrawText(buf, x, y, 14, gPH.ink);
     y += 22;
 
     // XP bar
     snprintf(buf, sizeof(buf), "XP  %d / %d", m->xp, m->xpToNext);
-    DrawText(buf, x, y, 14, WHITE);
-    DrawRectangle(x, y + 18, 200, 6, (Color){30, 30, 30, 255});
+    DrawText(buf, x, y, 14, gPH.ink);
+    DrawRectangle(x, y + 18, 200, 6, (Color){60, 50, 40, 180});
     float xpPct = m->xpToNext > 0 ? (float)m->xp / (float)m->xpToNext : 0.0f;
     if (xpPct > 1) xpPct = 1;
-    DrawRectangle(x, y + 18, (int)(200 * xpPct), 6, (Color){120, 160, 240, 255});
+    DrawRectangle(x, y + 18, (int)(200 * xpPct), 6, (Color){120, 140, 200, 255});
     y += 32;
 
     // Moves — right column
     int mx = 500, my = 95;
-    DrawText("Moves", mx, my, 18, WHITE);
+    DrawText("Moves", mx, my, 18, gPH.ink);
     my += 26;
     for (int g = 0; g < MOVE_GROUP_COUNT; g++) {
-        DrawText(kGroupTitle[g], mx, my, 12, (Color){160, 180, 220, 255});
+        DrawText(kGroupTitle[g], mx, my, 12, gPH.inkLight);
         my += 16;
         int rowCount = MoveGroupSlotCount(g);
         for (int n = 0; n < rowCount; n++) {
             int slot = MOVE_GROUP_SLOT(g, n);
             if (m->moveIds[slot] < 0) {
-                DrawText("  --", mx, my, 14, GRAY);
+                DrawText("  --", mx, my, 14, gPH.inkLight);
             } else {
                 const MoveDef *mv = GetMoveDef(m->moveIds[slot]);
                 if (mv->isWeapon) {
@@ -209,14 +210,14 @@ static void DrawStatsTab(const StatsUI *ui, const Party *party)
                 } else {
                     snprintf(buf, sizeof(buf), "%d %-14s", slot + 1, mv->name);
                 }
-                DrawText(buf, mx, my, 14, WHITE);
+                DrawText(buf, mx, my, 14, gPH.ink);
             }
             my += 18;
         }
         my += 4;
     }
 
-    DrawText("Up/Down: select member   X/C: close", 60, 420, 14, GRAY);
+    DrawText("Up/Down: select member   X/C: close", 60, 420, 14, gPH.inkLight);
 }
 
 static void DrawLayoutGrid(const StatsUI *ui, const Party *party)
@@ -229,9 +230,8 @@ static void DrawLayoutGrid(const StatsUI *ui, const Party *party)
     int baseX = (GetScreenWidth()  - gridW) / 2;
     int baseY = 110;
 
-    DrawText("BACK", baseX - 50, baseY + gridH / 2 - 8, 14, (Color){150, 150, 180, 255});
-    DrawText("FRONT -> enemy", baseX + gridW + 10, baseY + gridH / 2 - 8, 14,
-             (Color){200, 180, 140, 255});
+    DrawText("BACK", baseX - 50, baseY + gridH / 2 - 8, 14, gPH.inkLight);
+    DrawText("FRONT -> enemy", baseX + gridW + 10, baseY + gridH / 2 - 8, 14, gPH.inkLight);
 
     for (int c = 0; c < GRID_COLS; c++) {
         for (int r = 0; r < GRID_ROWS; r++) {
@@ -266,19 +266,17 @@ static void DrawLayoutGrid(const StatsUI *ui, const Party *party)
         help = "Arrows: move   Z: pick up   X/C: close   TAB: stats";
     else
         help = "Arrows: move   Z: drop/swap   X/C: close";
-    DrawText(help, 60, 420, 14, GRAY);
+    DrawText(help, 60, 420, 14, gPH.inkLight);
 }
 
 void StatsUIDraw(const StatsUI *ui, const Party *party)
 {
     if (!ui->active) return;
 
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 180});
-    DrawRectangle(40, 30, GetScreenWidth() - 80, GetScreenHeight() - 60, (Color){10, 10, 30, 230});
-    DrawRectangleLines(40, 30, GetScreenWidth() - 80, GetScreenHeight() - 60,
-                       (Color){120, 140, 220, 255});
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), gPH.dimmer);
+    PHDrawPanel((Rectangle){40, 30, GetScreenWidth() - 80, GetScreenHeight() - 60}, 0x501);
 
-    DrawText("STATUS", 60, 36, 18, WHITE);
+    DrawText("STATUS", 60, 36, 18, gPH.ink);
     DrawTabHeader(ui->tab);
 
     if (ui->tab == STATS_TAB_STATS) DrawStatsTab(ui, party);

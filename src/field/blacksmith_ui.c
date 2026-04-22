@@ -3,6 +3,7 @@
 #include "../battle/inventory.h"
 #include "../data/move_defs.h"
 #include "../data/forge_recipes.h"
+#include "../render/paper_harbor.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -360,27 +361,25 @@ void BlacksmithUIDraw(const BlacksmithUI *b, const Party *party,
     if (!b->active) return;
 
     int W = GetScreenWidth(), H = GetScreenHeight();
-    DrawRectangle(0, 0, W, H, (Color){0, 0, 0, 180});
-    DrawRectangle(60, 60, W - 120, H - 120, (Color){25, 18, 10, 235});
-    DrawRectangleLines(60, 60, W - 120, H - 120, (Color){190, 110, 50, 255});
+    DrawRectangle(0, 0, W, H, gPH.dimmer);
+    PHDrawPanel((Rectangle){60, 60, W - 120, H - 120}, 0x301);
 
-    DrawText("BLACKSMITH", 80, 72, 20, WHITE);
-    DrawText(TextFormat("Rep: %d", villageReputation), W - 180, 74, 16,
-             (Color){200, 220, 120, 255});
+    DrawText("BLACKSMITH", 80, 72, 20, gPH.ink);
+    DrawText(TextFormat("Rep: %d", villageReputation), W - 180, 74, 16, gPH.ink);
 
     // Mode tabs
     const char *repairTab  = "[ REPAIR ]";
     const char *upgradeTab = "[ UPGRADE ]";
-    Color repairCol  = (b->mode == SMITH_MODE_REPAIR)  ? WHITE : GRAY;
-    Color upgradeCol = (b->mode == SMITH_MODE_UPGRADE) ? WHITE : GRAY;
+    Color repairCol  = (b->mode == SMITH_MODE_REPAIR)  ? gPH.ink : gPH.inkLight;
+    Color upgradeCol = (b->mode == SMITH_MODE_UPGRADE) ? gPH.ink : gPH.inkLight;
     DrawText(repairTab,  220, 74, 18, repairCol);
     DrawText(upgradeTab, 340, 74, 18, upgradeCol);
 
     if (b->phase == SMITH_PHASE_RESULT) {
-        DrawText(b->resultLine1, 80, 140, 18, WHITE);
+        DrawText(b->resultLine1, 80, 140, 18, gPH.ink);
         if (b->resultLine2[0] != '\0')
-            DrawText(b->resultLine2, 80, 168, 16, (Color){200, 220, 120, 255});
-        DrawText("Press any key to continue...", 80, H - 100, 14, GRAY);
+            DrawText(b->resultLine2, 80, 168, 16, gPH.ink);
+        DrawText("Press any key to continue...", 80, H - 100, 14, gPH.inkLight);
         return;
     }
 
@@ -389,18 +388,18 @@ void BlacksmithUIDraw(const BlacksmithUI *b, const Party *party,
 
     if (b->mode == SMITH_MODE_REPAIR) {
         DrawText("\"Bring me scrap and I'll pound it into the edge you need.\"",
-                 x, y, 16, (Color){200, 200, 220, 255});
+                 x, y, 16, gPH.inkLight);
         y += 22;
         const char *hdr = (b->phase == SMITH_PHASE_PICK_TARGET)
             ? "Pick the weapon to repair:"
             : (b->phase == SMITH_PHASE_PICK_FUEL)
                 ? "Pick the weapons to sacrifice as fuel:"
                 : "";
-        if (hdr[0]) DrawText(hdr, x, y, 14, WHITE);
+        if (hdr[0]) DrawText(hdr, x, y, 14, gPH.ink);
         y += 26;
 
         if (b->entryCount == 0) {
-            DrawText("(Your weapon bag is empty - nothing to forge.)", x, y, 16, GRAY);
+            DrawText("(Your weapon bag is empty - nothing to forge.)", x, y, 16, gPH.inkLight);
         } else {
             const int VISIBLE = 5;
             const int ROW_H   = 22;
@@ -450,56 +449,56 @@ void BlacksmithUIDraw(const BlacksmithUI *b, const Party *party,
                                     ? GetMoveDef(inv->weapons[b->weaponIdx[b->targetEntry]].moveId)->name
                                     : "-",
                                 fuelN, b->pendingDurGain, BLACKSMITH_REPAIR_REP),
-                     80, H - 140, 16, (Color){200, 220, 120, 255});
+                     80, H - 140, 16, gPH.ink);
         } else if (b->phase == SMITH_PHASE_CONFIRM) {
             const char *tname = (b->targetEntry >= 0 && b->targetEntry < b->entryCount)
                 ? GetMoveDef(inv->weapons[b->weaponIdx[b->targetEntry]].moveId)->name
                 : "weapon";
             DrawText(TextFormat("Repair %s (+%d durability) for %d Rep?",
                                 tname, b->pendingDurGain, BLACKSMITH_REPAIR_REP),
-                     80, 140, 18, WHITE);
+                     80, 140, 18, gPH.ink);
             DrawText(TextFormat("Will sacrifice %d piece%s of gear.",
                                 fuelN, fuelN == 1 ? "" : "s"),
-                     80, 168, 16, (Color){200, 200, 220, 255});
-            DrawText("Z: confirm   X: back", 80, H - 100, 14, GRAY);
+                     80, 168, 16, gPH.inkLight);
+            DrawText("Z: confirm   X: back", 80, H - 100, 14, gPH.inkLight);
             return;
         }
 
         DrawText("UP/DOWN: select   SPACE: toggle fuel   Z: next   X: back   TAB: switch mode",
-                 80, H - 100, 14, GRAY);
+                 80, H - 100, 14, gPH.inkLight);
         return;
     }
 
     // ------- UPGRADE mode -------
     DrawText("\"Show me a recipe I can work with. Fire's hot.\"",
-             x, y, 16, (Color){200, 200, 220, 255});
+             x, y, 16, gPH.inkLight);
     y += 22;
 
     if (b->phase == SMITH_PHASE_CONFIRM) {
         const ForgeRecipe *r = &gForgeRecipes[b->recipeIdx];
         const MoveDef *resMv = GetMoveDef(r->resultMoveId);
         DrawText(TextFormat("Forge %s for:", resMv ? resMv->name : "?"),
-                 80, 140, 18, WHITE);
+                 80, 140, 18, gPH.ink);
         int yy = 168;
         for (int i = 0; i < FORGE_RECIPE_INPUTS; i++) {
             int mid = r->inputs[i].moveId;
             if (mid < 0) continue;
             const MoveDef *im = GetMoveDef(mid);
             DrawText(TextFormat("  - %dx %s", r->inputs[i].count, im ? im->name : "?"),
-                     80, yy, 16, (Color){200, 200, 220, 255});
+                     80, yy, 16, gPH.inkLight);
             yy += 22;
         }
         DrawText(TextFormat("  - %d Rep", r->repCost),
-                 80, yy, 16, (Color){200, 200, 220, 255});
-        DrawText("Z: confirm   X: back", 80, H - 100, 14, GRAY);
+                 80, yy, 16, gPH.inkLight);
+        DrawText("Z: confirm   X: back", 80, H - 100, 14, gPH.inkLight);
         return;
     }
 
-    DrawText("Pick a recipe:", x, y, 14, WHITE);
+    DrawText("Pick a recipe:", x, y, 14, gPH.ink);
     y += 26;
 
     if (gForgeRecipeCount == 0) {
-        DrawText("(No recipes yet. Come back later.)", x, y, 16, GRAY);
+        DrawText("(No recipes yet. Come back later.)", x, y, 16, gPH.inkLight);
     } else {
         const int VISIBLE = 5;
         const int ROW_H   = 22;
@@ -525,5 +524,5 @@ void BlacksmithUIDraw(const BlacksmithUI *b, const Party *party,
     }
 
     DrawText("UP/DOWN: select   Z: forge   X: cancel   TAB: switch mode",
-             80, H - 100, 14, GRAY);
+             80, H - 100, 14, gPH.inkLight);
 }

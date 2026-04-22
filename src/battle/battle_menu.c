@@ -1,6 +1,7 @@
 #include "battle_menu.h"
 #include "../data/move_defs.h"
 #include "../data/item_defs.h"
+#include "../render/paper_harbor.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -131,8 +132,7 @@ int BattleMenuUpdateItemSelect(BattleMenuState *m, int itemCount)
 
 void BattleMenuDrawRoot(const BattleMenuState *m, bool moveDisabled)
 {
-    DrawRectangle(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){20, 20, 40, 220});
-    DrawRectangleLines(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){80, 80, 140, 255});
+    PHDrawPanel((Rectangle){PANEL_X, PANEL_Y, PANEL_W, PANEL_H}, 0xA01);
 
     int btnW = 140, btnH = 40, startX = 490, startY = PANEL_Y + 15;
     for (int i = 0; i < BMENU_ACTION_COUNT; i++) {
@@ -148,13 +148,12 @@ void BattleMenuDrawRoot(const BattleMenuState *m, bool moveDisabled)
         DrawText(gActionLabels[i], bx + 12, by + 12, 18, text);
     }
     // Arrow indicator
-    DrawText(">", PANEL_X + PANEL_PAD, PANEL_Y + PANEL_PAD, 20, YELLOW);
+    DrawText(">", PANEL_X + PANEL_PAD, PANEL_Y + PANEL_PAD, 20, gPH.ink);
 }
 
 void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, bool actorInFront)
 {
-    DrawRectangle(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){20, 20, 40, 220});
-    DrawRectangleLines(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){80, 80, 140, 255});
+    PHDrawPanel((Rectangle){PANEL_X, PANEL_Y, PANEL_W, PANEL_H}, 0xA02);
 
     // Fixed 3x2 cell grid. Each cell's border colours by its actual group —
     // that's the only identity cue now, since there's no column header row:
@@ -231,17 +230,16 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
             }
         }
     }
-    DrawText("X: Back", PANEL_W - 70, PANEL_Y + PANEL_H - 16, 12, GRAY);
+    DrawText("X: Back", PANEL_W - 70, PANEL_Y + PANEL_H - 16, 12, gPH.inkLight);
 }
 
 void BattleMenuDrawItemSelect(const BattleMenuState *m, const Inventory *inv)
 {
-    DrawRectangle(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){20, 20, 40, 220});
-    DrawRectangleLines(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){80, 80, 140, 255});
+    PHDrawPanel((Rectangle){PANEL_X, PANEL_Y, PANEL_W, PANEL_H}, 0xA03);
 
     if (inv->itemCount == 0) {
-        DrawText("No items.", PANEL_X + PANEL_PAD + 10, PANEL_Y + PANEL_PAD + 15, 18, GRAY);
-        DrawText("X: Back", 640, PANEL_Y + PANEL_H - 22, 14, GRAY);
+        DrawText("No items.", PANEL_X + PANEL_PAD + 10, PANEL_Y + PANEL_PAD + 15, 18, gPH.inkLight);
+        DrawText("X: Back", 640, PANEL_Y + PANEL_H - 22, 14, gPH.inkLight);
         return;
     }
 
@@ -258,13 +256,12 @@ void BattleMenuDrawItemSelect(const BattleMenuState *m, const Inventory *inv)
         DrawText(buf, startX + 4, startY + i * rowH + 2, 16, WHITE);
         DrawText(it->desc, startX + 300, startY + i * rowH + 4, 12, GRAY);
     }
-    DrawText("X: Back | Z: Use", 600, PANEL_Y + PANEL_H - 22, 14, GRAY);
+    DrawText("X: Back | Z: Use", 600, PANEL_Y + PANEL_H - 22, 14, gPH.inkLight);
 }
 
 void BattleMenuDrawNarration(const char *text)
 {
-    DrawRectangle(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){10, 10, 30, 230});
-    DrawRectangleLines(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){80, 80, 140, 255});
-    DrawText(text, PANEL_X + PANEL_PAD + 5, PANEL_Y + PANEL_PAD + 10, 20, WHITE);
-    DrawText("Z: Continue", PANEL_W - 120, PANEL_Y + PANEL_H - 22, 14, GRAY);
+    PHDrawPanel((Rectangle){PANEL_X, PANEL_Y, PANEL_W, PANEL_H}, 0xA04);
+    DrawText(text, PANEL_X + PANEL_PAD + 5, PANEL_Y + PANEL_PAD + 10, 20, gPH.ink);
+    DrawText("Z: Continue", PANEL_W - 120, PANEL_Y + PANEL_H - 22, 14, gPH.inkLight);
 }

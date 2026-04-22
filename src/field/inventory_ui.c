@@ -3,6 +3,7 @@
 #include "../data/item_defs.h"
 #include "../data/move_defs.h"
 #include "../data/armor_defs.h"
+#include "../render/paper_harbor.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -315,10 +316,10 @@ static void DrawItemsTab(const InventoryUI *ui, const Party *party)
 {
     const Inventory *inv = &party->inventory;
     int x = 60, y = 95;
-    DrawText("Consumables", x, y, 18, WHITE);
+    DrawText("Consumables", x, y, 18, gPH.ink);
     y += 26;
     if (inv->itemCount == 0) {
-        DrawText("(Empty)", x, y, 16, GRAY);
+        DrawText("(Empty)", x, y, 16, gPH.inkLight);
     }
     for (int i = 0; i < inv->itemCount; i++) {
         const ItemDef *it = GetItemDef(inv->items[i].itemId);
@@ -337,11 +338,11 @@ static void DrawItemsTab(const InventoryUI *ui, const Party *party)
     int hbx = 500, hby = 68;
     DrawText(TextFormat("%s  HP %d/%d  ([ or ] switch)",
                         active->name, active->hp, active->maxHp),
-             hbx, hby, 14, WHITE);
-    DrawRectangle(hbx, hby + 18, 200, 8, (Color){30, 30, 30, 255});
+             hbx, hby, 14, gPH.ink);
+    DrawRectangle(hbx, hby + 18, 200, 8, (Color){60, 50, 40, 180});
     float pct = (float)active->hp / (float)active->maxHp;
-    DrawRectangle(hbx, hby + 18, (int)(200 * pct), 8, (Color){40, 200, 40, 255});
-    DrawText("Z: Use    [ or ]: Switch Member    X/I: Close", 60, 420, 14, GRAY);
+    DrawRectangle(hbx, hby + 18, (int)(200 * pct), 8, (Color){110, 160, 80, 255});
+    DrawText("Z: Use    [ or ]: Switch Member    X/I: Close", 60, 420, 14, gPH.inkLight);
 }
 
 static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
@@ -353,14 +354,14 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
 
     // Equipped on left
     int colX = 60, y = 95;
-    DrawText(TextFormat("%s's Moves  ([ or ] switch)", led->name), colX, y, 18, WHITE);
+    DrawText(TextFormat("%s's Moves  ([ or ] switch)", led->name), colX, y, 18, gPH.ink);
     y += 26;
     // Fixed-slot layout with group headers between rows.
     static const char *groupTitle[MOVE_GROUP_COUNT] = {
         "Attacks", "Item Attacks", "Specials"
     };
     for (int g = 0; g < MOVE_GROUP_COUNT; g++) {
-        DrawText(groupTitle[g], colX, y, 12, (Color){160, 180, 220, 255});
+        DrawText(groupTitle[g], colX, y, 12, gPH.inkLight);
         y += 16;
         int rowCount = MoveGroupSlotCount(g);
         for (int n = 0; n < rowCount; n++) {
@@ -401,11 +402,11 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
     int bagX = 420;
     y = 95;
     DrawText(TextFormat("Weapon Bag  %d/%d", inv->weaponCount, INVENTORY_MAX_WEAPONS),
-             bagX, y, 18, WHITE);
+             bagX, y, 18, gPH.ink);
     y += 26;
     int listTop = y;
     if (inv->weaponCount == 0) {
-        DrawText("(Empty)", bagX, y, 16, GRAY);
+        DrawText("(Empty)", bagX, y, 16, gPH.inkLight);
     }
     int scrollTop = 0;
     if (!ui->equippedFocus && ui->cursor >= BAG_VISIBLE) {
@@ -449,7 +450,7 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
 
     DrawText(ui->equippedFocus ? "Z: Unequip  Del: Toss Broken  Right: Bag  [ or ]: Switch Member  X/I: Close"
                                : "Z: Equip  Del: Discard  Left: Equipped  [ or ]: Switch  X/I: Close",
-             60, 420, 14, GRAY);
+             60, 420, 14, gPH.inkLight);
 }
 
 static void DrawArmorTab(const InventoryUI *ui, const Party *party)
@@ -460,7 +461,7 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
     const Combatant *led = &party->members[idx];
 
     int colX = 60, y = 95;
-    DrawText(TextFormat("%s's Armor  ([ or ] switch)", led->name), colX, y, 18, WHITE);
+    DrawText(TextFormat("%s's Armor  ([ or ] switch)", led->name), colX, y, 18, gPH.ink);
     y += 26;
     {
         bool sel = ui->equippedFocus;
@@ -481,10 +482,10 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
     int bagX = 420;
     y = 95;
     DrawText(TextFormat("Armor Bag  %d/%d", inv->armorCount, INVENTORY_MAX_ARMORS),
-             bagX, y, 18, WHITE);
+             bagX, y, 18, gPH.ink);
     y += 26;
     if (inv->armorCount == 0) {
-        DrawText("(Empty)", bagX, y, 16, GRAY);
+        DrawText("(Empty)", bagX, y, 16, gPH.inkLight);
     }
     for (int i = 0; i < inv->armorCount; i++) {
         const ArmorDef *ad = GetArmorDef(inv->armors[i].armorId);
@@ -500,22 +501,19 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
 
     DrawText(ui->equippedFocus ? "Z: Remove    Right: Bag    [ or ]: Switch Member    X/I: Close"
                                : "Z: Equip     Left: Equipped   [ or ]: Switch Member    X/I: Close",
-             60, 420, 14, GRAY);
+             60, 420, 14, gPH.inkLight);
 }
 
 void InventoryUIDraw(const InventoryUI *ui, const Party *party, int villageReputation)
 {
     if (!ui->active) return;
 
-    // Dim background
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 180});
-    // Panel
-    DrawRectangle(40, 30, GetScreenWidth() - 80, GetScreenHeight() - 60, (Color){10, 10, 30, 230});
-    DrawRectangleLines(40, 30, GetScreenWidth() - 80, GetScreenHeight() - 60, (Color){120, 140, 220, 255});
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), gPH.dimmer);
+    PHDrawPanel((Rectangle){40, 30, GetScreenWidth() - 80, GetScreenHeight() - 60}, 0x601);
 
-    DrawText("INVENTORY", 60, 36, 18, WHITE);
+    DrawText("INVENTORY", 60, 36, 18, gPH.ink);
     DrawText(TextFormat("Village Rep: %d", villageReputation),
-             GetScreenWidth() - 220, 36, 16, (Color){200, 220, 120, 255});
+             GetScreenWidth() - 220, 36, 16, gPH.ink);
     DrawTabHeader(ui->tab);
 
     if      (ui->tab == INV_TAB_ITEMS)   DrawItemsTab(ui, party);
@@ -523,5 +521,5 @@ void InventoryUIDraw(const InventoryUI *ui, const Party *party, int villageReput
     else                                 DrawArmorTab(ui, party);
 
     if (ui->status[0] != '\0')
-        DrawText(ui->status, 60, 398, 14, (Color){200, 220, 120, 255});
+        DrawText(ui->status, 60, 398, 14, gPH.ink);
 }

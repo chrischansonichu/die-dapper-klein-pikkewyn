@@ -3,6 +3,7 @@
 #include "../data/move_defs.h"
 #include "../data/item_defs.h"
 #include "../field/tilemap.h"
+#include "../render/paper_harbor.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1145,8 +1146,8 @@ void BattleDrawUI(const BattleContext *ctx)
         // instead so the player can see the whole grid.
         const char *hint = "Target: Arrows | Z=Confirm | X=Back";
         int th = 22;
-        DrawRectangle(0, 0, GetScreenWidth(), th, (Color){10, 10, 30, 180});
-        DrawText(hint, 10, 3, 16, WHITE);
+        DrawRectangle(0, 0, GetScreenWidth(), th, (Color){0x3C, 0x28, 0x14, 200});
+        DrawText(hint, 10, 3, 16, (Color){0xF7, 0xEF, 0xD9, 240});
         break;
     }
     case BS_NARRATION:
@@ -1162,6 +1163,8 @@ void BattleDrawUI(const BattleContext *ctx)
     default:
         break;
     }
+
+    PHDrawPaperGrain((Rectangle){0, 0, (float)GetScreenWidth(), (float)GetScreenHeight()});
 }
 
 int BattleFinished(const BattleContext *ctx)

@@ -10,6 +10,7 @@
 #include "../data/armor_defs.h"
 #include "../battle/battle_sprites.h"
 #include "../battle/battle_grid.h"
+#include "../render/paper_harbor.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1609,15 +1610,17 @@ void FieldDraw(const FieldState *ow)
         int boxW = 560, boxH = 140;
         int bx = (sw - boxW) / 2;
         int by = (sh - boxH) / 2;
-        DrawRectangle(0, 0, sw, sh, (Color){0, 0, 0, 150});
-        DrawRectangle(bx, by, boxW, boxH, (Color){15, 15, 35, 235});
-        DrawRectangleLines(bx, by, boxW, boxH, (Color){120, 140, 220, 255});
-        DrawText(title, bx + 20, by + 20, 20, WHITE);
+        DrawRectangle(0, 0, sw, sh, gPH.dimmer);
+        PHDrawPanel((Rectangle){bx, by, boxW, boxH}, 0x901);
+        DrawText(title, bx + 20, by + 20, 20, gPH.ink);
         if (warn[0] != '\0')
-            DrawText(warn, bx + 20, by + 52, 16, (Color){220, 180, 100, 255});
+            DrawText(warn, bx + 20, by + 52, 16, gPH.ink);
         DrawText("Z / Enter: Yes    X / Esc: No",
-                 bx + 20, by + boxH - 30, 14, (Color){200, 220, 220, 255});
+                 bx + 20, by + boxH - 30, 14, gPH.inkLight);
     }
+
+    // Paper-grain overlay over the whole frame — reads as texture, not noise.
+    PHDrawPaperGrain((Rectangle){0, 0, (float)GetScreenWidth(), (float)GetScreenHeight()});
 }
 
 void FieldReloadResources(FieldState *ow)

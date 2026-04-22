@@ -3,6 +3,7 @@
 #include "raylib.h"
 #include "../battle/inventory.h"
 #include "../data/item_defs.h"
+#include "../render/paper_harbor.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -110,39 +111,37 @@ void DonationUIDraw(const DonationUI *d, const Party *party, int rep)
     if (!d->active) return;
 
     int W = GetScreenWidth(), H = GetScreenHeight();
-    DrawRectangle(0, 0, W, H, (Color){0, 0, 0, 180});
-    DrawRectangle(60, 60, W - 120, H - 120, (Color){10, 10, 30, 235});
-    DrawRectangleLines(60, 60, W - 120, H - 120, (Color){120, 140, 220, 255});
+    DrawRectangle(0, 0, W, H, gPH.dimmer);
+    PHDrawPanel((Rectangle){60, 60, W - 120, H - 120}, 0x401);
 
-    DrawText("FOOD BANK", 80, 72, 20, WHITE);
-    DrawText(TextFormat("Village Rep: %d", rep),
-             W - 240, 76, 16, (Color){200, 220, 120, 255});
+    DrawText("FOOD BANK", 80, 72, 20, gPH.ink);
+    DrawText(TextFormat("Village Rep: %d", rep), W - 240, 76, 16, gPH.ink);
 
     if (d->phase == DON_PHASE_RESULT) {
         DrawText(TextFormat("You donated %d item%s. Thank you, Jan.",
                             d->donatedTotal, d->donatedTotal == 1 ? "" : "s"),
-                 80, 130, 18, WHITE);
+                 80, 130, 18, gPH.ink);
         DrawText(TextFormat("Reputation is now %d.", d->repAfter),
-                 80, 160, 18, (Color){200, 220, 120, 255});
+                 80, 160, 18, gPH.ink);
         DrawText("The young ones will eat tonight.",
-                 80, 200, 16, (Color){200, 200, 220, 255});
-        DrawText("Press any key to continue...", 80, H - 100, 14, GRAY);
+                 80, 200, 16, gPH.inkLight);
+        DrawText("Press any key to continue...", 80, H - 100, 14, gPH.inkLight);
         return;
     }
 
     const Inventory *inv = &party->inventory;
     int x = 80, y = 110;
     DrawText("\"The food bank feeds the young and the displaced.\"",
-             x, y, 16, (Color){200, 200, 220, 255});
+             x, y, 16, gPH.inkLight);
     y += 22;
     DrawText("\"Every item you give = +1 village reputation.\"",
-             x, y, 16, (Color){200, 200, 220, 255});
+             x, y, 16, gPH.inkLight);
     y += 30;
 
     if (d->entryCount == 0) {
-        DrawText("(You have no food to donate right now.)", x, y, 16, GRAY);
+        DrawText("(You have no food to donate right now.)", x, y, 16, gPH.inkLight);
     } else {
-        DrawText("Choose how many to give:", x, y, 14, WHITE);
+        DrawText("Choose how many to give:", x, y, 14, gPH.ink);
         y += 24;
         for (int i = 0; i < d->entryCount; i++) {
             bool sel = (i == d->cursor);
@@ -159,7 +158,7 @@ void DonationUIDraw(const DonationUI *d, const Party *party, int rep)
 
     int total = DonationTotal(d);
     DrawText(TextFormat("Total donated: %d  (rep gain: +%d)", total, total),
-             x, H - 140, 16, (Color){200, 220, 120, 255});
+             x, H - 140, 16, gPH.ink);
     DrawText("UP/DOWN: select   LEFT/RIGHT: adjust   Z/Enter: confirm   X: cancel",
-             x, H - 100, 14, GRAY);
+             x, H - 100, 14, gPH.inkLight);
 }

@@ -2,6 +2,7 @@
 #include "raylib.h"
 #include "map_source.h"
 #include "../state/game_state.h"
+#include "../render/paper_harbor.h"
 #include <stdio.h>
 
 // Destination table. Spawn coordinates match the default FieldInit spawns for
@@ -68,12 +69,11 @@ void DevWarpUIDraw(const DevWarpUI *d)
     int sw = GetScreenWidth(), sh = GetScreenHeight();
     int x = (sw - W) / 2, y = (sh - H) / 2;
 
-    DrawRectangle(0, 0, sw, sh, (Color){0, 0, 0, 160});
-    DrawRectangle(x, y, W, H, (Color){10, 10, 30, 240});
-    DrawRectangleLines(x, y, W, H, (Color){220, 200, 80, 255});
+    DrawRectangle(0, 0, sw, sh, gPH.dimmer);
+    PHDrawPanel((Rectangle){x, y, W, H}, 0x801);
 
-    DrawText("DEV WARP", x + 12, y + 10, 18, (Color){220, 200, 80, 255});
-    DrawText("UP/DOWN select  Z warp  X close", x + 12, y + 32, 12, GRAY);
+    DrawText("DEV WARP", x + 12, y + 10, 18, gPH.ink);
+    DrawText("UP/DOWN select  Z warp  X close", x + 12, y + 32, 12, gPH.inkLight);
 
     const int ROW_H  = 22;
     const int VISIBLE = 9;
@@ -92,5 +92,5 @@ void DevWarpUIDraw(const DevWarpUI *d)
     }
 
     // "DEV" watermark top-right so this build is obviously cheat-enabled.
-    DrawText("DEV", sw - 44, 6, 16, (Color){220, 200, 80, 255});
+    DrawText("DEV", sw - 44, 6, 16, (Color){220, 140, 60, 255});
 }

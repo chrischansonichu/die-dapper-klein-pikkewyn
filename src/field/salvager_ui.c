@@ -3,6 +3,7 @@
 #include "../battle/inventory.h"
 #include "../data/move_defs.h"
 #include "../data/item_defs.h"
+#include "../render/paper_harbor.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -117,38 +118,37 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
     if (!s->active) return;
 
     int W = GetScreenWidth(), H = GetScreenHeight();
-    DrawRectangle(0, 0, W, H, (Color){0, 0, 0, 180});
-    DrawRectangle(60, 60, W - 120, H - 120, (Color){25, 18, 10, 235});
-    DrawRectangleLines(60, 60, W - 120, H - 120, (Color){190, 110, 50, 255});
+    DrawRectangle(0, 0, W, H, gPH.dimmer);
+    PHDrawPanel((Rectangle){60, 60, W - 120, H - 120}, 0x201);
 
-    DrawText("SALVAGER", 80, 72, 20, WHITE);
+    DrawText("SALVAGER", 80, 72, 20, gPH.ink);
 
     if (s->phase == SAL_PHASE_RESULT) {
         DrawText(TextFormat("Handed over %d piece%s of gear.",
                             s->handedTotal, s->handedTotal == 1 ? "" : "s"),
-                 80, 130, 18, WHITE);
+                 80, 130, 18, gPH.ink);
         DrawText(TextFormat("Received %d Fresh Fish.", s->fishGained),
-                 80, 160, 18, (Color){200, 220, 120, 255});
+                 80, 160, 18, gPH.ink);
         DrawText("\"Better in my sack than on the seabed. Safe travels.\"",
-                 80, 200, 16, (Color){200, 200, 220, 255});
-        DrawText("Press any key to continue...", 80, H - 100, 14, GRAY);
+                 80, 200, 16, gPH.inkLight);
+        DrawText("Press any key to continue...", 80, H - 100, 14, gPH.inkLight);
         return;
     }
 
     const Inventory *inv = &party->inventory;
     int x = 80, y = 110;
     DrawText("\"Just making my rounds. I'll take any gear off your hands —\"",
-             x, y, 16, (Color){200, 200, 220, 255});
+             x, y, 16, gPH.inkLight);
     y += 22;
     DrawText("\"broken or not, so it doesn't end up tangled in a flipper. One fish per piece.\"",
-             x, y, 16, (Color){200, 200, 220, 255});
+             x, y, 16, gPH.inkLight);
     y += 30;
 
     if (s->entryCount == 0) {
         DrawText("(Your weapon bag is empty - nothing to salvage today.)",
-                 x, y, 16, GRAY);
+                 x, y, 16, gPH.inkLight);
     } else {
-        DrawText("Pick the pieces to hand over:", x, y, 14, WHITE);
+        DrawText("Pick the pieces to hand over:", x, y, 14, gPH.ink);
         y += 24;
 
         // Viewport — clamp visible rows and scroll with the cursor so a
@@ -207,7 +207,7 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
 
     int total = SalvagerSelectedTotal(s);
     DrawText(TextFormat("Hand over: %d   Fish received: %d", total, total),
-             x, H - 140, 16, (Color){200, 220, 120, 255});
+             x, H - 140, 16, gPH.ink);
     DrawText("UP/DOWN: select   SPACE: toggle   Z/Enter: confirm   X: cancel",
-             x, H - 100, 14, GRAY);
+             x, H - 100, 14, gPH.inkLight);
 }
