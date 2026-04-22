@@ -1,5 +1,6 @@
 #include "enemy_sprites.h"
 #include "../data/creature_defs.h"
+#include "../render/paper_harbor.h"
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -44,70 +45,69 @@ typedef struct SailorStyle {
 static SailorStyle StyleForCreature(int creatureId, float alpha, bool flash)
 {
     SailorStyle s = {0};
-    // Shared Simpsons-yellow skin across ranks.
-    s.skin      = Tint((Color){248, 205,  70, 255}, alpha, flash);
-    s.skinShade = Tint((Color){205, 165,  50, 255}, alpha, flash);
-    s.eye       = Tint((Color){ 15,  18,  32, 255}, alpha, flash);
-    s.beard     = Tint((Color){235, 235, 240, 255}, alpha, flash);
+    // Warm parchment skin across ranks — Paper Harbor palette, no Simpsons yellow.
+    s.skin      = Tint((Color){0xE8, 0xC4, 0x84, 255}, alpha, flash);
+    s.skinShade = Tint((Color){0xC0, 0x9A, 0x64, 255}, alpha, flash);
+    s.eye       = Tint(gPH.inkDark, alpha, flash);
+    s.beard     = Tint(gPH.panel, alpha, flash);
 
     switch (creatureId) {
     case CREATURE_BOSUN:
-        s.coat       = Tint((Color){ 70,  90,  55, 255}, alpha, flash);   // olive
-        s.coatShade  = Tint((Color){ 42,  58,  30, 255}, alpha, flash);
-        s.collar     = Tint((Color){235, 235, 240, 255}, alpha, flash);
-        s.stripe     = Tint((Color){185, 200, 110, 255}, alpha, flash);
-        s.tie        = Tint((Color){ 42,  58,  30, 255}, alpha, flash);
-        s.hat        = Tint((Color){ 70,  90,  55, 255}, alpha, flash);
-        s.hatBand    = Tint((Color){ 42,  58,  30, 255}, alpha, flash);
-        s.pants      = Tint((Color){230, 225, 205, 255}, alpha, flash);   // khaki
-        s.pantsShade = Tint((Color){190, 185, 165, 255}, alpha, flash);
-        s.boots      = Tint((Color){ 25,  30,  40, 255}, alpha, flash);
+        s.coat       = Tint(gPH.grassDark, alpha, flash);                 // dark pastel olive
+        s.coatShade  = Tint((Color){0x6A, 0x84, 0x4C, 255}, alpha, flash);
+        s.collar     = Tint(gPH.panel, alpha, flash);
+        s.stripe     = Tint(gPH.grass, alpha, flash);
+        s.tie        = Tint((Color){0x6A, 0x84, 0x4C, 255}, alpha, flash);
+        s.hat        = Tint(gPH.grassDark, alpha, flash);
+        s.hatBand    = Tint((Color){0x6A, 0x84, 0x4C, 255}, alpha, flash);
+        s.pants      = Tint(gPH.wall, alpha, flash);                      // parchment khaki
+        s.pantsShade = Tint((Color){0xC4, 0xAE, 0x88, 255}, alpha, flash);
+        s.boots      = Tint(gPH.inkDark, alpha, flash);
         s.hatStyle   = 1;
         s.hasBeard   = false;
         break;
     case CREATURE_CAPTAIN:
     case CREATURE_CAPTAIN_BOSS:
-        s.coat       = Tint((Color){ 24,  30,  58, 255}, alpha, flash);   // near-black navy
-        s.coatShade  = Tint((Color){ 10,  14,  30, 255}, alpha, flash);
-        s.collar     = Tint((Color){235, 195,  75, 255}, alpha, flash);   // gold collar
-        s.stripe     = Tint((Color){245, 210,  90, 255}, alpha, flash);
-        s.tie        = Tint((Color){150,  35,  45, 255}, alpha, flash);   // crimson sash
-        s.hat        = Tint((Color){ 14,  18,  38, 255}, alpha, flash);
-        s.hatBand    = Tint((Color){225, 185,  68, 255}, alpha, flash);   // gold band
-        s.pants      = Tint((Color){225, 225, 230, 255}, alpha, flash);
-        s.pantsShade = Tint((Color){180, 180, 190, 255}, alpha, flash);
-        s.boots      = Tint((Color){ 10,  12,  22, 255}, alpha, flash);
+        s.coat       = Tint((Color){0x2E, 0x3C, 0x60, 255}, alpha, flash); // desaturated navy
+        s.coatShade  = Tint(gPH.inkDark, alpha, flash);
+        s.collar     = Tint((Color){0xD8, 0xA8, 0x60, 255}, alpha, flash); // muted gold collar
+        s.stripe     = Tint((Color){0xE0, 0xB4, 0x68, 255}, alpha, flash);
+        s.tie        = Tint((Color){0xA8, 0x50, 0x54, 255}, alpha, flash); // burgundy sash
+        s.hat        = Tint(gPH.inkDark, alpha, flash);
+        s.hatBand    = Tint((Color){0xD0, 0xA0, 0x58, 255}, alpha, flash); // muted gold band
+        s.pants      = Tint(gPH.panel, alpha, flash);
+        s.pantsShade = Tint((Color){0xC4, 0xB4, 0x90, 255}, alpha, flash);
+        s.boots      = Tint(gPH.inkDark, alpha, flash);
         s.hatStyle   = 2;
         s.hasBeard   = true;
         break;
     case CREATURE_POACHER:
-        // Wetsuit black with a teal stripe, no hat. Bare head reads as the
-        // goggle silhouette once the face layer lands on top.
-        s.coat       = Tint((Color){ 18,  22,  28, 255}, alpha, flash);
-        s.coatShade  = Tint((Color){  8,  10,  14, 255}, alpha, flash);
-        s.collar     = Tint((Color){ 40,  52,  58, 255}, alpha, flash);
-        s.stripe     = Tint((Color){ 70, 195, 190, 255}, alpha, flash);   // teal
-        s.tie        = Tint((Color){ 25,  32,  38, 255}, alpha, flash);
-        s.hat        = Tint((Color){  0,   0,   0,   0}, alpha, flash);   // no hat
-        s.hatBand    = Tint((Color){  0,   0,   0,   0}, alpha, flash);
-        s.pants      = Tint((Color){ 18,  22,  28, 255}, alpha, flash);
-        s.pantsShade = Tint((Color){  8,  10,  14, 255}, alpha, flash);
-        s.boots      = Tint((Color){ 35,  55,  60, 255}, alpha, flash);   // neoprene fins
-        s.hatStyle   = 3;  // "none" — hat-drawing branch handles this
+        // Wetsuit ink-dark with a softened teal stripe, no hat.
+        s.coat       = Tint(gPH.inkDark, alpha, flash);
+        s.coatShade  = Tint((Color){0x1A, 0x12, 0x08, 255}, alpha, flash);
+        s.collar     = Tint((Color){0x3A, 0x44, 0x40, 255}, alpha, flash);
+        s.stripe     = Tint((Color){0x5E, 0x92, 0xB6, 255}, alpha, flash); // waterDark teal
+        s.tie        = Tint((Color){0x2A, 0x20, 0x18, 255}, alpha, flash);
+        s.hat        = Tint((Color){0, 0, 0, 0}, alpha, flash);             // no hat
+        s.hatBand    = Tint((Color){0, 0, 0, 0}, alpha, flash);
+        s.pants      = Tint(gPH.inkDark, alpha, flash);
+        s.pantsShade = Tint((Color){0x1A, 0x12, 0x08, 255}, alpha, flash);
+        s.boots      = Tint((Color){0x3A, 0x44, 0x40, 255}, alpha, flash);  // neoprene fins
+        s.hatStyle   = 3;
         s.hasBeard   = false;
         break;
     case CREATURE_DECKHAND:
     default:
-        s.coat       = Tint((Color){ 40,  60, 120, 255}, alpha, flash);   // navy
-        s.coatShade  = Tint((Color){ 22,  38,  82, 255}, alpha, flash);
-        s.collar     = Tint((Color){240, 240, 245, 255}, alpha, flash);
-        s.stripe     = Tint((Color){100, 155, 225, 255}, alpha, flash);
-        s.tie        = Tint((Color){ 25,  35,  75, 255}, alpha, flash);
-        s.hat        = Tint((Color){240, 240, 245, 255}, alpha, flash);   // white cap
-        s.hatBand    = Tint((Color){ 30,  45,  85, 255}, alpha, flash);
-        s.pants      = Tint((Color){240, 240, 245, 255}, alpha, flash);
-        s.pantsShade = Tint((Color){200, 200, 210, 255}, alpha, flash);
-        s.boots      = Tint((Color){ 25,  35,  65, 255}, alpha, flash);
+        s.coat       = Tint((Color){0x50, 0x68, 0xA0, 255}, alpha, flash); // pastel navy
+        s.coatShade  = Tint((Color){0x38, 0x4A, 0x78, 255}, alpha, flash);
+        s.collar     = Tint(gPH.panel, alpha, flash);
+        s.stripe     = Tint(gPH.water, alpha, flash);
+        s.tie        = Tint((Color){0x38, 0x4A, 0x78, 255}, alpha, flash);
+        s.hat        = Tint(gPH.panel, alpha, flash);
+        s.hatBand    = Tint((Color){0x38, 0x4A, 0x78, 255}, alpha, flash);
+        s.pants      = Tint(gPH.panel, alpha, flash);
+        s.pantsShade = Tint((Color){0xC4, 0xB4, 0x90, 255}, alpha, flash);
+        s.boots      = Tint((Color){0x38, 0x4A, 0x78, 255}, alpha, flash);
         s.hatStyle   = 0;
         s.hasBeard   = false;
         break;

@@ -1,5 +1,6 @@
 #include "player.h"
 #include "field.h"
+#include "../render/paper_harbor.h"
 #include <math.h>
 
 static const int DIR_DX[4] = {  0, -1,  1,  0 };
@@ -116,17 +117,26 @@ void PlayerUpdate(Player *p, const TileMap *m, const struct FieldState *f)
 // foot step; no atlas needed.
 static void DrawJanRounded(float px, float py, float sz, int dir, int frame)
 {
-    const Color black  = (Color){ 25,  25,  30, 255};
-    const Color cream  = (Color){235, 215, 160, 255};
-    const Color orange = (Color){255, 160,  40, 255};
+    const Color black  = gPH.inkDark;
+    const Color cream  = (Color){0xEC, 0xDA, 0xAC, 255};
+    const Color orange = (Color){0xD8, 0x96, 0x3A, 255};
 
     float cx = px + sz * 0.5f;
 
-    // Body (rounded black rectangle) — leaves room for the head/beak up top
-    // and feet at the bottom.
+    // Body (rounded ink-brown rectangle) — leaves room for the head/beak up
+    // top and feet at the bottom.
     Rectangle body = { px + sz * 0.18f, py + sz * 0.22f,
                        sz * 0.64f, sz * 0.66f };
     DrawRectangleRounded(body, 0.55f, 14, black);
+    // Wobbled ink outline along the body's vertical edges — sells the
+    // hand-drawn silhouette without outlining the rounded corners (which
+    // would require arc segments).
+    PHWobbleLine((Vector2){body.x, body.y + sz * 0.12f},
+                 (Vector2){body.x, body.y + body.height - sz * 0.10f},
+                 0.8f, 1.5f, gPH.ink, 0xB101);
+    PHWobbleLine((Vector2){body.x + body.width, body.y + sz * 0.12f},
+                 (Vector2){body.x + body.width, body.y + body.height - sz * 0.10f},
+                 0.8f, 1.5f, gPH.ink, 0xB102);
 
     // Cream belly — only visible from the front or in profile. Hidden
     // when Jan is facing away so the back of him reads as solid black.
@@ -147,8 +157,8 @@ static void DrawJanRounded(float px, float py, float sz, int dir, int frame)
     if (dir == 2) pupilDX =  1.0f;
 
     if (dir != 3) {
-        DrawCircle((int)eyeLX, (int)eyeY, sz * 0.06f, WHITE);
-        DrawCircle((int)eyeRX, (int)eyeY, sz * 0.06f, WHITE);
+        DrawCircle((int)eyeLX, (int)eyeY, sz * 0.06f, gPH.panel);
+        DrawCircle((int)eyeRX, (int)eyeY, sz * 0.06f, gPH.panel);
         DrawCircle((int)(eyeLX + pupilDX), (int)(eyeY + pupilDY),
                    sz * 0.03f, black);
         DrawCircle((int)(eyeRX + pupilDX), (int)(eyeY + pupilDY),
@@ -222,13 +232,13 @@ void PlayerDraw(const Player *p)
     if (p->onWater) {
         float rx = cx;
         float ry = py + sz * 0.80f;
-        DrawEllipse((int)rx, (int)ry, sz * 0.45f, sz * 0.14f,
-                    (Color){ 30, 110, 170, 160});
+        Color ripple = gPH.waterDark; ripple.a = 170;
+        DrawEllipse((int)rx, (int)ry, sz * 0.45f, sz * 0.14f, ripple);
     } else {
         // Contact shadow on land. Skipped on water — the ripple above reads
         // as the contact, and a dark ellipse underwater looks wrong.
         DrawEllipse((int)cx, (int)(py + sz * 0.94f),
-                    sz * 0.30f, sz * 0.09f, (Color){0, 0, 0, 90});
+                    sz * 0.30f, sz * 0.09f, (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 90});
     }
 
     DrawJanRounded(px, py, sz, p->dir, p->animFrame);
@@ -237,11 +247,11 @@ void PlayerDraw(const Player *p)
     if (p->onWater) {
         float waterY = py + sz * 0.66f;
         float waterH = sz * 0.34f;
-        DrawRectangle((int)px, (int)waterY, (int)sz, (int)waterH,
-                      (Color){ 40, 120, 185, 230});
+        Color waterFill = gPH.waterDark; waterFill.a = 230;
+        DrawRectangle((int)px, (int)waterY, (int)sz, (int)waterH, waterFill);
         float time = (float)GetTime();
         float wobble = sinf(time * 4.0f) * 2.0f;
-        Color foam = (Color){220, 235, 250, 220};
+        Color foam = gPH.panel; foam.a = 230;
         DrawLineEx((Vector2){px + 2,              waterY + 4 + wobble},
                    (Vector2){px + sz * 0.35f,     waterY + 2 + wobble},
                    2.0f, foam);
@@ -253,7 +263,7 @@ void PlayerDraw(const Player *p)
     // Drying droplets popping off the head.
     if (p->dryingFrames > 0) {
         float tNorm = 1.0f - (float)p->dryingFrames / 24.0f;
-        Color drop = (Color){170, 220, 255, 230};
+        Color drop = gPH.water;
         float baseX = cx;
         float baseY = py + sz * 0.25f;
         for (int k = -2; k <= 2; k += 2) {

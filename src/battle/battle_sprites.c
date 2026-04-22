@@ -1,6 +1,7 @@
 #include "battle_sprites.h"
 #include "../data/creature_defs.h"
 #include "../field/enemy_sprites.h"
+#include "../render/paper_harbor.h"
 
 // Tint helper: multiplies alpha, or replaces with white when flashing. All
 // per-creature draw helpers funnel colors through this so the flash frame
@@ -23,15 +24,23 @@ static void DrawJanSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
     float px = cx - sz / 2.0f;
     float py = r.y;
 
-    Color black  = Tint((Color){ 25,  25,  30, 255}, alpha, flash);
-    Color cream  = Tint((Color){235, 215, 160, 255}, alpha, flash);
-    Color orange = Tint((Color){255, 160,  40, 255}, alpha, flash);
-    Color white  = Tint(WHITE, alpha, flash);
-    Color eyeBlk = Tint((Color){ 25,  25,  30, 255}, alpha, flash);
+    Color black  = Tint(gPH.inkDark, alpha, flash);
+    Color cream  = Tint((Color){0xEC, 0xDA, 0xAC, 255}, alpha, flash);
+    Color orange = Tint((Color){0xD8, 0x96, 0x3A, 255}, alpha, flash);
+    Color white  = Tint(gPH.panel, alpha, flash);
+    Color eyeBlk = Tint(gPH.inkDark, alpha, flash);
+    Color ink    = Tint(gPH.ink, alpha, flash);
 
     // Body (rounded)
     Rectangle body  = { px + sz * 0.18f, py + sz * 0.25f, sz * 0.64f, sz * 0.65f };
     DrawRectangleRounded(body, 0.55f, 14, black);
+    // Wobbled ink outline along the body silhouette.
+    PHWobbleLine((Vector2){body.x, body.y + sz * 0.10f},
+                 (Vector2){body.x, body.y + body.height - sz * 0.10f},
+                 0.8f, 1.5f, ink, 0xD101);
+    PHWobbleLine((Vector2){body.x + body.width, body.y + sz * 0.10f},
+                 (Vector2){body.x + body.width, body.y + body.height - sz * 0.10f},
+                 0.8f, 1.5f, ink, 0xD102);
     // Cream belly
     Rectangle belly = { px + sz * 0.30f, py + sz * 0.42f, sz * 0.40f, sz * 0.42f };
     DrawRectangleRounded(belly, 0.6f, 12, cream);
@@ -104,10 +113,10 @@ static void DrawCaptainSprite(Rectangle r, bool faceLeft, float alpha, bool flas
 static void DrawSealSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
 {
     // Cape fur seal palette — these are South African animals, not arctic.
-    Color body  = Tint((Color){120,  80,  50, 255}, alpha, flash);
-    Color dark  = Tint((Color){ 70,  45,  25, 255}, alpha, flash);
-    Color belly = Tint((Color){205, 170, 130, 255}, alpha, flash);
-    Color blk   = Tint((Color){ 20,  20,  25, 255}, alpha, flash);
+    Color body  = Tint((Color){0xA8, 0x7E, 0x54, 255}, alpha, flash);
+    Color dark  = Tint(gPH.ink, alpha, flash);
+    Color belly = Tint((Color){0xE0, 0xC0, 0x98, 255}, alpha, flash);
+    Color blk   = Tint(gPH.inkDark, alpha, flash);
 
     float sz = r.height;
     float px = r.x + (r.width - sz) / 2.0f;
@@ -191,8 +200,8 @@ void DrawCombatantSprite(int creatureId, Rectangle r, bool isEnemy,
         case CREATURE_SEAL:         DrawSealSprite(rr,     faceLeft, alpha, flashWhite); break;
         default: {
             // Fallback: the old colored box, so unknown creatures still render.
-            Color c = isEnemy ? (Color){200, 60, 60, 255} : (Color){60, 100, 200, 255};
-            if (flashWhite) c = WHITE;
+            Color c = isEnemy ? (Color){0xA8, 0x50, 0x54, 255} : (Color){0x50, 0x68, 0xA0, 255};
+            if (flashWhite) c = gPH.panel;
             c.a = (unsigned char)(c.a * alpha);
             DrawRectangleRec(rr, c);
         } break;

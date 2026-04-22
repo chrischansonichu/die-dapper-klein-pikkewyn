@@ -1,5 +1,6 @@
 #include "npc.h"
 #include "enemy.h"
+#include "../render/paper_harbor.h"
 #include <string.h>
 #include <math.h>
 
@@ -77,10 +78,10 @@ void NpcTurnToFace(Npc *n, int tileX, int tileY)
 // color so keeper / food-bank variants can reuse this silhouette.
 // hatBand != 0 paints a colored stripe around the hat brim (keeper = green,
 // food-bank = blue); elder leaves it off.
-static void DrawPenguinPerson(int px, int py, int sz, int dir, Color belly, Color hatBand)
+static void DrawPenguinPerson(int px, int py, int sz, int dir, Color belly, Color hatBand, int seedSalt)
 {
-    const Color black  = (Color){ 25,  25,  30, 255};
-    const Color orange = (Color){255, 160,  40, 255};
+    const Color black  = gPH.inkDark;
+    const Color orange = (Color){0xD8, 0x96, 0x3A, 255};
 
     float cx = px + sz / 2.0f;
 
@@ -99,12 +100,19 @@ static void DrawPenguinPerson(int px, int py, int sz, int dir, Color belly, Colo
     // Body (rounded rectangle)
     Rectangle body = { px + sz * 0.18f, py + sz * 0.30f, sz * 0.64f, sz * 0.60f };
     DrawRectangleRounded(body, 0.55f, 14, black);
+    // Wobbled ink outline along the body silhouette.
+    PHWobbleLine((Vector2){body.x, body.y + sz * 0.10f},
+                 (Vector2){body.x, body.y + body.height - sz * 0.10f},
+                 0.8f, 1.5f, gPH.ink, seedSalt + 1);
+    PHWobbleLine((Vector2){body.x + body.width, body.y + sz * 0.10f},
+                 (Vector2){body.x + body.width, body.y + body.height - sz * 0.10f},
+                 0.8f, 1.5f, gPH.ink, seedSalt + 2);
 
     // Belly (color varies by role)
     Rectangle bellyRect = { px + sz * 0.30f, py + sz * 0.46f, sz * 0.40f, sz * 0.38f };
     DrawRectangleRounded(bellyRect, 0.6f, 12, belly);
 
-    // Eyes — small whites with black pupil, shifted by facing
+    // Eyes — small cream whites with ink pupil, shifted by facing
     float eyeY  = py + sz * 0.40f;
     float pupilOffX = 0, pupilOffY = 0;
     if (dir == 0) pupilOffY =  1;
@@ -113,8 +121,8 @@ static void DrawPenguinPerson(int px, int py, int sz, int dir, Color belly, Colo
     if (dir == 2) pupilOffX =  1;
     float eyeLX = cx - sz * 0.12f;
     float eyeRX = cx + sz * 0.12f;
-    DrawCircle((int)eyeLX, (int)eyeY, 3, WHITE);
-    DrawCircle((int)eyeRX, (int)eyeY, 3, WHITE);
+    DrawCircle((int)eyeLX, (int)eyeY, 3, gPH.panel);
+    DrawCircle((int)eyeRX, (int)eyeY, 3, gPH.panel);
     DrawCircle((int)(eyeLX + pupilOffX), (int)(eyeY + pupilOffY), 1, black);
     DrawCircle((int)(eyeRX + pupilOffX), (int)(eyeY + pupilOffY), 1, black);
 
@@ -141,29 +149,32 @@ static void DrawPenguinPerson(int px, int py, int sz, int dir, Color belly, Colo
 }
 
 static void DrawPenguinElder(int px, int py, int sz, int dir) {
-    DrawPenguinPerson(px, py, sz, dir, (Color){235, 215, 160, 255}, (Color){0, 0, 0, 0});
+    DrawPenguinPerson(px, py, sz, dir,
+                      (Color){0xEC, 0xDA, 0xAC, 255}, (Color){0, 0, 0, 0},
+                      0xC101);
 }
 
 static void DrawKeeper(int px, int py, int sz, int dir) {
-    // Green-bellied + green hat-band — the trader in the village.
+    // Grass-bellied + dark grass hat-band — the trader in the village.
     DrawPenguinPerson(px, py, sz, dir,
-                      (Color){170, 210, 130, 255},
-                      (Color){ 80, 160,  80, 255});
+                      gPH.grass, gPH.grassDark,
+                      0xC201);
 }
 
 static void DrawFoodBank(int px, int py, int sz, int dir) {
-    // Blue-bellied + blue hat-band — the donation keeper.
+    // Water-bellied + dark water hat-band — the donation keeper.
     DrawPenguinPerson(px, py, sz, dir,
-                      (Color){150, 190, 225, 255},
-                      (Color){ 70, 120, 200, 255});
+                      gPH.water, gPH.waterDark,
+                      0xC301);
 }
 
 static void DrawScribe(int px, int py, int sz, int dir) {
     // Parchment-belly + burgundy hat-band — the village archivist who saves
     // the player's journey.
     DrawPenguinPerson(px, py, sz, dir,
-                      (Color){225, 210, 175, 255},
-                      (Color){130,  40,  60, 255});
+                      (Color){0xE5, 0xD0, 0xA8, 255},
+                      (Color){0xA8, 0x50, 0x54, 255},
+                      0xC401);
 }
 
 // Rust-coated belly + weathered orange hatband mark the salvager: he trades
@@ -172,23 +183,24 @@ static void DrawScribe(int px, int py, int sz, int dir) {
 // without forcing a whole new sprite.
 static void DrawSalvager(int px, int py, int sz, int dir) {
     // Sack first so it sits behind the body.
-    const Color burlap     = (Color){150, 120,  70, 255};
-    const Color burlapDark = (Color){ 95,  75,  40, 255};
+    const Color burlap     = (Color){0xC4, 0x9C, 0x60, 255};
+    const Color burlapDark = gPH.dockDark;
     Rectangle sack = { px + sz * 0.72f, py + sz * 0.58f, sz * 0.22f, sz * 0.28f };
     DrawRectangleRounded(sack, 0.5f, 10, burlap);
     DrawRectangleRounded((Rectangle){sack.x, sack.y, sack.width, sack.height * 0.18f},
                          0.4f, 6, burlapDark);
 
     DrawPenguinPerson(px, py, sz, dir,
-                      (Color){200, 140,  80, 255},
-                      (Color){190, 110,  50, 255});
+                      (Color){0xC8, 0x9A, 0x6A, 255},
+                      (Color){0xA8, 0x74, 0x40, 255},
+                      0xC501);
 }
 
 // Sooty penguin with a forge-orange apron band. A small anvil silhouette sits
 // beside him to telegraph the blacksmith role.
 static void DrawBlacksmith(int px, int py, int sz, int dir) {
-    const Color anvilBody = (Color){ 55,  55,  60, 255};
-    const Color anvilBase = (Color){ 30,  30,  35, 255};
+    const Color anvilBody = gPH.inkLight;
+    const Color anvilBase = gPH.ink;
     // Anvil on the side opposite the cane so it's not covered by the body.
     float ax = px + sz * 0.06f;
     float ay = py + sz * 0.70f;
@@ -199,16 +211,17 @@ static void DrawBlacksmith(int px, int py, int sz, int dir) {
                   (int)(sz * 0.10f), (int)(sz * 0.04f), anvilBody);
 
     DrawPenguinPerson(px, py, sz, dir,
-                      (Color){200, 140,  60, 255},   // forge-orange apron belly
-                      (Color){ 80,  55,  30, 255});  // dark leather hat band
+                      (Color){0xD0, 0x96, 0x48, 255},   // forge-orange apron belly
+                      (Color){0x6E, 0x48, 0x28, 255},   // dark leather hat band
+                      0xC601);
 }
 
 // Cape fur seal — warm brown with a lighter belly
 static void DrawSeal(int px, int py, int sz, int dir)
 {
-    const Color body  = (Color){120,  80,  50, 255};   // warm brown
-    const Color dark  = (Color){ 70,  45,  25, 255};   // deep brown shadow
-    const Color belly = (Color){205, 170, 130, 255};   // tawny belly
+    const Color body  = (Color){0xA8, 0x7E, 0x54, 255};   // warm pastel brown
+    const Color dark  = gPH.ink;                          // deep ink-brown shadow
+    const Color belly = (Color){0xE0, 0xC0, 0x98, 255};   // tawny belly
 
     float cx = px + sz / 2.0f;
 
@@ -242,12 +255,12 @@ static void DrawSeal(int px, int py, int sz, int dir)
         (Vector2){headCx + sz * 0.08f * side, headCy + sz * 0.00f},
         (Vector2){headCx + sz * 0.08f * side, headCy + sz * 0.12f},
         (Vector2){headCx + sz * 0.26f * side, headCy + sz * 0.06f}, belly);
-    DrawCircle((int)(sx + 2 * side), (int)(headCy + sz * 0.04f), 1, BLACK);
+    DrawCircle((int)(sx + 2 * side), (int)(headCy + sz * 0.04f), 1, gPH.inkDark);
 
     // Eyes clustered toward the facing side
     float eyeY = headCy - sz * 0.04f;
-    DrawCircle((int)(headCx + sz * 0.02f * side), (int)eyeY, 2, BLACK);
-    DrawCircle((int)(headCx + sz * 0.12f * side), (int)eyeY, 2, BLACK);
+    DrawCircle((int)(headCx + sz * 0.02f * side), (int)eyeY, 2, gPH.inkDark);
+    DrawCircle((int)(headCx + sz * 0.12f * side), (int)eyeY, 2, gPH.inkDark);
 
     // Whiskers fan out from the snout
     float wX = headCx + sz * 0.14f * side;
@@ -281,7 +294,7 @@ void NpcDraw(const Npc *n, Camera2D cam)
     float shCx = (float)(n->tileX * tilePixels) + (float)sz * 0.5f;
     float shY  = (float)(n->tileY * tilePixels) + (float)sz * 0.94f;
     DrawEllipse((int)shCx, (int)shY, sz * 0.30f, sz * 0.09f,
-                (Color){0, 0, 0, 90});
+                (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 90});
 
     switch (n->type) {
         case NPC_PENGUIN_ELDER: DrawPenguinElder(px, py, sz, n->dir); break;
@@ -304,7 +317,7 @@ void NpcDrawCaptiveOverlay(const Npc *n)
     int sz = NPC_SPRITE_SIZE * TILE_SCALE;
 
     // Rope: two warm-brown diagonals crossing the body + a knot at the X.
-    const Color rope = (Color){130,  85,  45, 235};
+    const Color rope = (Color){gPH.dockDark.r, gPH.dockDark.g, gPH.dockDark.b, 235};
     float thick = 2.0f * TILE_SCALE;
     float x0 = px + sz * 0.18f;
     float x1 = px + sz * 0.82f;

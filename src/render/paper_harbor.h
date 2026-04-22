@@ -26,6 +26,7 @@ typedef struct PHPalette {
     Color wall;       // building wall fill
     Color ink;        // text + borders
     Color inkLight;   // muted ink for subtitles / hints
+    Color inkDark;    // near-black ink-brown for character silhouettes (Jan, captains, wetsuits)
     Color panel;      // parchment panel fill (slightly creamier than bg)
     Color dimmer;     // warm-brown modal backdrop (use .a ~ 120)
 } PHPalette;
