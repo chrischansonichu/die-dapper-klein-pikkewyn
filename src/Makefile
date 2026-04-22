@@ -48,10 +48,13 @@ PROJECT_SOURCE_FILES  ?= \
     battle/combatant.c \
     battle/inventory.c \
     battle/party.c \
+    data/armor_defs.c \
     data/creature_defs.c \
     data/item_defs.c \
     data/move_defs.c \
     data/room_templates.c \
+    field/dev_warp_ui.c \
+    field/discard_ui.c \
     field/donation_ui.c \
     field/enemy.c \
     field/enemy_sprites.c \
@@ -230,7 +233,7 @@ else
 endif
 
 ifeq ($(BUILD_MODE),DEBUG)
-    CFLAGS += -g -D_DEBUG
+    CFLAGS += -g -D_DEBUG -DDEV_BUILD=1
 else
     ifeq ($(PLATFORM),PLATFORM_WEB)
         ifeq ($(BUILD_WEB_ASYNCIFY),TRUE)

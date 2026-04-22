@@ -151,6 +151,8 @@ void EnemyInit(FieldEnemy *e, int tileX, int tileY, int dir,
     e->dropItemPct    = 0;
     e->dropWeaponId   = -1;
     e->dropWeaponPct  = 0;
+    e->dropArmorId    = -1;
+    e->dropArmorPct   = 0;
     e->onWater        = false;
     e->dryingFrames   = 0;
 }
@@ -162,6 +164,12 @@ void EnemySetDrops(FieldEnemy *e, int itemId, int itemPct,
     e->dropItemPct   = itemPct;
     e->dropWeaponId  = weaponId;
     e->dropWeaponPct = weaponPct;
+}
+
+void EnemySetArmorDrop(FieldEnemy *e, int armorId, int pct)
+{
+    e->dropArmorId  = armorId;
+    e->dropArmorPct = pct;
 }
 
 void EnemySetPatrol(FieldEnemy *e, int x0, int y0, int x1, int y1)
@@ -341,7 +349,17 @@ void EnemyDraw(const FieldEnemy *e)
 
     // Procedural rounded sailor — same visual family as the Elder Penguin
     // and Seal (DrawRectangleRounded / DrawCircle / DrawTriangle).
-    Rectangle dst = { fpx, top, sz, sz };
+    // Honor the creature's sprite scale, but clamp to 1.3x on the overworld
+    // so the boss doesn't overrun adjacent tiles. Anchor at the bottom so
+    // the feet still sit on the tile while the torso towers above.
+    const CreatureDef *cdef = GetCreatureDef(e->creatureId);
+    float scale = (cdef && cdef->spriteScale > 0.0f) ? cdef->spriteScale : 1.0f;
+    if (scale > 1.3f) scale = 1.3f;
+    float scaledW = sz * scale;
+    float scaledH = sz * scale;
+    float scaledX = fpx + (sz - scaledW) * 0.5f;
+    float scaledY = top + (sz - scaledH);
+    Rectangle dst = { scaledX, scaledY, scaledW, scaledH };
     EnemySpritesDrawSailor(e->creatureId, dst, e->dir, e->animFrame,
                            1.0f, false);
 

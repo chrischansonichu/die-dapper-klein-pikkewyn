@@ -15,6 +15,8 @@
 #include "stats_ui.h"
 #include "donation_ui.h"
 #include "salvager_ui.h"
+#include "discard_ui.h"
+#include "dev_warp_ui.h"
 
 // Forward declaration — field.c reads/writes the persistent party + inventory
 // through this pointer; ownership lives in screen_gameplay.c.
@@ -67,6 +69,16 @@ typedef struct FieldState {
     // Salvager trade picker (opened by NPC_SALVAGER interaction) — hands over
     // broken weapons in exchange for fish.
     SalvagerUI    salvagerUi;
+
+    // Bag-full discard prompt — opened whenever a weapon is about to enter a
+    // full bag (post-battle drops, keeper rewards, inventory unequip). Holds a
+    // pending weapon until the player picks one to toss or cancels.
+    DiscardUI     discardUi;
+
+    // Developer-only warp cheat — F9 opens a picker listing every destination
+    // so we can jump straight to a floor for testing. Gated by DEV_BUILD at
+    // the input site in field.c; the struct field compiles unconditionally.
+    DevWarpUI     devWarpUi;
 
     // Warp confirmation prompt — -1 when no prompt is open, otherwise an
     // index into warps[]. Set by facing + Z'ing a warp tile; confirmed with

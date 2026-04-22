@@ -9,7 +9,7 @@
 
 #define MOVE_NAME_LEN  32
 #define MOVE_DESC_LEN  64
-#define MOVE_COUNT     6
+#define MOVE_COUNT     8
 
 typedef enum MoveRange {
     RANGE_MELEE = 0,    // must be in front column, hits adjacent enemy

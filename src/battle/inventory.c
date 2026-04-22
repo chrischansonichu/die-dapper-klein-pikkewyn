@@ -55,3 +55,21 @@ bool InventoryTakeWeapon(Inventory *inv, int slotIdx, WeaponStack *out)
     inv->weaponCount--;
     return true;
 }
+
+bool InventoryAddArmor(Inventory *inv, int armorId)
+{
+    if (inv->armorCount >= INVENTORY_MAX_ARMORS) return false;
+    inv->armors[inv->armorCount].armorId = armorId;
+    inv->armorCount++;
+    return true;
+}
+
+bool InventoryTakeArmor(Inventory *inv, int slotIdx, ArmorStack *out)
+{
+    if (slotIdx < 0 || slotIdx >= inv->armorCount) return false;
+    *out = inv->armors[slotIdx];
+    for (int i = slotIdx; i < inv->armorCount - 1; i++)
+        inv->armors[i] = inv->armors[i + 1];
+    inv->armorCount--;
+    return true;
+}

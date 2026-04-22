@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include "../battle/party.h"
+#include "discard_ui.h"
 
 //----------------------------------------------------------------------------------
 // InventoryUI - overlay for viewing and managing the party inventory outside battle
@@ -11,6 +12,7 @@
 typedef enum InventoryTab {
     INV_TAB_ITEMS = 0,
     INV_TAB_WEAPONS,
+    INV_TAB_ARMOR,
     INV_TAB_COUNT,
 } InventoryTab;
 
@@ -39,7 +41,9 @@ void InventoryUIOpen(InventoryUI *ui);
 void InventoryUIClose(InventoryUI *ui);
 
 // Update overlay. Consumes input when active. Returns true if still open after update.
-bool InventoryUIUpdate(InventoryUI *ui, Party *party);
+// `discard` receives a pending weapon when unequipping into a full bag — if the
+// caller can't provide one, pass NULL and the UI falls back to re-equipping.
+bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard);
 
 // Draw overlay (screen space, call after world draw).
 void InventoryUIDraw(const InventoryUI *ui, const Party *party, int villageReputation);

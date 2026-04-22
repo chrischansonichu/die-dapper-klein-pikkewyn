@@ -48,6 +48,10 @@ endif ()
 #set(raylib_VERBOSE 1)
 target_link_libraries(${PROJECT_NAME} raylib)
 
+# Enable the in-game dev warp cheat (F9 picker) on debug builds only. Release
+# builds omit the define so the cheat compiles out.
+target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:DEV_BUILD=1>)
+
 # Web Configurations
 if ("${PLATFORM}" STREQUAL "Web")
     # Tell Emscripten to build an example.html file.

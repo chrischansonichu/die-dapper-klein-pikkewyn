@@ -1,6 +1,8 @@
 #include "map_source.h"
 #include "../data/item_defs.h"
 #include "../data/creature_defs.h"
+#include "../data/move_defs.h"
+#include "../data/armor_defs.h"
 
 // Append a warp and mark its tile as both WARP and SOLID. Warps are now
 // door-like — the player can't walk through them; they have to face the
@@ -35,6 +37,42 @@ static void AddHarborF1Npcs(MapBuildContext *ctx)
     NpcInit(elder, 8, 13, 0, NPC_PENGUIN_ELDER);
     NpcAddDialogue(elder, "Jan! The sailors have taken all the fish!");
     NpcAddDialogue(elder, "You must fight them off. Be brave, little one.");
+}
+
+// Happy-harbor crowd — replaces AddHarborF1Npcs + AddHarborF1Enemies once the
+// Captain has fallen. Sailors are gone; penguins reclaim the dock. No combat
+// spawns, no descent warp (BuildHarborFloor1 omits it in this branch).
+static void AddHarborF1PostVictoryNpcs(MapBuildContext *ctx)
+{
+    // Elder back on the dock with a celebratory line.
+    if (*ctx->npcCount < ctx->npcMax) {
+        Npc *elder = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(elder, 8, 13, 0, NPC_PENGUIN_ELDER);
+        NpcAddDialogue(elder, "Jan! You did it - the sailors are gone!");
+        NpcAddDialogue(elder, "The harbor is ours again. Fish for everyone tonight.");
+    }
+
+    // A handful of cheerful penguins where the patrols used to stand.
+    if (*ctx->npcCount < ctx->npcMax) {
+        Npc *p = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(p, 12, 13, 2, NPC_PENGUIN_ELDER);
+        NpcAddDialogue(p, "Look at this dock! You can actually walk it end to end.");
+    }
+    if (*ctx->npcCount < ctx->npcMax) {
+        Npc *p = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(p, 15, 13, 1, NPC_PENGUIN_ELDER);
+        NpcAddDialogue(p, "Captain's cache fed the whole village. Bless you, Jan.");
+    }
+    if (*ctx->npcCount < ctx->npcMax) {
+        Npc *p = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(p, 10, 15, 3, NPC_PENGUIN_ELDER);
+        NpcAddDialogue(p, "The chicks are splashing in the shallows again.");
+    }
+    if (*ctx->npcCount < ctx->npcMax) {
+        Npc *p = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(p, 14, 15, 3, NPC_PENGUIN_ELDER);
+        NpcAddDialogue(p, "Arf! (A seal waddles past, belly full of sardines.)");
+    }
 }
 
 // Seal is surrounded by two STAND sailors facing inward. Defeating both frees
@@ -259,25 +297,33 @@ void BuildHarborFloor1(MapBuildContext *ctx)
     TileMapSetTile(m, 6, 4, TILE_ROCK);
     TileMapSetTile(m, 15, 7, TILE_ROCK);
 
-    AddHarborF1Npcs(ctx);
-    AddHarborF1Enemies(ctx);
-    AddSealCaptiveScene(ctx);
+    if (ctx->captainDefeated) {
+        // Post-victory: the dungeon is closed. No enemies, no captive scene,
+        // no descent warp. Just happy penguins celebrating the harbor's
+        // return.
+        AddHarborF1PostVictoryNpcs(ctx);
+    } else {
+        AddHarborF1Npcs(ctx);
+        AddHarborF1Enemies(ctx);
+        AddSealCaptiveScene(ctx);
 
-    // Descent warp at the far east end of the dock → procedural floor 2.
-    // Placed against the east ocean wall so the player has to push past the
-    // patrol sailor and walk all the way east before facing + interacting.
-    // One-way: there is no return warp from F2 back up here.
-    AddWarp(ctx, m->width - 2, 13, MAP_HARBOR_PROC, 2, 2, 2, 2);
+        // Descent warp at the far east end of the dock → procedural floor 2.
+        // Placed against the east ocean wall so the player has to push past the
+        // patrol sailor and walk all the way east before facing + interacting.
+        // One-way: there is no return warp from F2 back up here.
+        AddWarp(ctx, m->width - 2, 13, MAP_HARBOR_PROC, 2, 2, 2, 2);
+    }
 
     *ctx->spawnTileX = 8;
     *ctx->spawnTileY = 14;
     *ctx->spawnDir   = 3; // facing up, toward the dock
 }
 
-// Harbor floor 9 — the deepest level. Placeholder content until the boss and
-// final-room design land: a small stone chamber with a return warp back to
-// the hub so the player can complete the loop. Entered via the stairs in
-// the last procedural floor; no enemies or NPCs yet.
+// Harbor floor 9 — the boss floor. A stone chamber with the Captain standing
+// center-back, facing the player's entrance. The return warp is present but
+// gated behind `captainDefeated` — TryInteractWarp narrates a blocker line
+// until the boss is down. The Captain drops the Harpoon (100%) and the
+// Captain's Coat (100%) via EnemySetDrops + EnemySetArmorDrop.
 void BuildHarborFloor9(MapBuildContext *ctx)
 {
     TileMap *m = ctx->map;
@@ -298,11 +344,23 @@ void BuildHarborFloor9(MapBuildContext *ctx)
 
     // Return portal — center-bottom wall tile warps back to the hub's south
     // gate. Sits on the outer wall row so the player walks up and interacts
-    // rather than stepping onto it.
+    // rather than stepping onto it. Field.c gates this warp behind
+    // gs->captainDefeated.
     TileMapSetTile(m, m->width / 2, m->height - 1, TILE_SAND);
     AddWarp(ctx, m->width / 2, m->height - 1, MAP_OVERWORLD_HUB, 0, 11, 12, 3);
 
-    *ctx->spawnTileX = 2;
-    *ctx->spawnTileY = 2;
-    *ctx->spawnDir   = 2;
+    // The Captain — level-14 boss, stands center-back facing the entrance.
+    // Color is used for the "!" alert bubble and the field fallback; the
+    // actual field sprite comes from enemy_sprites via creatureId.
+    if (*ctx->enemyCount < ctx->enemyMax) {
+        FieldEnemy *cap = &ctx->enemies[(*ctx->enemyCount)++];
+        EnemyInit(cap, 8, 4, 0, BEHAVIOR_STAND, CREATURE_CAPTAIN_BOSS, 14, 4,
+                  (Color){120, 30, 30, 255});
+        EnemySetDrops(cap, -1, 0, /*Harpoon*/ 6, 100);
+        EnemySetArmorDrop(cap, ARMOR_CAPTAINS_COAT, 100);
+    }
+
+    *ctx->spawnTileX = 8;
+    *ctx->spawnTileY = 12;
+    *ctx->spawnDir   = 3;
 }

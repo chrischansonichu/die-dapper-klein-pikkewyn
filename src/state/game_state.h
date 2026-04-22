@@ -58,6 +58,12 @@ typedef struct GameState {
     int      villageReputation;
     int      keeperQuestIdx;   // which entry in the keeper's rotating ask list is active
 
+    // Harbor boss progression. `captainDefeated` latches true on victory at
+    // Harbor F9 and unlocks the return warp; `captainTauntShown` prevents the
+    // pre-fight narration page from repeating on every approach.
+    bool     captainDefeated;
+    bool     captainTauntShown;
+
     // Additional persistent state lands here in later phases:
     //   Roster    dismissedMembers;
     //   uint64_t  storyFlags;

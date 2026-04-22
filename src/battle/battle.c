@@ -25,6 +25,29 @@ static TilePos TileOf(const Combatant *c)
     return (TilePos){ c->tileX, c->tileY };
 }
 
+// Phase-2 enrage one-shot. Boss creatures flagged `canEnrage` flip once when
+// their HP first crosses 50% — ATK jumps to 150%, the `enraged` latch prevents
+// re-trigger. Narration is appended by the caller via AppendEnrageLine so the
+// message lands after the damage text.
+static bool TryEnrage(Combatant *t)
+{
+    if (!t || !t->alive || t->hp <= 0) return false;
+    if (!t->def || !t->def->canEnrage)  return false;
+    if (t->enraged)                     return false;
+    if (t->hp * 2 > t->maxHp)           return false;
+    t->enraged = true;
+    t->atkMod  = 150;
+    return true;
+}
+
+static void AppendEnrageLine(char *buf, const Combatant *t)
+{
+    size_t len = strlen(buf);
+    if (len >= NARRATION_LEN - 1) return;
+    snprintf(buf + len, NARRATION_LEN - len,
+             " %s bellows — \"You'll not take this ship!\"", t->name);
+}
+
 // Ranged weapons swung at melee distance (Chebyshev ≤ 1) do half damage — a
 // thrown shell to the face has no arc to pick up speed. Non-ranged moves are
 // pass-through. Always floors to at least 1 so a glancing hit still registers.
@@ -263,13 +286,33 @@ static BattleState TrySelectMove(BattleContext *ctx, const TileMap *m, int slot)
 
 // ---------- Execute ----------
 
+// Spend one use of a player weapon. When a weapon breaks (durability hits 0)
+// we move it into the bag and clear the equipped slot so the player isn't
+// stuck carrying a dead weapon in an item-attack slot. If the bag is full the
+// weapon stays equipped; the inventory screen's "toss broken" path is the
+// manual escape hatch.
+static void ConsumePlayerWeapon(Combatant *actor, int slot, Inventory *inv)
+{
+    if (!actor || slot < 0 || slot >= CREATURE_MAX_MOVES) return;
+    int *dur = &actor->moveDurability[slot];
+    if (*dur > 0) (*dur)--;
+    if (*dur != 0) return;
+    int id = actor->moveIds[slot];
+    if (id < 0) return;
+    const MoveDef *mv = GetMoveDef(id);
+    if (!mv || !mv->isWeapon) return;
+    if (inv && InventoryAddWeapon(inv, id, 0)) {
+        actor->moveIds[slot]        = -1;
+        actor->moveDurability[slot] = -1;
+    }
+}
+
 static void ConsumeMoveUse(BattleContext *ctx, bool actorIsEnemy, int slot)
 {
     if (actorIsEnemy || slot < 0) return;
     Combatant *actor = GetCurrentActor(ctx);
     if (!actor) return;
-    int *dur = &actor->moveDurability[slot];
-    if (*dur > 0) (*dur)--;
+    ConsumePlayerWeapon(actor, slot, ctx->party ? &ctx->party->inventory : NULL);
 }
 
 // Return the combatant occupying the target tile, or NULL if empty. Sets
@@ -416,6 +459,7 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
     }
     target->hp -= dmg;
     ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
+    bool enraged = TryEnrage(target);
 
     if (target->hp <= 0) {
         target->hp    = 0;
@@ -440,6 +484,7 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
             snprintf(ctx->narration, NARRATION_LEN,
                      "%s used %s! Dealt %d dmg.", actor->name, mv->name, dmg);
     }
+    if (enraged) AppendEnrageLine(ctx->narration, target);
 }
 
 static void ExecuteAction(BattleContext *ctx, const TileMap *m)
@@ -488,6 +533,7 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                                    :  targetSideIsEnemyOfActor;
         bool hostileAoe = targetSideIsEnemyOfActor;
         int totalDmg = 0, hits = 0, misses = 0, lastIdx = -1;
+        Combatant *enragedTarget = NULL;
         if (targetOnEnemyGrid) {
             for (int i = 0; i < ctx->enemyCount; i++) {
                 Combatant *t = &ctx->enemies[i];
@@ -496,6 +542,7 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 int dmg = CalculateDamage(actor, t, mv);
                 t->hp -= dmg;
                 totalDmg += dmg; hits++; lastIdx = i;
+                if (!enragedTarget && TryEnrage(t)) enragedTarget = t;
                 if (t->hp <= 0) { t->hp = 0; t->alive = false; }
             }
         } else {
@@ -506,6 +553,7 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 int dmg = CalculateDamage(actor, t, mv);
                 t->hp -= dmg;
                 totalDmg += dmg; hits++; lastIdx = i;
+                if (!enragedTarget && TryEnrage(t)) enragedTarget = t;
                 if (t->hp <= 0) { t->hp = 0; t->alive = false; }
             }
         }
@@ -547,6 +595,7 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                      "%s used %s! (%d total dmg across %d)",
                      actor->name, mv->name, totalDmg, hits);
         }
+        if (enragedTarget) AppendEnrageLine(ctx->narration, enragedTarget);
         ConsumeMoveUse(ctx, te->isEnemy, ctx->selectedMove);
         return;
     }
@@ -615,7 +664,8 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
             target->hp -= dmg;
             // Consumable-weapon durability is spent on the sneak too, matching
             // how the regular FIGHT path treats weapon use.
-            if (jan->moveDurability[slot] > 0) jan->moveDurability[slot]--;
+            ConsumePlayerWeapon(jan, slot, &party->inventory);
+            bool enraged = TryEnrage(target);
             const char *verb = (mv->range == RANGE_RANGED) ? "sniped" : "ambushed";
             if (target->hp <= 0) {
                 target->hp    = 0;
@@ -628,6 +678,7 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
                          "Surprise %s! %s's %s dealt %d damage to %s!",
                          verb, jan->name, mv->name, dmg, target->name);
             }
+            if (enraged) AppendEnrageLine(ctx->narration, target);
         }
     }
 }

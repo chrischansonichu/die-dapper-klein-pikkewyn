@@ -8,6 +8,8 @@ const MoveDef gMoveDefs[MOVE_COUNT] = {
     { 3, "SeaUrchinSpike", "Stab with a sea urchin",      135, RANGE_MELEE,   8, true,  7, MOVE_GROUP_ITEM_ATTACK, DMG_PIERCE,  false },
     { 4, "WaveCall",       "Lower all enemy DEF by 20%",    0, RANGE_AOE,    -1, false, 1, MOVE_GROUP_SPECIAL,     DMG_SPECIAL, true  },
     { 5, "ColonyRoar",     "Boost own ATK by 25%",          0, RANGE_SELF,   -1, false, 1, MOVE_GROUP_SPECIAL,     DMG_SPECIAL, false },
+    { 6, "Harpoon",        "A heavy iron harpoon",        150, RANGE_RANGED, 10, true,  1, MOVE_GROUP_ITEM_ATTACK, DMG_PIERCE,  false },
+    { 7, "CrashingTide",   "A furious wave floods the deck", 90, RANGE_AOE, -1, false, 1, MOVE_GROUP_SPECIAL,     DMG_BLUNT,   true  },
 };
 
 const MoveDef *GetMoveDef(int id)

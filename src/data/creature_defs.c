@@ -7,13 +7,18 @@
 // rewarding combat rather than trivializing it.
 const CreatureDef gCreatureDefs[CREATURE_DEF_COUNT] = {
     // Move slots: [Attack0, Attack1, Item0, Item1, Special0, Special1].  -1 = empty.
-    // id,               name,              class,         HP  ATK DEF SPD DEX  { Atk0  Atk1  Item0 Item1 Sp0   Sp1 }
-    { CREATURE_JAN,      "Jan",             CLASS_PENGUIN, 10, 3,  2,  4,  2,   {   0,   -1,    1,   -1,    4,  -1} },
-    { CREATURE_DECKHAND, "Deckhand",        CLASS_HUMAN,    8, 2,  2,  3,  1,   {   0,   -1,    1,   -1,   -1,  -1} },
-    { CREATURE_BOSUN,    "Bosun",           CLASS_HUMAN,   20, 4,  4,  2,  1,   {   0,   -1,    1,    2,   -1,  -1} },
-    { CREATURE_CAPTAIN,  "Captain",         CLASS_HUMAN,   45, 8,  6,  2,  1,   {   0,   -1,    2,    3,    5,  -1} },
-    { CREATURE_SEAL,     "Seal",            CLASS_PINNIPED,24, 7,  5,  5,  1,   {   0,   -1,    2,   -1,    4,  -1} },
-    { CREATURE_POACHER,  "Abalone Poacher", CLASS_DIVER,   14, 3,  3,  4,  2,   {   0,   -1,    1,   -1,   -1,  -1} },
+    // id,                   name,              class,         HP  ATK DEF SPD DEX  { Atk0  Atk1  Item0 Item1 Sp0   Sp1 }  scale enrage
+    { CREATURE_JAN,          "Jan",             CLASS_PENGUIN, 10, 3,  2,  4,  2,   {   0,   -1,    1,   -1,    4,  -1}, 1.0f, false },
+    { CREATURE_DECKHAND,     "Deckhand",        CLASS_HUMAN,    8, 2,  2,  3,  1,   {   0,   -1,    1,   -1,   -1,  -1}, 1.0f, false },
+    { CREATURE_BOSUN,        "Bosun",           CLASS_HUMAN,   20, 4,  4,  2,  1,   {   0,   -1,    1,    2,   -1,  -1}, 1.0f, false },
+    { CREATURE_CAPTAIN,      "Captain",         CLASS_HUMAN,   45, 8,  6,  2,  1,   {   0,   -1,    2,    3,    5,  -1}, 1.0f, false },
+    { CREATURE_SEAL,         "Seal",            CLASS_PINNIPED,24, 7,  5,  5,  1,   {   0,   -1,    2,   -1,    4,  -1}, 1.0f, false },
+    { CREATURE_POACHER,      "Abalone Poacher", CLASS_DIVER,   14, 3,  3,  4,  2,   {   0,   -1,    1,   -1,   -1,  -1}, 1.0f, false },
+    // Boss variant. Bigger baseHp so L14 class growth lands around 124 HP. Holds
+    // the unique Harpoon (move id 6) in item-attack slot 3 and the boss-only
+    // CrashingTide (move id 7) in special slot 5. canEnrage=true unlocks the
+    // one-shot phase-2 buff when his HP first crosses 50%.
+    { CREATURE_CAPTAIN_BOSS, "Captain",         CLASS_HUMAN,   85, 10, 7,  2,  1,   {   0,   -1,    2,    6,    5,   7}, 1.5f, true  },
 };
 
 // Penguins grow nimbly (high DEX, modest power). Humans are bulky and hit hard

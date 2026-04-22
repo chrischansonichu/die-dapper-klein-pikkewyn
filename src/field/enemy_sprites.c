@@ -66,6 +66,7 @@ static SailorStyle StyleForCreature(int creatureId, float alpha, bool flash)
         s.hasBeard   = false;
         break;
     case CREATURE_CAPTAIN:
+    case CREATURE_CAPTAIN_BOSS:
         s.coat       = Tint((Color){ 24,  30,  58, 255}, alpha, flash);   // near-black navy
         s.coatShade  = Tint((Color){ 10,  14,  30, 255}, alpha, flash);
         s.collar     = Tint((Color){235, 195,  75, 255}, alpha, flash);   // gold collar

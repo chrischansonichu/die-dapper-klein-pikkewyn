@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "../state/game_state.h"
 #include "npc.h"
+#include "discard_ui.h"
 
 //----------------------------------------------------------------------------------
 // Village — hub-only economy. The game has no abstract currency; instead:
@@ -25,8 +26,11 @@
 // Fill *pages with up to 3 dialogue page pointers into scratch. Returns the
 // page count. If the player has enough items to fulfil the current keeper
 // quest, it is consumed + reward is granted + keeperQuestIdx advances.
-// Otherwise a "still need X more" reminder is shown.
-int KeeperInteract(GameState *gs, const char **pages, char scratch[4][NPC_DIALOGUE_LEN]);
+// Otherwise a "still need X more" reminder is shown. If the weapon reward
+// can't fit, the DiscardUI is opened so the player can swap instead of
+// silently losing the reward.
+int KeeperInteract(GameState *gs, DiscardUI *discard,
+                   const char **pages, char scratch[4][NPC_DIALOGUE_LEN]);
 
 // Shared test so the Food Bank donation UI and any future hub code classify
 // food the same way.

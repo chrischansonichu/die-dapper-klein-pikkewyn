@@ -1,6 +1,8 @@
 #ifndef CREATURE_DEFS_H
 #define CREATURE_DEFS_H
 
+#include <stdbool.h>
+
 //----------------------------------------------------------------------------------
 // Creature definitions - static data table for all combatants
 //----------------------------------------------------------------------------------
@@ -12,7 +14,7 @@
 #define MOVE_SLOTS_PER_GROUP 2
 #define CREATURE_MAX_MOVES (MOVE_SLOTS_PER_GROUP * 3)
 #define MOVE_GROUP_SLOT(group, n) ((group) * MOVE_SLOTS_PER_GROUP + (n))
-#define CREATURE_DEF_COUNT 6
+#define CREATURE_DEF_COUNT 7
 
 typedef enum CreatureClass {
     CLASS_PENGUIN = 0,
@@ -34,6 +36,12 @@ typedef struct CreatureDef {
     // Fixed-layout move slots. -1 = empty. Each group's two slots are
     // at indices [group*2, group*2+1].
     int           moveIds[CREATURE_MAX_MOVES];
+    // Sprite size multiplier. 1.0 = default cell size. Boss creatures use >1
+    // to tower over rank-and-file; taller sprites anchor at bottom-center.
+    float         spriteScale;
+    // When true, the combatant triggers a one-shot phase-2 enrage on the hit
+    // that first crosses 50% HP — atk buff + narration page.
+    bool          canEnrage;
 } CreatureDef;
 
 // Per-level stat gain. Added to base stats once per level above 1.
@@ -51,11 +59,12 @@ const CreatureDef *GetCreatureDef(int id);
 const ClassGrowth *GetClassGrowth(CreatureClass cclass);
 
 // Creature IDs
-#define CREATURE_JAN      0
-#define CREATURE_DECKHAND 1
-#define CREATURE_BOSUN    2
-#define CREATURE_CAPTAIN  3
-#define CREATURE_SEAL     4
-#define CREATURE_POACHER  5
+#define CREATURE_JAN          0
+#define CREATURE_DECKHAND     1
+#define CREATURE_BOSUN        2
+#define CREATURE_CAPTAIN      3
+#define CREATURE_SEAL         4
+#define CREATURE_POACHER      5
+#define CREATURE_CAPTAIN_BOSS 6
 
 #endif // CREATURE_DEFS_H

@@ -2,6 +2,7 @@
 #include "raylib.h"
 #include "../data/item_defs.h"
 #include "../data/move_defs.h"
+#include "../data/armor_defs.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -126,7 +127,7 @@ static void DiscardEquippedWeapon(InventoryUI *ui, Party *party)
              mv->name);
 }
 
-static void UnequipMemberWeapon(InventoryUI *ui, Party *party)
+static void UnequipMemberWeapon(InventoryUI *ui, Party *party, DiscardUI *discard)
 {
     if (ui->memberCursor < 0 || ui->memberCursor >= party->count) return;
     Combatant *target = &party->members[ui->memberCursor];
@@ -137,9 +138,16 @@ static void UnequipMemberWeapon(InventoryUI *ui, Party *party)
         return;
     }
     if (!InventoryAddWeapon(&party->inventory, id, dur)) {
-        // Bag full — re-equip to avoid losing it
-        CombatantEquipWeapon(target, id, dur);
-        snprintf(ui->status, sizeof(ui->status), "Weapon bag full.");
+        // Bag full — hand the swap decision to the player. Fallback to
+        // re-equip only if no discard UI is wired in (defensive).
+        if (discard) {
+            DiscardUIOpen(discard, party, id, dur);
+            snprintf(ui->status, sizeof(ui->status),
+                     "Weapon bag full - pick one to toss.");
+        } else {
+            CombatantEquipWeapon(target, id, dur);
+            snprintf(ui->status, sizeof(ui->status), "Weapon bag full.");
+        }
         return;
     }
     snprintf(ui->status, sizeof(ui->status),
@@ -147,7 +155,54 @@ static void UnequipMemberWeapon(InventoryUI *ui, Party *party)
     if (ui->cursor >= CREATURE_MAX_MOVES && ui->cursor > 0) ui->cursor--;
 }
 
-bool InventoryUIUpdate(InventoryUI *ui, Party *party)
+// Equip armor at ui->cursor onto the active member. If the member is already
+// wearing armor, the displaced piece goes back into the bag.
+static void EquipBagArmor(InventoryUI *ui, Party *party)
+{
+    if (ui->cursor < 0 || ui->cursor >= party->inventory.armorCount) return;
+    if (ui->memberCursor < 0 || ui->memberCursor >= party->count) return;
+    Combatant *target = &party->members[ui->memberCursor];
+    ArmorStack a;
+    if (!InventoryTakeArmor(&party->inventory, ui->cursor, &a)) return;
+    const ArmorDef *ad = GetArmorDef(a.armorId);
+    if (ad && target->level < ad->minLevel) {
+        InventoryAddArmor(&party->inventory, a.armorId);
+        snprintf(ui->status, sizeof(ui->status),
+                 "%s needs Lv %d to equip %s.", target->name, ad->minLevel, ad->name);
+        return;
+    }
+    int displaced = -1;
+    CombatantEquipArmor(target, a.armorId, &displaced);
+    if (displaced >= 0) InventoryAddArmor(&party->inventory, displaced);
+    snprintf(ui->status, sizeof(ui->status),
+             "%s equipped %s (+%d DEF).",
+             target->name, ad ? ad->name : "armor", ad ? ad->defBonus : 0);
+    if (ui->cursor >= party->inventory.armorCount && ui->cursor > 0) ui->cursor--;
+}
+
+static void UnequipMemberArmor(InventoryUI *ui, Party *party)
+{
+    if (ui->memberCursor < 0 || ui->memberCursor >= party->count) return;
+    Combatant *target = &party->members[ui->memberCursor];
+    if (target->armorItemId < 0) {
+        snprintf(ui->status, sizeof(ui->status), "%s isn't wearing armor.", target->name);
+        return;
+    }
+    int removed = -1;
+    CombatantUnequipArmor(target, &removed);
+    if (removed < 0) return;
+    const ArmorDef *ad = GetArmorDef(removed);
+    if (!InventoryAddArmor(&party->inventory, removed)) {
+        // Armor bag full — put it back on (armor has no discard UI this slice).
+        CombatantEquipArmor(target, removed, NULL);
+        snprintf(ui->status, sizeof(ui->status), "Armor bag full.");
+        return;
+    }
+    snprintf(ui->status, sizeof(ui->status),
+             "%s removed %s.", target->name, ad ? ad->name : "armor");
+}
+
+bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
 {
     if (!ui->active) return false;
 
@@ -157,9 +212,14 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party)
         return false;
     }
 
-    // Tab switch
-    if (IsKeyPressed(KEY_TAB) || IsKeyPressed(KEY_Q) || IsKeyPressed(KEY_E)) {
-        ui->tab           = (ui->tab == INV_TAB_ITEMS) ? INV_TAB_WEAPONS : INV_TAB_ITEMS;
+    // Tab switch — cycle ITEMS → WEAPONS → ARMOR → ITEMS.
+    if (IsKeyPressed(KEY_TAB) || IsKeyPressed(KEY_E)) {
+        ui->tab           = (InventoryTab)((ui->tab + 1) % INV_TAB_COUNT);
+        ui->cursor        = 0;
+        ui->equippedFocus = false;
+        ui->status[0]     = '\0';
+    } else if (IsKeyPressed(KEY_Q)) {
+        ui->tab           = (InventoryTab)((ui->tab + INV_TAB_COUNT - 1) % INV_TAB_COUNT);
         ui->cursor        = 0;
         ui->equippedFocus = false;
         ui->status[0]     = '\0';
@@ -188,7 +248,7 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party)
             if (ui->cursor >= n) ui->cursor = n - 1;
             if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) UseItemOnMember(ui, party);
         }
-    } else {
+    } else if (ui->tab == INV_TAB_WEAPONS) {
         // Weapons tab: LEFT/RIGHT swaps focus between equipped and bag.
         // Equipped cursor ranges over the full fixed 6-slot layout (empties
         // included — selecting an empty slot is a no-op via UnequipLeaderWeapon).
@@ -205,7 +265,7 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party)
             if (ui->cursor >= n) ui->cursor = n - 1;
         }
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
-            if (ui->equippedFocus) UnequipMemberWeapon(ui, party);
+            if (ui->equippedFocus) UnequipMemberWeapon(ui, party, discard);
             else                   EquipBagWeapon(ui, party);
         }
         // Drop the weapon at the cursor. Bag-side discards anything; equipped
@@ -215,6 +275,24 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party)
             if (ui->equippedFocus) DiscardEquippedWeapon(ui, party);
             else                   DiscardBagWeapon(ui, party);
         }
+    } else { // INV_TAB_ARMOR
+        // Single equipped armor slot + bag list. LEFT focuses the equipped
+        // slot, RIGHT focuses the bag. Z equips/unequips.
+        int bagN = party->inventory.armorCount;
+        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) { ui->equippedFocus = true;  ui->cursor = 0; }
+        if (IsKeyPressed(KEY_RIGHT)|| IsKeyPressed(KEY_D)) { ui->equippedFocus = false; ui->cursor = 0; }
+
+        if (!ui->equippedFocus && bagN > 0) {
+            if (IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_W)) ui->cursor = (ui->cursor - 1 + bagN) % bagN;
+            if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) ui->cursor = (ui->cursor + 1) % bagN;
+            if (ui->cursor >= bagN) ui->cursor = bagN - 1;
+        } else if (ui->equippedFocus) {
+            ui->cursor = 0;
+        }
+        if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
+            if (ui->equippedFocus) UnequipMemberArmor(ui, party);
+            else                   EquipBagArmor(ui, party);
+        }
     }
 
     return ui->active;
@@ -223,14 +301,14 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party)
 static void DrawTabHeader(InventoryTab tab)
 {
     int y = 40, x = 120;
-    const char *labels[INV_TAB_COUNT] = { "ITEMS", "WEAPONS" };
+    const char *labels[INV_TAB_COUNT] = { "ITEMS", "WEAPONS", "ARMOR" };
     for (int i = 0; i < INV_TAB_COUNT; i++) {
         Color bg = (i == tab) ? (Color){80, 100, 200, 255} : (Color){30, 30, 60, 255};
         DrawRectangle(x + i * 130, y, 120, 30, bg);
         DrawRectangleLines(x + i * 130, y, 120, 30, (Color){120, 140, 220, 255});
         DrawText(labels[i], x + i * 130 + 28, y + 8, 16, WHITE);
     }
-    DrawText("TAB: switch", x + 2 * 130 + 24, y + 8, 14, GRAY);
+    DrawText("TAB: switch", x + INV_TAB_COUNT * 130 + 24, y + 8, 14, GRAY);
 }
 
 static void DrawItemsTab(const InventoryUI *ui, const Party *party)
@@ -373,6 +451,57 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
              60, 420, 14, GRAY);
 }
 
+static void DrawArmorTab(const InventoryUI *ui, const Party *party)
+{
+    const Inventory *inv = &party->inventory;
+    int idx = (ui->memberCursor >= 0 && ui->memberCursor < party->count)
+                ? ui->memberCursor : 0;
+    const Combatant *led = &party->members[idx];
+
+    int colX = 60, y = 95;
+    DrawText(TextFormat("%s's Armor  ([ or ] switch)", led->name), colX, y, 18, WHITE);
+    y += 26;
+    {
+        bool sel = ui->equippedFocus;
+        Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
+        DrawRectangle(colX - 6, y - 2, 320, 22, bg);
+        if (led->armorItemId < 0) {
+            DrawText("(none)", colX, y, 14, GRAY);
+        } else {
+            const ArmorDef *ad = GetArmorDef(led->armorItemId);
+            char buf[96];
+            snprintf(buf, sizeof(buf), "%-20s +%d DEF",
+                     ad ? ad->name : "(unknown)", ad ? ad->defBonus : 0);
+            DrawText(buf, colX, y, 14, WHITE);
+        }
+    }
+
+    // Bag column
+    int bagX = 420;
+    y = 95;
+    DrawText(TextFormat("Armor Bag  %d/%d", inv->armorCount, INVENTORY_MAX_ARMORS),
+             bagX, y, 18, WHITE);
+    y += 26;
+    if (inv->armorCount == 0) {
+        DrawText("(Empty)", bagX, y, 16, GRAY);
+    }
+    for (int i = 0; i < inv->armorCount; i++) {
+        const ArmorDef *ad = GetArmorDef(inv->armors[i].armorId);
+        bool sel = (!ui->equippedFocus && ui->cursor == i);
+        Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
+        DrawRectangle(bagX - 6, y - 2, 320, 22, bg);
+        char buf[96];
+        snprintf(buf, sizeof(buf), "%-20s +%d DEF",
+                 ad ? ad->name : "(unknown)", ad ? ad->defBonus : 0);
+        DrawText(buf, bagX, y, 14, WHITE);
+        y += 24;
+    }
+
+    DrawText(ui->equippedFocus ? "Z: Remove    Right: Bag    [ or ]: Switch Member    X/I: Close"
+                               : "Z: Equip     Left: Equipped   [ or ]: Switch Member    X/I: Close",
+             60, 420, 14, GRAY);
+}
+
 void InventoryUIDraw(const InventoryUI *ui, const Party *party, int villageReputation)
 {
     if (!ui->active) return;
@@ -388,8 +517,9 @@ void InventoryUIDraw(const InventoryUI *ui, const Party *party, int villageReput
              GetScreenWidth() - 220, 36, 16, (Color){200, 220, 120, 255});
     DrawTabHeader(ui->tab);
 
-    if (ui->tab == INV_TAB_ITEMS) DrawItemsTab(ui, party);
-    else                          DrawWeaponsTab(ui, party);
+    if      (ui->tab == INV_TAB_ITEMS)   DrawItemsTab(ui, party);
+    else if (ui->tab == INV_TAB_WEAPONS) DrawWeaponsTab(ui, party);
+    else                                 DrawArmorTab(ui, party);
 
     if (ui->status[0] != '\0')
         DrawText(ui->status, 60, 398, 14, (Color){200, 220, 120, 255});

@@ -47,6 +47,13 @@ typedef struct Combatant {
     int   moveDurability[CREATURE_MAX_MOVES];
     // Active status flags (bitmask of CombatantStatus).
     int   statusFlags;
+    // Equipped armor (ArmorDef id). -1 = none. Armor's defBonus is added to
+    // base defense before the defMod percentage is applied.
+    int   armorItemId;
+    // Phase-2 enrage one-shot latch. Combatants with `canEnrage` true on their
+    // CreatureDef set this to true when HP first crosses 50%; once set, it
+    // prevents retriggering.
+    bool  enraged;
 } Combatant;
 
 static inline bool CombatantHasStatus(const Combatant *c, CombatantStatus s) {
@@ -79,6 +86,14 @@ bool CombatantEquipWeapon(Combatant *c, int moveId, int durability);
 // Unequip the weapon at moveIds[slot]. Writes the displaced weapon into *out
 // (moveId + remaining durability). Returns false if slot isn't a weapon.
 bool CombatantUnequipWeapon(Combatant *c, int slot, int *outMoveId, int *outDurability);
+
+// Equip armorId into the combatant's single armor slot. Writes the displaced
+// armor id to *outDisplaced (-1 if slot was empty). Always succeeds.
+void CombatantEquipArmor(Combatant *c, int armorId, int *outDisplaced);
+
+// Clear the combatant's armor slot. Writes the removed armor id to *outId
+// (-1 if slot was already empty).
+void CombatantUnequipArmor(Combatant *c, int *outId);
 
 // Apply a healing amount to c->hp, capped at c->maxHp. Returns actual HP restored.
 int  CombatantHeal(Combatant *c, int amount);

@@ -1,4 +1,5 @@
 #include "combatant.h"
+#include "../data/armor_defs.h"
 #include "../field/tilemap.h"
 #include "raylib.h"
 #include <string.h>
@@ -35,6 +36,8 @@ void CombatantInit(Combatant *c, int creatureId, int level)
     c->statusFlags = STATUS_NONE;
     c->tileX       = 0;
     c->tileY       = 0;
+    c->armorItemId = -1;
+    c->enraged     = false;
 
     RecomputeStats(c);
     c->hp = c->maxHp;
@@ -67,7 +70,10 @@ int CalculateDamage(const Combatant *attacker, const Combatant *defender, const 
 {
     if (move->power == 0) return 0;
     int effectiveAtk = attacker->atk * attacker->atkMod / 100;
-    int effectiveDef = defender->defense * defender->defMod / 100;
+    int baseDef      = defender->defense;
+    if (defender->armorItemId >= 0)
+        baseDef += GetArmorDef(defender->armorItemId)->defBonus;
+    int effectiveDef = baseDef * defender->defMod / 100;
     if (effectiveAtk < 1) effectiveAtk = 1;
     if (effectiveDef < 1) effectiveDef = 1;
     // Pokemon-derived formula: scales with level, power, atk/def ratio
@@ -143,6 +149,18 @@ bool CombatantUnequipWeapon(Combatant *c, int slot, int *outMoveId, int *outDura
     c->moveIds[slot]        = -1;
     c->moveDurability[slot] = -1;
     return true;
+}
+
+void CombatantEquipArmor(Combatant *c, int armorId, int *outDisplaced)
+{
+    if (outDisplaced) *outDisplaced = c->armorItemId;
+    c->armorItemId = armorId;
+}
+
+void CombatantUnequipArmor(Combatant *c, int *outId)
+{
+    if (outId) *outId = c->armorItemId;
+    c->armorItemId = -1;
 }
 
 int CombatantEffectiveSpeed(const Combatant *c, const TileMap *map)

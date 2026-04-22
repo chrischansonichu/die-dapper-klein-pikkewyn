@@ -7,6 +7,7 @@
 #include "../data/item_defs.h"
 #include "../data/move_defs.h"
 #include "../data/creature_defs.h"
+#include "../data/armor_defs.h"
 #include "../battle/battle_sprites.h"
 #include "../battle/battle_grid.h"
 #include <string.h>
@@ -24,7 +25,7 @@
 
 // Post-battle dialogue buffers. DialogueBegin keeps pointers, so these must
 // live at file scope to outlive the call.
-#define DROP_MSG_PAGES 2
+#define DROP_MSG_PAGES 3
 #define DROP_MSG_LEN   160
 static char gDropMsg[DROP_MSG_PAGES][DROP_MSG_LEN];
 
@@ -79,7 +80,7 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
 {
     Npc *n = &ow->npcs[npcIdx];
 
-    if (n->type == NPC_KEEPER) return KeeperInteract(ow->gs, pages, scratch);
+    if (n->type == NPC_KEEPER) return KeeperInteract(ow->gs, &ow->discardUi, pages, scratch);
     // NPC_FOOD_BANK is handled by a dedicated picker UI (see BeginNpcInteraction).
 
     if (n->type == NPC_SCRIBE) {
@@ -176,6 +177,18 @@ static bool TryInteractWarp(FieldState *ow, int tx, int ty)
     if (!(TileMapGetFlags(&ow->map, fx, fy) & TILE_FLAG_WARP))           return false;
     for (int i = 0; i < ow->warpCount; i++) {
         if (ow->warps[i].tileX == fx && ow->warps[i].tileY == fy) {
+            // Harbor F9 return warp is gated behind the boss fight — if the
+            // Captain is still up, the warp is inactive and we narrate a
+            // short blocker line instead of opening the confirmation prompt.
+            if (ow->gs->currentMapId == MAP_HARBOR_F9 &&
+                ow->warps[i].targetMapId == MAP_OVERWORLD_HUB &&
+                !ow->gs->captainDefeated) {
+                static const char *kBlockedPages[] = {
+                    "The way back is blocked - you can't leave the Captain alive at your back.",
+                };
+                DialogueBegin(&ow->dialogue, kBlockedPages, 1, 30.0f);
+                return true;
+            }
             ow->warpPromptIdx = i;
             return true;
         }
@@ -637,9 +650,12 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
 //----------------------------------------------------------------------------------
 
 // Roll drops on a defeated field enemy, append narration, and return pages
-// populated.
-static int RollEnemyDrops(FieldEnemy *e, Inventory *inv)
+// populated. If the weapon bag is full on a weapon drop, opens `discard` with
+// the incoming weapon instead of silently dropping it — narrating a short
+// lead-in page so the player sees what triggered the modal.
+static int RollEnemyDrops(FieldEnemy *e, Party *party, DiscardUI *discard)
 {
+    Inventory *inv = &party->inventory;
     int pages = 0;
     if (e->dropItemId >= 0 && GetRandomValue(1, 100) <= e->dropItemPct) {
         const ItemDef *it = GetItemDef(e->dropItemId);
@@ -651,10 +667,35 @@ static int RollEnemyDrops(FieldEnemy *e, Inventory *inv)
     if (e->dropWeaponId >= 0 && GetRandomValue(1, 100) <= e->dropWeaponPct
         && pages < DROP_MSG_PAGES) {
         const MoveDef *mv = GetMoveDef(e->dropWeaponId);
-        if (mv->isWeapon && InventoryAddWeapon(inv, e->dropWeaponId,
-                                               mv->defaultDurability)) {
+        if (mv->isWeapon) {
+            if (InventoryAddWeapon(inv, e->dropWeaponId, mv->defaultDurability)) {
+                snprintf(gDropMsg[pages], DROP_MSG_LEN,
+                         "Picked up a %s! (open inventory with I to equip)", mv->name);
+                pages++;
+            } else if (discard) {
+                // Bag full — narrate the drop and open the discard modal.
+                snprintf(gDropMsg[pages], DROP_MSG_LEN,
+                         "A %s rolls across the deck - but your bag is full...",
+                         mv->name);
+                pages++;
+                DiscardUIOpen(discard, party, e->dropWeaponId, mv->defaultDurability);
+            }
+        }
+    }
+    if (e->dropArmorId >= 0 && GetRandomValue(1, 100) <= e->dropArmorPct
+        && pages < DROP_MSG_PAGES) {
+        const ArmorDef *ad = GetArmorDef(e->dropArmorId);
+        if (InventoryAddArmor(inv, e->dropArmorId)) {
             snprintf(gDropMsg[pages], DROP_MSG_LEN,
-                     "Picked up a %s! (open inventory with I to equip)", mv->name);
+                     "Picked up %s! (open inventory with I to equip)", ad->name);
+            pages++;
+        } else {
+            // Armor bag is small but can still overflow — narrate the loss.
+            // A full DiscardUI for armor isn't worth the surface area for a
+            // single drop this slice; generalize when more armor ships.
+            snprintf(gDropMsg[pages], DROP_MSG_LEN,
+                     "A %s tumbles to the deck - but your armor chest is full. Lost.",
+                     ad->name);
             pages++;
         }
     }
@@ -718,20 +759,33 @@ static int DropInventoryOnRescue(Inventory *inv, int *outItems, int *outWeapons)
 static void ResolveBattleEnd(FieldState *ow, int result)
 {
     BattleContext *ctx = &ow->battle;
-    const char *ptrs[DROP_MSG_PAGES + 2];
+    const char *ptrs[DROP_MSG_PAGES + 3];
     int pageCount = 0;
 
     if (result == 1 /* victory */) {
         // Deactivate each field enemy that participated, roll drops on the
         // first one that produces any narration.
+        bool bossDown = false;
         for (int k = 0; k < ctx->enemyCount; k++) {
             int idx = ctx->enemyFieldIdx[k];
             if (idx < 0 || idx >= ow->enemyCount) continue;
             FieldEnemy *e = &ow->enemies[idx];
-            int pages = RollEnemyDrops(e, &ow->gs->party.inventory);
+            if (e->creatureId == CREATURE_CAPTAIN_BOSS) bossDown = true;
+            int pages = RollEnemyDrops(e, &ow->gs->party, &ow->discardUi);
             e->active = false;
             if (pageCount == 0 && pages > 0) {
                 for (int i = 0; i < pages; i++) ptrs[pageCount++] = gDropMsg[i];
+            }
+        }
+        if (bossDown && !ow->gs->captainDefeated) {
+            ow->gs->captainDefeated     = true;
+            ow->gs->villageReputation  += 100;
+            if (pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0]))) {
+                ptrs[pageCount++] =
+                    "You haul the Captain's cache of stolen fish back to the village. (+100 Rep)";
+            }
+            if (pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0]))) {
+                ptrs[pageCount++] = "Captain defeated - the harbor is safe.";
             }
         }
     } else if (result == 3 /* fled */) {
@@ -870,6 +924,7 @@ void FieldInit(FieldState *ow, GameState *gs)
         .spawnTileY  = &spawnY,
         .spawnDir    = &spawnDir,
         .sealAlreadyRecruited = sealRecruited,
+        .captainDefeated      = gs->captainDefeated,
     };
     MapBuild((MapId)gs->currentMapId, gs->currentFloor, &ctx, gs->currentMapSeed);
 
@@ -880,6 +935,8 @@ void FieldInit(FieldState *ow, GameState *gs)
     StatsUIInit(&ow->statsUi);
     DonationUIInit(&ow->donationUi);
     SalvagerUIInit(&ow->salvagerUi);
+    DiscardUIInit(&ow->discardUi);
+    DevWarpUIInit(&ow->devWarpUi);
 
     int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;
     int mapPixH = ow->map.height * TILE_SIZE * TILE_SCALE;
@@ -1057,7 +1114,7 @@ void FieldUpdate(FieldState *ow, float dt)
 
     // Inventory overlay captures all input while open
     if (ow->invUi.active) {
-        InventoryUIUpdate(&ow->invUi, &ow->gs->party);
+        InventoryUIUpdate(&ow->invUi, &ow->gs->party, &ow->discardUi);
         return;
     }
     // Stats overlay captures all input while open
@@ -1075,6 +1132,23 @@ void FieldUpdate(FieldState *ow, float dt)
         SalvagerUIUpdate(&ow->salvagerUi, &ow->gs->party);
         return;
     }
+    // Bag-full discard prompt takes priority — the player's mid-transaction
+    // and shouldn't be able to open other modals until they resolve it.
+    if (ow->discardUi.active) {
+        DiscardUIUpdate(&ow->discardUi, &ow->gs->party);
+        return;
+    }
+#ifdef DEV_BUILD
+    // Dev warp cheat. Consumes input while open; F9 toggles.
+    if (ow->devWarpUi.active) {
+        DevWarpUIUpdate(&ow->devWarpUi, ow->gs);
+        return;
+    }
+    if (IsKeyPressed(KEY_F9) && !ow->dialogue.active && !ow->player.moving) {
+        DevWarpUIOpen(&ow->devWarpUi);
+        return;
+    }
+#endif
     // Open inventory with I (only while not moving / no dialogue)
     if (IsKeyPressed(KEY_I) && !ow->dialogue.active && !ow->player.moving) {
         InventoryUIOpen(&ow->invUi);
@@ -1094,6 +1168,31 @@ void FieldUpdate(FieldState *ow, float dt)
 
     // Update player movement
     PlayerUpdate(&ow->player, &ow->map, ow);
+
+    // One-shot pre-fight taunt on F9 — fires the first time the player comes
+    // within 2 tiles (Chebyshev) of the Captain. Gated by captainTauntShown
+    // so it doesn't repeat, and by captainDefeated so a re-visit after the
+    // fight stays quiet.
+    if (ow->gs->currentMapId == MAP_HARBOR_F9 &&
+        !ow->gs->captainTauntShown && !ow->gs->captainDefeated) {
+        for (int i = 0; i < ow->enemyCount; i++) {
+            const FieldEnemy *e = &ow->enemies[i];
+            if (!e->active || e->creatureId != CREATURE_CAPTAIN_BOSS) continue;
+            int dx = e->tileX - ow->player.tileX;
+            int dy = e->tileY - ow->player.tileY;
+            if (dx < 0) dx = -dx;
+            if (dy < 0) dy = -dy;
+            int cheb = dx > dy ? dx : dy;
+            if (cheb <= 2) {
+                static const char *kTauntPages[] = {
+                    "Captain: \"So the penguin shows his face. I've been waiting.\"",
+                };
+                DialogueBegin(&ow->dialogue, kTauntPages, 1, 30.0f);
+                ow->gs->captainTauntShown = true;
+                break;
+            }
+        }
+    }
 
     // After step completes, check NPC or warp interaction. Warp tiles are
     // solid — the player can't step onto one, so they're only entered via
@@ -1437,6 +1536,16 @@ void FieldDraw(const FieldState *ow)
     if (ow->salvagerUi.active) {
         SalvagerUIDraw(&ow->salvagerUi, &ow->gs->party);
     }
+
+    if (ow->discardUi.active) {
+        DiscardUIDraw(&ow->discardUi, &ow->gs->party);
+    }
+
+#ifdef DEV_BUILD
+    if (ow->devWarpUi.active) {
+        DevWarpUIDraw(&ow->devWarpUi);
+    }
+#endif
 
     if (ow->warpPromptIdx >= 0) {
         const FieldWarp *w = &ow->warps[ow->warpPromptIdx];

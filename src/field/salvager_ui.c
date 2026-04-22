@@ -65,10 +65,11 @@ void SalvagerUIUpdate(SalvagerUI *s, Party *party)
         if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
             s->cursor = (s->cursor + 1) % s->entryCount;
 
-        // Space/Left/Right toggles the selection on broken entries only.
+        // Space/Left/Right toggles the selection on any weapon in the bag —
+        // the salvager takes both broken scrap and still-usable gear.
         if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_LEFT) ||
             IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_A) || IsKeyPressed(KEY_D)) {
-            if (s->broken[s->cursor]) s->give[s->cursor] = !s->give[s->cursor];
+            s->give[s->cursor] = !s->give[s->cursor];
         }
     }
 
@@ -99,7 +100,7 @@ void SalvagerUIUpdate(SalvagerUI *s, Party *party)
             WeaponStack out;
             InventoryTakeWeapon(inv, s->weaponIdx[order[i]], &out);
         }
-        // One Fresh Fish per broken weapon handed over. Skip payout if the
+        // One Fresh Fish per weapon handed over. Skip payout if the
         // item bag is already full — better to lose the fish than confuse
         // the player with a silent failure.
         for (int i = 0; i < total; i++) {
@@ -123,7 +124,7 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
     DrawText("SALVAGER", 80, 72, 20, WHITE);
 
     if (s->phase == SAL_PHASE_RESULT) {
-        DrawText(TextFormat("Handed over %d piece%s of broken gear.",
+        DrawText(TextFormat("Handed over %d piece%s of gear.",
                             s->handedTotal, s->handedTotal == 1 ? "" : "s"),
                  80, 130, 18, WHITE);
         DrawText(TextFormat("Received %d Fresh Fish.", s->fishGained),
@@ -136,18 +137,18 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
 
     const Inventory *inv = &party->inventory;
     int x = 80, y = 110;
-    DrawText("\"Just making my rounds. I take the broken gear off your hands\"",
+    DrawText("\"Just making my rounds. I'll take any gear off your hands —\"",
              x, y, 16, (Color){200, 200, 220, 255});
     y += 22;
-    DrawText("\"so it doesn't end up tangled in a flipper. One fish per piece.\"",
+    DrawText("\"broken or not, so it doesn't end up tangled in a flipper. One fish per piece.\"",
              x, y, 16, (Color){200, 200, 220, 255});
     y += 30;
 
     if (s->entryCount == 0) {
-        DrawText("(Your weapon bag is empty — no scrap to salvage today.)",
+        DrawText("(Your weapon bag is empty - nothing to salvage today.)",
                  x, y, 16, GRAY);
     } else {
-        DrawText("Pick the broken pieces to hand over:", x, y, 14, WHITE);
+        DrawText("Pick the pieces to hand over:", x, y, 14, WHITE);
         y += 24;
 
         // Viewport — clamp visible rows and scroll with the cursor so a
@@ -176,11 +177,13 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
             const MoveDef *mv = GetMoveDef(inv->weapons[s->weaponIdx[i]].moveId);
             int dur = inv->weapons[s->weaponIdx[i]].durability;
             char buf[96];
-            const char *mark = s->broken[i] ? (s->give[i] ? "[x]" : "[ ]") : " - ";
+            const char *mark = s->give[i] ? "[x]" : "[ ]";
             snprintf(buf, sizeof(buf), "%s  %-16s dur %-2d  %s",
                      mark, mv->name, dur,
                      s->broken[i] ? "(broken)" : "(still usable)");
-            Color text = s->broken[i] ? WHITE : (Color){140, 140, 140, 255};
+            // Keep broken items visually prominent so the player notices them
+            // first, but all rows are togglable now.
+            Color text = s->broken[i] ? WHITE : (Color){200, 200, 200, 255};
             DrawText(buf, x, y, 16, text);
             y += ROW_H;
         }

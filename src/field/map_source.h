@@ -59,6 +59,9 @@ typedef struct MapBuildContext {
     // have already been resolved (e.g. don't re-place the captive seal if he
     // is already in the party). Field.c fills these from the live GameState.
     bool        sealAlreadyRecruited;
+    // Harbor boss cleared — F1 builders swap sailor enemies for happy
+    // penguins and remove the descent warp so the dungeon is closed off.
+    bool        captainDefeated;
 } MapBuildContext;
 
 // Build the map identified by `id`. `floor` distinguishes dungeon depths for

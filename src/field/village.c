@@ -82,7 +82,8 @@ static KeeperReward ComputeReward(int janLevel)
     return r;
 }
 
-int KeeperInteract(GameState *gs, const char **pages, char scratch[4][NPC_DIALOGUE_LEN])
+int KeeperInteract(GameState *gs, DiscardUI *discard,
+                   const char **pages, char scratch[4][NPC_DIALOGUE_LEN])
 {
     int q = gs->keeperQuestIdx;
     if (q < 0 || q >= KEEPER_QUEST_COUNT) q = 0;
@@ -118,6 +119,21 @@ int KeeperInteract(GameState *gs, const char **pages, char scratch[4][NPC_DIALOG
     snprintf(scratch[1], NPC_DIALOGUE_LEN,
              "Take this %s and %d %s for your trouble.",
              rwMv->name, r.fishCount, rfIt->name);
+
+    // Weapon bag full: hand the swap decision to the player via DiscardUI
+    // instead of silently dropping the reward.
+    if (!gotWeapon && discard) {
+        DiscardUIOpen(discard, &gs->party, r.weaponMoveId, rwMv->defaultDurability);
+        if (!gotFish) {
+            snprintf(scratch[2], NPC_DIALOGUE_LEN,
+                     "(Your food bag is full too - some of the reward couldn't fit.)");
+            pages[0] = scratch[0]; pages[1] = scratch[1]; pages[2] = scratch[2];
+            return 3;
+        }
+        pages[0] = scratch[0]; pages[1] = scratch[1];
+        return 2;
+    }
+
     if (!gotWeapon || !gotFish) {
         snprintf(scratch[2], NPC_DIALOGUE_LEN,
                  "(Your bag was full - some of the reward couldn't fit.)");

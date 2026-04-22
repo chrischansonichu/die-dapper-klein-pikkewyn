@@ -61,11 +61,13 @@ typedef struct FieldEnemy {
     // Alert countdown
     float         alertTimer;
 
-    // Drops on defeat. Both are optional; set via EnemySetDrops.
+    // Drops on defeat. All optional; set via EnemySetDrops / EnemySetArmorDrop.
     int           dropItemId;      // -1 = no item drop
     int           dropItemPct;     // 0..100
     int           dropWeaponId;    // -1 = no weapon drop
     int           dropWeaponPct;   // 0..100
+    int           dropArmorId;     // -1 = no armor drop
+    int           dropArmorPct;    // 0..100
 
     bool          onWater;         // current tile is water — draw as swimming
     int           dryingFrames;    // >0 = paused after stepping from water onto land
@@ -83,6 +85,10 @@ void EnemySetPatrol(FieldEnemy *e, int x0, int y0, int x1, int y1);
 // Set drops for this enemy. Pass -1 for either ID to disable that drop.
 void EnemySetDrops(FieldEnemy *e, int itemId, int itemPct,
                    int weaponId, int weaponPct);
+
+// Set an armor drop. Pass -1 to clear. Independent of EnemySetDrops; only one
+// armor slot per enemy.
+void EnemySetArmorDrop(FieldEnemy *e, int armorId, int pct);
 
 // Update one enemy for this frame (dt in seconds).
 // Returns true if the enemy has just reached the player and a battle should start.

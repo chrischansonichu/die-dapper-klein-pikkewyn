@@ -9,6 +9,7 @@
 
 #define INVENTORY_MAX_ITEMS   16
 #define INVENTORY_MAX_WEAPONS 16
+#define INVENTORY_MAX_ARMORS  8
 
 typedef struct ItemStack {
     int itemId;
@@ -20,11 +21,17 @@ typedef struct WeaponStack {
     int durability; // remaining uses
 } WeaponStack;
 
+typedef struct ArmorStack {
+    int armorId;    // ArmorDef id
+} ArmorStack;
+
 typedef struct Inventory {
     ItemStack   items[INVENTORY_MAX_ITEMS];
     int         itemCount;          // number of occupied item slots
     WeaponStack weapons[INVENTORY_MAX_WEAPONS];
     int         weaponCount;        // number of occupied weapon slots
+    ArmorStack  armors[INVENTORY_MAX_ARMORS];
+    int         armorCount;         // number of occupied armor slots
 } Inventory;
 
 void InventoryInit(Inventory *inv);
@@ -41,5 +48,11 @@ bool InventoryAddWeapon(Inventory *inv, int moveId, int durability);
 
 // Remove weapon at slotIdx, writing its data to *out. Returns false on bad index.
 bool InventoryTakeWeapon(Inventory *inv, int slotIdx, WeaponStack *out);
+
+// Add an armor piece to the bag. Returns false if full.
+bool InventoryAddArmor(Inventory *inv, int armorId);
+
+// Remove armor at slotIdx, writing its data to *out. Returns false on bad index.
+bool InventoryTakeArmor(Inventory *inv, int slotIdx, ArmorStack *out);
 
 #endif // INVENTORY_H

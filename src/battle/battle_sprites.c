@@ -161,17 +161,34 @@ void DrawCombatantSprite(int creatureId, Rectangle r, bool isEnemy,
     if (alpha < 0.0f) alpha = 0.0f;
     if (alpha > 1.0f) alpha = 1.0f;
 
+    // Honor the creature's sprite scale. Expand the rect anchored at the
+    // bottom-center so taller sprites (e.g. the boss Captain) rise above
+    // their grid cell without spilling sideways into the neighboring column.
+    float scale = 1.0f;
+    const CreatureDef *def = GetCreatureDef(creatureId);
+    if (def && def->spriteScale > 0.0f) scale = def->spriteScale;
+
     Rectangle rr = { r.x + slideX, r.y + slideY, r.width, r.height };
+    if (scale != 1.0f) {
+        float newW = rr.width  * scale;
+        float newH = rr.height * scale;
+        rr.x = rr.x + (rr.width  - newW) * 0.5f;
+        rr.y = rr.y + (rr.height - newH);
+        rr.width  = newW;
+        rr.height = newH;
+    }
+
     // Player-side sprites face right (toward enemies on the right).
     // Enemy-side sprites face left (toward the player).
     bool faceLeft = isEnemy;
 
     switch (creatureId) {
-        case CREATURE_JAN:      DrawJanSprite(rr,      faceLeft, alpha, flashWhite); break;
-        case CREATURE_DECKHAND: DrawDeckhandSprite(rr, faceLeft, alpha, flashWhite); break;
-        case CREATURE_BOSUN:    DrawBosunSprite(rr,    faceLeft, alpha, flashWhite); break;
-        case CREATURE_CAPTAIN:  DrawCaptainSprite(rr,  faceLeft, alpha, flashWhite); break;
-        case CREATURE_SEAL:     DrawSealSprite(rr,     faceLeft, alpha, flashWhite); break;
+        case CREATURE_JAN:          DrawJanSprite(rr,      faceLeft, alpha, flashWhite); break;
+        case CREATURE_DECKHAND:     DrawDeckhandSprite(rr, faceLeft, alpha, flashWhite); break;
+        case CREATURE_BOSUN:        DrawBosunSprite(rr,    faceLeft, alpha, flashWhite); break;
+        case CREATURE_CAPTAIN:      DrawCaptainSprite(rr,  faceLeft, alpha, flashWhite); break;
+        case CREATURE_CAPTAIN_BOSS: DrawCaptainSprite(rr,  faceLeft, alpha, flashWhite); break;
+        case CREATURE_SEAL:         DrawSealSprite(rr,     faceLeft, alpha, flashWhite); break;
         default: {
             // Fallback: the old colored box, so unknown creatures still render.
             Color c = isEnemy ? (Color){200, 60, 60, 255} : (Color){60, 100, 200, 255};
