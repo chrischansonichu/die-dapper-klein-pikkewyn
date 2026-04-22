@@ -209,6 +209,20 @@ static void BeginNpcInteraction(FieldState *ow, int npcIdx)
         SalvagerUIOpen(&ow->salvagerUi, &ow->gs->party);
         return;
     }
+    if (n->type == NPC_BLACKSMITH) {
+        if (ow->gs->captainDefeated) {
+            BlacksmithUIOpen(&ow->blacksmithUi, &ow->gs->party);
+            return;
+        }
+        // Forge is cold until the harbor boss falls. Fall through to a fixed
+        // dialogue instead of the modal so the NPC still reads as an NPC.
+        const char *locked[2] = {
+            "The blacksmith is hunched over a cold forge, shaping nothing in particular.",
+            "\"Forge's cold. Nothing worth shaping 'til the harbor's ours again. Clear it and we'll talk.\"",
+        };
+        DialogueBegin(&ow->dialogue, locked, 2, 30.0f);
+        return;
+    }
     const char *pages[NPC_MAX_DIALOGUE_PAGES];
     char scratch[4][NPC_DIALOGUE_LEN];
     int count = BuildNpcInteraction(ow, npcIdx, pages, scratch);
@@ -935,6 +949,7 @@ void FieldInit(FieldState *ow, GameState *gs)
     StatsUIInit(&ow->statsUi);
     DonationUIInit(&ow->donationUi);
     SalvagerUIInit(&ow->salvagerUi);
+    BlacksmithUIInit(&ow->blacksmithUi);
     DiscardUIInit(&ow->discardUi);
     DevWarpUIInit(&ow->devWarpUi);
 
@@ -1130,6 +1145,13 @@ void FieldUpdate(FieldState *ow, float dt)
     // Salvager trade picker captures input while open
     if (ow->salvagerUi.active) {
         SalvagerUIUpdate(&ow->salvagerUi, &ow->gs->party);
+        return;
+    }
+    // Blacksmith modal captures input while open. It may spawn DiscardUI
+    // below when an UPGRADE overflows the bag, which is handled next.
+    if (ow->blacksmithUi.active) {
+        BlacksmithUIUpdate(&ow->blacksmithUi, &ow->gs->party,
+                           &ow->gs->villageReputation, &ow->discardUi);
         return;
     }
     // Bag-full discard prompt takes priority — the player's mid-transaction
@@ -1535,6 +1557,11 @@ void FieldDraw(const FieldState *ow)
 
     if (ow->salvagerUi.active) {
         SalvagerUIDraw(&ow->salvagerUi, &ow->gs->party);
+    }
+
+    if (ow->blacksmithUi.active) {
+        BlacksmithUIDraw(&ow->blacksmithUi, &ow->gs->party,
+                         ow->gs->villageReputation);
     }
 
     if (ow->discardUi.active) {

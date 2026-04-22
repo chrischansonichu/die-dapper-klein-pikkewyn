@@ -184,6 +184,25 @@ static void DrawSalvager(int px, int py, int sz, int dir) {
                       (Color){190, 110,  50, 255});
 }
 
+// Sooty penguin with a forge-orange apron band. A small anvil silhouette sits
+// beside him to telegraph the blacksmith role.
+static void DrawBlacksmith(int px, int py, int sz, int dir) {
+    const Color anvilBody = (Color){ 55,  55,  60, 255};
+    const Color anvilBase = (Color){ 30,  30,  35, 255};
+    // Anvil on the side opposite the cane so it's not covered by the body.
+    float ax = px + sz * 0.06f;
+    float ay = py + sz * 0.70f;
+    DrawRectangle((int)ax, (int)ay, (int)(sz * 0.18f), (int)(sz * 0.06f), anvilBody);
+    DrawRectangle((int)(ax + sz * 0.02f), (int)(ay + sz * 0.06f),
+                  (int)(sz * 0.14f), (int)(sz * 0.04f), anvilBase);
+    DrawRectangle((int)(ax + sz * 0.04f), (int)(ay + sz * 0.10f),
+                  (int)(sz * 0.10f), (int)(sz * 0.04f), anvilBody);
+
+    DrawPenguinPerson(px, py, sz, dir,
+                      (Color){200, 140,  60, 255},   // forge-orange apron belly
+                      (Color){ 80,  55,  30, 255});  // dark leather hat band
+}
+
 // Cape fur seal — warm brown with a lighter belly
 static void DrawSeal(int px, int py, int sz, int dir)
 {
@@ -271,6 +290,7 @@ void NpcDraw(const Npc *n, Camera2D cam)
         case NPC_FOOD_BANK:     DrawFoodBank(px, py, sz, n->dir);     break;
         case NPC_SCRIBE:        DrawScribe(px, py, sz, n->dir);       break;
         case NPC_SALVAGER:      DrawSalvager(px, py, sz, n->dir);     break;
+        case NPC_BLACKSMITH:    DrawBlacksmith(px, py, sz, n->dir);   break;
     }
 }
 

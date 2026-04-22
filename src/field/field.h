@@ -15,6 +15,7 @@
 #include "stats_ui.h"
 #include "donation_ui.h"
 #include "salvager_ui.h"
+#include "blacksmith_ui.h"
 #include "discard_ui.h"
 #include "dev_warp_ui.h"
 
@@ -69,6 +70,9 @@ typedef struct FieldState {
     // Salvager trade picker (opened by NPC_SALVAGER interaction) — hands over
     // broken weapons in exchange for fish.
     SalvagerUI    salvagerUi;
+
+    // Forge/repair modal (opened by NPC_BLACKSMITH when captainDefeated).
+    BlacksmithUI  blacksmithUi;
 
     // Bag-full discard prompt — opened whenever a weapon is about to enter a
     // full bag (post-battle drops, keeper rewards, inventory unequip). Holds a

@@ -200,6 +200,14 @@ static void AddHubNpcs(MapBuildContext *ctx)
         Npc *salvager = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(salvager, 17, 3, 0, NPC_SALVAGER);
     }
+
+    // Blacksmith — west of the plaza. Present from day one; dialogue is
+    // gated in BeginNpcInteraction off ctx->captainDefeated so the player
+    // sees a locked NPC until the harbor boss falls.
+    if (*ctx->npcCount < ctx->npcMax) {
+        Npc *smith = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(smith, 5, 11, 0, NPC_BLACKSMITH);
+    }
 }
 
 void BuildOverworldHub(MapBuildContext *ctx)

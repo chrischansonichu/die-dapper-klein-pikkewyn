@@ -50,9 +50,11 @@ PROJECT_SOURCE_FILES  ?= \
     battle/party.c \
     data/armor_defs.c \
     data/creature_defs.c \
+    data/forge_recipes.c \
     data/item_defs.c \
     data/move_defs.c \
     data/room_templates.c \
+    field/blacksmith_ui.c \
     field/dev_warp_ui.c \
     field/discard_ui.c \
     field/donation_ui.c \
