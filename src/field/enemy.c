@@ -332,6 +332,13 @@ void EnemyDraw(const FieldEnemy *e)
     float cx   = fpx + sz * 0.5f;
     float top  = fpy;
 
+    // Contact shadow on land (skipped on water — the water band below reads
+    // as the contact instead).
+    if (!e->onWater) {
+        DrawEllipse((int)cx, (int)(top + sz * 0.94f),
+                    sz * 0.30f, sz * 0.09f, (Color){0, 0, 0, 90});
+    }
+
     // Procedural rounded sailor — same visual family as the Elder Penguin
     // and Seal (DrawRectangleRounded / DrawCircle / DrawTriangle).
     Rectangle dst = { fpx, top, sz, sz };

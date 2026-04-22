@@ -1,4 +1,5 @@
 #include "combatant.h"
+#include "../field/tilemap.h"
 #include "raylib.h"
 #include <string.h>
 
@@ -142,6 +143,24 @@ bool CombatantUnequipWeapon(Combatant *c, int slot, int *outMoveId, int *outDura
     c->moveIds[slot]        = -1;
     c->moveDurability[slot] = -1;
     return true;
+}
+
+int CombatantEffectiveSpeed(const Combatant *c, const TileMap *map)
+{
+    if (!map || !c->def) return c->spd;
+    if (!TileMapIsWater(map, c->tileX, c->tileY)) return c->spd;
+    switch (c->def->creatureClass) {
+        case CLASS_PENGUIN:
+        case CLASS_PINNIPED: {
+            int boosted = c->spd * 3 / 2;
+            return boosted < 1 ? 1 : boosted;
+        }
+        case CLASS_HUMAN: {
+            int slowed = c->spd / 2;
+            return slowed < 1 ? 1 : slowed;
+        }
+        default: return c->spd;
+    }
 }
 
 int CombatantHeal(Combatant *c, int amount)

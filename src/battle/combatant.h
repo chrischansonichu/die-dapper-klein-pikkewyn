@@ -83,4 +83,10 @@ bool CombatantUnequipWeapon(Combatant *c, int slot, int *outMoveId, int *outDura
 // Apply a healing amount to c->hp, capped at c->maxHp. Returns actual HP restored.
 int  CombatantHeal(Combatant *c, int amount);
 
+// Effective speed after terrain modifiers. Water tiles boost aquatic classes
+// (penguins, pinnipeds) by 50% and penalize humans by 50%. `map` may be NULL,
+// in which case the base spd is returned unchanged.
+struct TileMap;
+int  CombatantEffectiveSpeed(const Combatant *c, const struct TileMap *map);
+
 #endif // COMBATANT_H

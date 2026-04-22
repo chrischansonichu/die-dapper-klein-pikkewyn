@@ -238,6 +238,14 @@ void NpcDraw(const Npc *n, Camera2D cam)
                   (float)n->tileX * 0.7f + (float)n->tileY * 1.3f;
     py += (int)(sinf(phase) * 1.0f);
 
+    // Contact shadow under the feet — drawn before the sprite so it sits
+    // behind the body. The bob moves the sprite but not the shadow, which
+    // reads as the character lifting off the ground.
+    float shCx = (float)(n->tileX * tilePixels) + (float)sz * 0.5f;
+    float shY  = (float)(n->tileY * tilePixels) + (float)sz * 0.94f;
+    DrawEllipse((int)shCx, (int)shY, sz * 0.30f, sz * 0.09f,
+                (Color){0, 0, 0, 90});
+
     switch (n->type) {
         case NPC_PENGUIN_ELDER: DrawPenguinElder(px, py, sz, n->dir); break;
         case NPC_SEAL:          DrawSeal(px, py, sz, n->dir);         break;

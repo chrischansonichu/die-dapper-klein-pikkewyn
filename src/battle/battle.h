@@ -41,8 +41,12 @@ typedef struct TurnEntry {
     int  spd;
 } TurnEntry;
 
+struct TileMap;
+
 typedef struct BattleContext {
-    Party *party;   // borrowed, lives in GameState
+    Party *party;                // borrowed, lives in GameState
+    const struct TileMap *map;   // borrowed, lives in FieldState — used for
+                                 // terrain-aware speed + movement budget
 
     Combatant enemies[BATTLE_MAX_ENEMIES];
     int       enemyCount;
@@ -90,19 +94,22 @@ typedef struct BattleContext {
     int   partyMoveCursor[PARTY_MAX];
 } BattleContext;
 
-// Compute the per-turn movement budget from a combatant's speed:
-//   budget = 2 + max(0, (spd - 4) / 4)
+// Compute the per-turn movement budget from a combatant's effective speed
+// (base +/- terrain modifiers from CombatantEffectiveSpeed). map may be NULL
+// to skip terrain effects.
+//   budget = 2 + max(0, (effSpd - 4) / 4)
 // Jan at SPD 4 → 2. Seal with pinniped growth hits 3 at level 3. Put here so
 // future tuning lives in one place.
-int  CombatantMoveBudget(const Combatant *c);
+int  CombatantMoveBudget(const Combatant *c, const struct TileMap *map);
 
 // Begin the fight — caller has already populated ctx->enemies[], ctx->enemyCount,
 // ctx->enemyFieldIdx[], and seeded tileX/tileY on every participating combatant.
-void BattleBegin(BattleContext *ctx, Party *party, bool preemptive);
+// map is stashed on ctx so the turn-order sort can apply terrain-speed.
+void BattleBegin(BattleContext *ctx, Party *party, const struct TileMap *map,
+                 bool preemptive);
 
 // Per-frame update. Needs the tilemap for walkability / LOS checks during the
 // MOVE phase, target select, and attack resolution.
-struct TileMap;
 void BattleUpdate(BattleContext *ctx, const struct TileMap *map, float dt);
 
 // Draw combat overlays (actor highlight, reachable tiles, target cursor) in

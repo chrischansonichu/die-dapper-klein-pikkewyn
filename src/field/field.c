@@ -589,7 +589,7 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
     }
 
     ow->mode = FIELD_BATTLE;
-    BattleBegin(ctx, &ow->gs->party, preemptive);
+    BattleBegin(ctx, &ow->gs->party, &ow->map, preemptive);
 }
 
 // Find an active enemy adjacent (Chebyshev ≤ 1) to any party member that could
@@ -1219,6 +1219,14 @@ static void DrawPartyFollowersInBattle(const FieldState *ow)
         Rectangle r = { (float)(m->tileX * tp),
                         (float)(m->tileY * tp) + bob,
                         (float)tp, (float)tp };
+        // Contact shadow anchored to the tile, unaffected by bob.
+        bool onWater = TileMapIsWater(&ow->map, m->tileX, m->tileY);
+        if (!onWater) {
+            float shCx = (float)(m->tileX * tp) + tp * 0.5f;
+            float shY  = (float)(m->tileY * tp) + tp * 0.94f;
+            DrawEllipse((int)shCx, (int)shY, tp * 0.30f, tp * 0.09f,
+                        (Color){0, 0, 0, 90});
+        }
         DrawCombatantSprite(m->def->id, r, false, 1.0f, 0, 0, false);
     }
 }

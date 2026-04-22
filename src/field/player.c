@@ -224,6 +224,11 @@ void PlayerDraw(const Player *p)
         float ry = py + sz * 0.80f;
         DrawEllipse((int)rx, (int)ry, sz * 0.45f, sz * 0.14f,
                     (Color){ 30, 110, 170, 160});
+    } else {
+        // Contact shadow on land. Skipped on water — the ripple above reads
+        // as the contact, and a dark ellipse underwater looks wrong.
+        DrawEllipse((int)cx, (int)(py + sz * 0.94f),
+                    sz * 0.30f, sz * 0.09f, (Color){0, 0, 0, 90});
     }
 
     DrawJanRounded(px, py, sz, p->dir, p->animFrame);

@@ -12,9 +12,10 @@
 // Internal helpers
 //----------------------------------------------------------------------------------
 
-int CombatantMoveBudget(const Combatant *c)
+int CombatantMoveBudget(const Combatant *c, const TileMap *map)
 {
-    int extra = (c->spd - 4) / 4;
+    int spd = CombatantEffectiveSpeed(c, map);
+    int extra = (spd - 4) / 4;
     if (extra < 0) extra = 0;
     return 2 + extra;
 }
@@ -61,13 +62,15 @@ static void BuildTurnOrder(BattleContext *ctx)
 {
     ctx->turnCount = 0;
     for (int i = 0; i < ctx->party->count; i++) {
-        if (!ctx->party->members[i].alive) continue;
-        TurnEntry e = { false, i, ctx->party->members[i].spd };
+        const Combatant *m = &ctx->party->members[i];
+        if (!m->alive) continue;
+        TurnEntry e = { false, i, CombatantEffectiveSpeed(m, ctx->map) };
         ctx->turnOrder[ctx->turnCount++] = e;
     }
     for (int i = 0; i < ctx->enemyCount; i++) {
-        if (!ctx->enemies[i].alive) continue;
-        TurnEntry e = { true, i, ctx->enemies[i].spd };
+        const Combatant *m = &ctx->enemies[i];
+        if (!m->alive) continue;
+        TurnEntry e = { true, i, CombatantEffectiveSpeed(m, ctx->map) };
         ctx->turnOrder[ctx->turnCount++] = e;
     }
     for (int i = 1; i < ctx->turnCount; i++) {
@@ -173,7 +176,7 @@ static void AITakeTurn(BattleContext *ctx, const TileMap *m)
     }
 
     // Walk toward target, budget steps per turn.
-    int budget = CombatantMoveBudget(actor);
+    int budget = CombatantMoveBudget(actor, m);
     for (int s = 0; s < budget; s++) {
         if (actor->tileX == target.x && actor->tileY == target.y) break;
         int before = actor->tileX * 10000 + actor->tileY;
@@ -578,9 +581,11 @@ static void AdvanceTurn(BattleContext *ctx)
 // Public API
 //----------------------------------------------------------------------------------
 
-void BattleBegin(BattleContext *ctx, Party *party, bool preemptive)
+void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
+                 bool preemptive)
 {
     ctx->party            = party;
+    ctx->map              = map;
     ctx->state            = preemptive ? BS_PREEMPTIVE_NARRATION : BS_TURN_START;
     ctx->currentTurn      = 0;
     ctx->selectedMove     = -1;
@@ -629,6 +634,11 @@ void BattleBegin(BattleContext *ctx, Party *party, bool preemptive)
 
 void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
 {
+    // Keep ctx->map in sync in case the caller swaps maps mid-battle (it
+    // doesn't today, but the extra line is cheap and avoids a stale pointer
+    // if that ever changes).
+    ctx->map = map;
+
     BattleAnimUpdate(&ctx->anim, dt);
 
     for (int i = 0; i < PARTY_MAX; i++) {
@@ -729,7 +739,7 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
             // turn. A second MOVE press is silently ignored (the menu also
             // dims MOVE to signal it's spent).
             Combatant *actor = GetCurrentActor(ctx);
-            ctx->moveBudget  = actor ? CombatantMoveBudget(actor) : 0;
+            ctx->moveBudget  = actor ? CombatantMoveBudget(actor, map) : 0;
             ctx->state       = BS_MOVE_PHASE;
         }
         break;
