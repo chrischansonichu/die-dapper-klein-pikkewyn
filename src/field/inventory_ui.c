@@ -85,6 +85,16 @@ static void EquipBagWeapon(InventoryUI *ui, Party *party)
     if (ui->cursor >= party->inventory.weaponCount && ui->cursor > 0) ui->cursor--;
 }
 
+static void DiscardBagWeapon(InventoryUI *ui, Party *party)
+{
+    if (ui->cursor < 0 || ui->cursor >= party->inventory.weaponCount) return;
+    WeaponStack w;
+    if (!InventoryTakeWeapon(&party->inventory, ui->cursor, &w)) return;
+    const MoveDef *mv = GetMoveDef(w.moveId);
+    snprintf(ui->status, sizeof(ui->status), "Discarded %s.", mv->name);
+    if (ui->cursor >= party->inventory.weaponCount && ui->cursor > 0) ui->cursor--;
+}
+
 static void UnequipMemberWeapon(InventoryUI *ui, Party *party)
 {
     if (ui->memberCursor < 0 || ui->memberCursor >= party->count) return;
@@ -166,6 +176,12 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party)
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
             if (ui->equippedFocus) UnequipMemberWeapon(ui, party);
             else                   EquipBagWeapon(ui, party);
+        }
+        // Drop the weapon at the bag cursor. Jan tosses it onto the sand —
+        // gone for good. Equipped slots aren't discardable; unequip first.
+        if (!ui->equippedFocus &&
+            (IsKeyPressed(KEY_BACKSPACE) || IsKeyPressed(KEY_DELETE))) {
+            DiscardBagWeapon(ui, party);
         }
     }
 
@@ -267,15 +283,30 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
         y += 4;
     }
 
-    // Bag on right
+    // Bag on right — scrolling viewport so the list doesn't overrun the
+    // panel. Cursor drives the scroll position; a thin bar on the right
+    // reflects the viewport extent when the bag overflows.
+    const int BAG_VISIBLE = 10;
     int bagX = 420;
     y = 95;
-    DrawText("Weapon Bag", bagX, y, 18, WHITE);
+    DrawText(TextFormat("Weapon Bag  %d/%d", inv->weaponCount, INVENTORY_MAX_WEAPONS),
+             bagX, y, 18, WHITE);
     y += 26;
+    int listTop = y;
     if (inv->weaponCount == 0) {
         DrawText("(Empty)", bagX, y, 16, GRAY);
     }
-    for (int i = 0; i < inv->weaponCount; i++) {
+    int scrollTop = 0;
+    if (!ui->equippedFocus && ui->cursor >= BAG_VISIBLE) {
+        scrollTop = ui->cursor - BAG_VISIBLE + 1;
+    }
+    int maxScroll = inv->weaponCount - BAG_VISIBLE;
+    if (maxScroll < 0) maxScroll = 0;
+    if (scrollTop > maxScroll) scrollTop = maxScroll;
+
+    int drawEnd = scrollTop + BAG_VISIBLE;
+    if (drawEnd > inv->weaponCount) drawEnd = inv->weaponCount;
+    for (int i = scrollTop; i < drawEnd; i++) {
         const MoveDef *mv = GetMoveDef(inv->weapons[i].moveId);
         bool sel = (!ui->equippedFocus && ui->cursor == i);
         Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
@@ -289,8 +320,24 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
         DrawText(buf, bagX, y, 14, WHITE);
         y += 24;
     }
+
+    // Scroll bar — gutter on the right of the bag column, thumb sized to the
+    // visible fraction. Only drawn when the list actually overflows.
+    if (inv->weaponCount > BAG_VISIBLE) {
+        int trackX = bagX + 318;
+        int trackY = listTop - 2;
+        int trackH = BAG_VISIBLE * 24;
+        DrawRectangle(trackX, trackY, 4, trackH, (Color){30, 30, 60, 200});
+        float frac = (float)BAG_VISIBLE / (float)inv->weaponCount;
+        int thumbH = (int)(trackH * frac);
+        if (thumbH < 8) thumbH = 8;
+        float pos = (maxScroll > 0) ? (float)scrollTop / (float)maxScroll : 0.0f;
+        int thumbY = trackY + (int)((trackH - thumbH) * pos);
+        DrawRectangle(trackX, thumbY, 4, thumbH, (Color){140, 160, 220, 255});
+    }
+
     DrawText(ui->equippedFocus ? "Z: Unequip  Right: Bag  [ or ]: Switch Member  X/I: Close"
-                               : "Z: Equip    Left: Equipped  [ or ]: Switch Member  X/I: Close",
+                               : "Z: Equip  Del: Discard  Left: Equipped  [ or ]: Switch  X/I: Close",
              60, 420, 14, GRAY);
 }
 
