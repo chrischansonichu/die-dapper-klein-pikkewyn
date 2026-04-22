@@ -79,6 +79,14 @@ static bool IsFloor(const TileMap *m, int x, int y)
     return t == TILE_SAND || t == TILE_DOCK || t == TILE_GRASS;
 }
 
+static bool HasEnemyAt(const MapBuildContext *ctx, int x, int y)
+{
+    for (int i = 0; i < *ctx->enemyCount; i++) {
+        if (ctx->enemies[i].tileX == x && ctx->enemies[i].tileY == y) return true;
+    }
+    return false;
+}
+
 void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
 {
     TileMap *m = ctx->map;
@@ -174,11 +182,14 @@ void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
         int stairsRoomY = DUNGEON_ROOMS_Y - 1 - spawnRoomY;
         int sx = -1, sy = -1;
         // Prefer wall-adjacent floor tiles, scanning from the far corner in.
+        // Skip any tile already occupied by an enemy — otherwise a sailor would
+        // be stranded on top of the (solid) stairs warp.
         for (int oy = ROOM_H - 2; oy >= 1 && sx < 0; oy--) {
             for (int ox = ROOM_W - 2; ox >= 1 && sx < 0; ox--) {
                 int tx = stairsRoomX * ROOM_W + ox;
                 int ty = stairsRoomY * ROOM_H + oy;
                 if (!IsFloor(m, tx, ty)) continue;
+                if (HasEnemyAt(ctx, tx, ty)) continue;
                 bool againstWall =
                     !IsFloor(m, tx + 1, ty) || !IsFloor(m, tx - 1, ty) ||
                     !IsFloor(m, tx, ty + 1) || !IsFloor(m, tx, ty - 1);
@@ -190,6 +201,7 @@ void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
             for (int ox = 1; ox < ROOM_W - 1 && sx < 0; ox++) {
                 int tx = stairsRoomX * ROOM_W + ox;
                 int ty = stairsRoomY * ROOM_H + oy;
+                if (HasEnemyAt(ctx, tx, ty)) continue;
                 if (IsFloor(m, tx, ty)) { sx = tx; sy = ty; }
             }
         }

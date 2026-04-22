@@ -351,7 +351,9 @@ static bool FieldEnemyIsCaptor(const FieldState *ow, int enemyIdx)
 // Captor enemies (guarding a captive NPC) are skipped unless the seed itself
 // is a captor: a regular fight never drags captors in, but a captive-rescue
 // fight still pulls in all captors of that scene (adjacent to the seed by
-// design) plus any regular enemies within sight.
+// design) plus any regular enemies within sight. Sibling captors of the same
+// captive are force-included regardless of range/LOS so the rescue scene can't
+// split into two separate fights based on approach geometry.
 static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
                                   int *outIdxs, int maxOut)
 {
@@ -362,6 +364,30 @@ static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
     if (written < maxOut) outIdxs[written++] = seedIdx;
 
     bool seedIsCaptor = FieldEnemyIsCaptor(ow, seedIdx);
+
+    if (seedIsCaptor) {
+        for (int n = 0; n < ow->npcCount && written < maxOut; n++) {
+            const Npc *npc = &ow->npcs[n];
+            if (!npc->active || !npc->isCaptive) continue;
+            bool ownsSeed = false;
+            for (int k = 0; k < npc->captorCount; k++) {
+                if (npc->captorIdxs[k] == seedIdx) { ownsSeed = true; break; }
+            }
+            if (!ownsSeed) continue;
+            for (int k = 0; k < npc->captorCount && written < maxOut; k++) {
+                int ci = npc->captorIdxs[k];
+                if (ci < 0 || ci >= ow->enemyCount) continue;
+                if (ci == seedIdx) continue;
+                if (!ow->enemies[ci].active) continue;
+                bool already = false;
+                for (int j = 0; j < written; j++) {
+                    if (outIdxs[j] == ci) { already = true; break; }
+                }
+                if (already) continue;
+                outIdxs[written++] = ci;
+            }
+        }
+    }
 
     int anchorX[2];
     int anchorY[2];
@@ -376,6 +402,11 @@ static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
     for (int i = 0; i < ow->enemyCount && written < maxOut; i++) {
         if (i == seedIdx) continue;
         if (!ow->enemies[i].active) continue;
+        bool already = false;
+        for (int j = 0; j < written; j++) {
+            if (outIdxs[j] == i) { already = true; break; }
+        }
+        if (already) continue;
         bool iIsCaptor = FieldEnemyIsCaptor(ow, i);
         if (!seedIsCaptor && iIsCaptor) continue;
         const FieldEnemy *e = &ow->enemies[i];
