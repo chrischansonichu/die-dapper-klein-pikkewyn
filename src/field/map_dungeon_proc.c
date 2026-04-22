@@ -12,17 +12,19 @@
 // _CAPTAIN.
 static int PickEnemyCreature(int floor, unsigned roll)
 {
-    // Map floor 2..8 onto three per-tier weights out of 100. Captains start
-    // as a rare-sighting on F2 (10%) and ramp up so the tier is visible
-    // across the whole dungeon, not just the deep floors.
+    // Map floor 2..8 onto three per-tier weights out of 100. Captains are a
+    // rare threat on the early floors and only become the bulk of the roster
+    // at the very bottom — they still need to be at least level 7 (clamped at
+    // the call site) so an early-floor captain is an unusually dangerous
+    // encounter, not a trivial one.
     int wDeck, wBosun, wCap;
-    if      (floor <= 2) { wDeck = 60; wBosun = 30; wCap = 10; }
-    else if (floor <= 3) { wDeck = 45; wBosun = 35; wCap = 20; }
-    else if (floor <= 4) { wDeck = 30; wBosun = 40; wCap = 30; }
-    else if (floor <= 5) { wDeck = 15; wBosun = 45; wCap = 40; }
-    else if (floor <= 6) { wDeck = 5;  wBosun = 45; wCap = 50; }
-    else if (floor <= 7) { wDeck = 0;  wBosun = 35; wCap = 65; }
-    else                 { wDeck = 0;  wBosun = 20; wCap = 80; }
+    if      (floor <= 2) { wDeck = 70; wBosun = 27; wCap = 3; }
+    else if (floor <= 3) { wDeck = 55; wBosun = 38; wCap = 7; }
+    else if (floor <= 4) { wDeck = 40; wBosun = 48; wCap = 12; }
+    else if (floor <= 5) { wDeck = 20; wBosun = 60; wCap = 20; }
+    else if (floor <= 6) { wDeck = 10; wBosun = 60; wCap = 30; }
+    else if (floor <= 7) { wDeck = 0;  wBosun = 60; wCap = 40; }
+    else                 { wDeck = 0;  wBosun = 45; wCap = 55; }
 
     int pct = (int)(roll % 100);
     if (pct < wDeck)           return CREATURE_DECKHAND;
@@ -146,6 +148,10 @@ void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
                 int depthBonus = floor - 2;
                 if (depthBonus < 0) depthBonus = 0;
                 int level = 3 + (int)((r2 >> 1) & 1) + depthBonus;
+                // Captains are never weak: bump early-floor captains up so
+                // their stat block matches their tier regardless of which
+                // floor rolled them.
+                if (creatureId == CREATURE_CAPTAIN && level < 7) level = 7;
                 Color color;
                 switch (creatureId) {
                     case CREATURE_CAPTAIN: color = (Color){230, 200,  80, 255}; break;
