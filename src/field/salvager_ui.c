@@ -152,8 +152,11 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
 
         // Viewport — clamp visible rows and scroll with the cursor so a
         // fully-packed bag (up to SALVAGER_MAX_ENTRIES) still fits the panel.
-        const int VISIBLE    = 8;
-        const int ROW_H      = 26;
+        // The panel is ~330px tall at 800x450; with the header + two dialogue
+        // lines above and the "Hand over" + help footer below, only about
+        // 110px is available for the list itself — 5 rows at 22px each.
+        const int VISIBLE    = 5;
+        const int ROW_H      = 22;
         int scrollTop = 0;
         if (s->cursor >= VISIBLE) scrollTop = s->cursor - VISIBLE + 1;
         int maxScroll = s->entryCount - VISIBLE;
