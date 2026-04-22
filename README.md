@@ -6,6 +6,9 @@
 
 This game is a work in progress. And will be for a very long time. It's designed to be played primarily by children.
 
+Play along during development at https://dapper.bdhimes.com
+
+
 #### Overview:
 
 Top-down, pixel art RPG in the general artistic style of Pokémon Red.
