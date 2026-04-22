@@ -8,12 +8,36 @@
 //----------------------------------------------------------------------------------
 
 #define CREATURE_NAME_LEN 32
-// Move slots: 3 groups x 2 slots = 6 total.
-// Slot order is fixed: [Atk0, Atk1, Item0, Item1, Spec0, Spec1].
-// Empty slots hold moveId = -1.
-#define MOVE_SLOTS_PER_GROUP 2
-#define CREATURE_MAX_MOVES (MOVE_SLOTS_PER_GROUP * 3)
-#define MOVE_GROUP_SLOT(group, n) ((group) * MOVE_SLOTS_PER_GROUP + (n))
+// Move slots: asymmetric layout, 6 total.
+//   [Atk0, Item0, Item1, Item2, Spec0, Spec1]
+// Group sizes are independent so the columns can grow separately — the game
+// intentionally has one basic-attack slot (Tackle) and more item-attack slots
+// where thrown/wielded weapons live. Empty slots hold moveId = -1.
+#define MOVE_SLOTS_ATTACK      1
+#define MOVE_SLOTS_ITEM_ATTACK 3
+#define MOVE_SLOTS_SPECIAL     2
+#define CREATURE_MAX_MOVES (MOVE_SLOTS_ATTACK + MOVE_SLOTS_ITEM_ATTACK + MOVE_SLOTS_SPECIAL)
+
+// Per-group slot counts and flat-index offsets. `group` is a MoveGroup value
+// (0=ATTACK, 1=ITEM_ATTACK, 2=SPECIAL) — typed as int here so creature_defs.h
+// stays independent of move_defs.h.
+static inline int MoveGroupSlotCount(int group) {
+    switch (group) {
+    case 0: return MOVE_SLOTS_ATTACK;
+    case 1: return MOVE_SLOTS_ITEM_ATTACK;
+    case 2: return MOVE_SLOTS_SPECIAL;
+    default: return 0;
+    }
+}
+static inline int MoveGroupSlotStart(int group) {
+    switch (group) {
+    case 0: return 0;
+    case 1: return MOVE_SLOTS_ATTACK;
+    case 2: return MOVE_SLOTS_ATTACK + MOVE_SLOTS_ITEM_ATTACK;
+    default: return 0;
+    }
+}
+#define MOVE_GROUP_SLOT(group, n) (MoveGroupSlotStart(group) + (n))
 #define CREATURE_DEF_COUNT 7
 
 typedef enum CreatureClass {
@@ -33,8 +57,9 @@ typedef struct CreatureDef {
     int           baseDef;
     int           baseSpd;
     int           baseDex;
-    // Fixed-layout move slots. -1 = empty. Each group's two slots are
-    // at indices [group*2, group*2+1].
+    // Fixed-layout move slots. -1 = empty. Flat order is
+    // [Atk0, Item0, Item1, Item2, Spec0, Spec1]; use MOVE_GROUP_SLOT to
+    // index a particular group's nth slot.
     int           moveIds[CREATURE_MAX_MOVES];
     // Sprite size multiplier. 1.0 = default cell size. Boss creatures use >1
     // to tower over rank-and-file; taller sprites anchor at bottom-center.

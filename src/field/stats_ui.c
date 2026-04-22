@@ -195,7 +195,8 @@ static void DrawStatsTab(const StatsUI *ui, const Party *party)
     for (int g = 0; g < MOVE_GROUP_COUNT; g++) {
         DrawText(kGroupTitle[g], mx, my, 12, (Color){160, 180, 220, 255});
         my += 16;
-        for (int n = 0; n < MOVE_SLOTS_PER_GROUP; n++) {
+        int rowCount = MoveGroupSlotCount(g);
+        for (int n = 0; n < rowCount; n++) {
             int slot = MOVE_GROUP_SLOT(g, n);
             if (m->moveIds[slot] < 0) {
                 DrawText("  --", mx, my, 14, GRAY);

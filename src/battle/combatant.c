@@ -46,7 +46,7 @@ void CombatantInit(Combatant *c, int creatureId, int level)
     c->xp      = 0;
     c->xpToNext = c->level * 50;
 
-    // Copy the 6-slot move layout verbatim; -1 slots carry -1 durability.
+    // Copy the fixed move layout verbatim; -1 slots carry -1 durability.
     for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
         c->moveIds[i] = cdef->moveIds[i];
         if (c->moveIds[i] >= 0) {
@@ -116,12 +116,12 @@ int CombatantWeaponCount(const Combatant *c)
     return n;
 }
 
-// Weapons only land in the Item-Attack group (slots 2-3). Returns the first
-// empty slot within that group, or -1 if both are full.
+// Weapons only land in the Item-Attack group. Returns the first empty slot
+// within that group, or -1 if all item-attack slots are occupied.
 static int FindEmptyItemAttackSlot(const Combatant *c)
 {
     int start = MOVE_GROUP_SLOT(MOVE_GROUP_ITEM_ATTACK, 0);
-    for (int n = 0; n < MOVE_SLOTS_PER_GROUP; n++) {
+    for (int n = 0; n < MOVE_SLOTS_ITEM_ATTACK; n++) {
         if (c->moveIds[start + n] == -1) return start + n;
     }
     return -1;

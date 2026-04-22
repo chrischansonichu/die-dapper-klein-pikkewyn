@@ -20,7 +20,7 @@ typedef enum BattleMenuAction {
 
 typedef struct BattleMenuState {
     int  rootCursor;    // 0..3 (FIGHT/ITEM/MOVE/PASS)
-    int  moveCursor;    // 0..CREATURE_MAX_MOVES-1 (slot index in 3x2 layout)
+    int  moveCursor;    // 0..CREATURE_MAX_MOVES-1 — flat slot index (see creature_defs.h)
     int  itemCursor;    // which item slot in inventory
 } BattleMenuState;
 

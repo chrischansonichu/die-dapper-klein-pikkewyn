@@ -75,7 +75,7 @@ static void EquipBagWeapon(InventoryUI *ui, Party *party)
         return;
     }
     if (!CombatantEquipWeapon(target, w.moveId, w.durability)) {
-        // Put it back — item-attack group is full (both slots 2 and 3).
+        // Put it back — every item-attack slot is full.
         InventoryAddWeapon(&party->inventory, w.moveId, w.durability);
         snprintf(ui->status, sizeof(ui->status),
                  "%s's item-attack slots are full. Unequip first.", target->name);
@@ -355,14 +355,15 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
     int colX = 60, y = 95;
     DrawText(TextFormat("%s's Moves  ([ or ] switch)", led->name), colX, y, 18, WHITE);
     y += 26;
-    // Fixed 6-slot layout with group headers between rows.
+    // Fixed-slot layout with group headers between rows.
     static const char *groupTitle[MOVE_GROUP_COUNT] = {
         "Attacks", "Item Attacks", "Specials"
     };
     for (int g = 0; g < MOVE_GROUP_COUNT; g++) {
         DrawText(groupTitle[g], colX, y, 12, (Color){160, 180, 220, 255});
         y += 16;
-        for (int n = 0; n < MOVE_SLOTS_PER_GROUP; n++) {
+        int rowCount = MoveGroupSlotCount(g);
+        for (int n = 0; n < rowCount; n++) {
             int i = MOVE_GROUP_SLOT(g, n);
             bool sel = (ui->equippedFocus && ui->cursor == i);
             Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};

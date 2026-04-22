@@ -29,7 +29,8 @@ typedef struct Combatant {
     int   spd;
     int   dex;
     int   level;
-    // Fixed 6-slot layout mirroring CreatureDef.moveIds. -1 = empty slot.
+    // Fixed-layout move slots mirroring CreatureDef.moveIds. -1 = empty slot.
+    // See creature_defs.h for the flat slot order.
     int   moveIds[CREATURE_MAX_MOVES];
     bool  alive;
     // Runtime dungeon-tile position — only valid for the duration of a battle.

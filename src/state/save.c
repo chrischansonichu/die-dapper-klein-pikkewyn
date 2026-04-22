@@ -9,7 +9,7 @@
 
 #define SAVE_PATH    "savegame.dat"
 #define SAVE_MAGIC   0x504B5044u  // 'D','P','K','P' little-endian
-#define SAVE_VERSION 2u
+#define SAVE_VERSION 3u
 
 // Flat per-combatant record. creatureId lets us re-resolve the CreatureDef
 // pointer on load. We snapshot effective stats rather than re-deriving them

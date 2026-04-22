@@ -15,10 +15,6 @@ static const char *gActionLabels[BMENU_ACTION_COUNT] = {
     "FIGHT", "ITEM", "MOVE", "PASS"
 };
 
-static const char *gGroupLabels[MOVE_GROUP_COUNT] = {
-    "ATTACKS", "ITEM ATK", "SPECIAL"
-};
-
 void BattleMenuInit(BattleMenuState *m)
 {
     m->rootCursor   = 0;
@@ -42,30 +38,49 @@ int BattleMenuUpdateRoot(BattleMenuState *m)
     return -1;
 }
 
-// Slot layout is a 3x2 grid:
-//   col 0 = Attacks (slots 0, 1)
-//   col 1 = Item Attacks (slots 2, 3)
-//   col 2 = Specials (slots 4, 5)
-// Map helpers:
-#define SLOT_COL(s) ((s) / MOVE_SLOTS_PER_GROUP)
-#define SLOT_ROW(s) ((s) % MOVE_SLOTS_PER_GROUP)
-#define COLROW_SLOT(c, r) ((c) * MOVE_SLOTS_PER_GROUP + (r))
+// Menu layout is a fixed 3x2 grid. Data-side there's only one Attack slot
+// (Tackle); the grid keeps its shape by "spilling" the third item-attack slot
+// (slot 3) into col 0 row 1 — so the Attacks column is visibly mixed: a
+// single attack on top, an item-attack underneath. The cell borders colour
+// by each cell's true group, which is how players see that the bottom-left
+// cell belongs to the item-attack family despite sitting in the Attacks
+// column.
+static const int kGridSlot[3][2] = {
+    {0, 3},  // col 0: Tackle (top) / Item2 (bottom) — mixed column
+    {1, 2},  // col 1: Item0 / Item1
+    {4, 5},  // col 2: Spec0 / Spec1
+};
+
+static int SlotGroupOf(int slot)
+{
+    if (slot < MOVE_SLOTS_ATTACK) return MOVE_GROUP_ATTACK;
+    if (slot < MOVE_SLOTS_ATTACK + MOVE_SLOTS_ITEM_ATTACK) return MOVE_GROUP_ITEM_ATTACK;
+    return MOVE_GROUP_SPECIAL;
+}
+
+static void SlotToGrid(int slot, int *col, int *row)
+{
+    for (int c = 0; c < 3; c++) {
+        for (int r = 0; r < 2; r++) {
+            if (kGridSlot[c][r] == slot) { *col = c; *row = r; return; }
+        }
+    }
+    *col = 0; *row = 0;
+}
 
 // Find a non-empty slot starting from (col, row), stepping in (dcol, drow).
 // Returns the original start slot if nothing else is found.
 static int FindNonEmptySlot(const Combatant *actor, int startCol, int startRow,
                             int dcol, int drow)
 {
-    int cols = MOVE_GROUP_COUNT;
-    int rows = MOVE_SLOTS_PER_GROUP;
     int c = startCol, r = startRow;
-    for (int step = 0; step < cols * rows; step++) {
-        c = (c + dcol + cols) % cols;
-        r = (r + drow + rows) % rows;
-        int slot = COLROW_SLOT(c, r);
+    for (int step = 0; step < 6; step++) {
+        c = (c + dcol + 3) % 3;
+        r = (r + drow + 2) % 2;
+        int slot = kGridSlot[c][r];
         if (actor->moveIds[slot] >= 0) return slot;
     }
-    return COLROW_SLOT(startCol, startRow); // fallback — all empty, stay put
+    return kGridSlot[startCol][startRow]; // fallback — all empty, stay put
 }
 
 int BattleMenuUpdateMoveSelect(BattleMenuState *m, const Combatant *actor)
@@ -73,14 +88,12 @@ int BattleMenuUpdateMoveSelect(BattleMenuState *m, const Combatant *actor)
     if (!actor) return -1;
 
     // Snap cursor onto a populated slot if it lands on an empty one.
+    int col, row;
     if (actor->moveIds[m->moveCursor] < 0) {
-        int col = SLOT_COL(m->moveCursor);
-        int row = SLOT_ROW(m->moveCursor);
+        SlotToGrid(m->moveCursor, &col, &row);
         m->moveCursor = FindNonEmptySlot(actor, col, row, 1, 0);
     }
-
-    int col = SLOT_COL(m->moveCursor);
-    int row = SLOT_ROW(m->moveCursor);
+    SlotToGrid(m->moveCursor, &col, &row);
 
     if (IsKeyPressed(KEY_UP)    || IsKeyPressed(KEY_W))
         m->moveCursor = FindNonEmptySlot(actor, col, row, 0, -1);
@@ -143,30 +156,44 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
     DrawRectangle(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){20, 20, 40, 220});
     DrawRectangleLines(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, (Color){80, 80, 140, 255});
 
-    // 3 columns x 2 rows grid, with group header above each column.
-    int colW = 245, btnH = 36, colGap = 10;
-    int startX = 20, headerY = PANEL_Y + 6, startY = PANEL_Y + 22;
+    // Fixed 3x2 cell grid. Each cell's border colours by its actual group —
+    // that's the only identity cue now, since there's no column header row:
+    // blue = attack, amber = item-attack, violet = special. Col 0 is visibly
+    // "mixed" because its two cells end up with different border colours.
+    static const Color kGroupBorder[MOVE_GROUP_COUNT] = {
+        [MOVE_GROUP_ATTACK]      = (Color){120, 140, 220, 255}, // blue
+        [MOVE_GROUP_ITEM_ATTACK] = (Color){210, 180, 100, 255}, // amber
+        [MOVE_GROUP_SPECIAL]     = (Color){180, 140, 220, 255}, // violet
+    };
 
-    for (int g = 0; g < MOVE_GROUP_COUNT; g++) {
-        int gx = startX + g * (colW + colGap);
-        DrawText(gGroupLabels[g], gx + 4, headerY, 11, (Color){160, 180, 220, 255});
-        for (int n = 0; n < MOVE_SLOTS_PER_GROUP; n++) {
-            int slot = MOVE_GROUP_SLOT(g, n);
-            int bx = gx;
-            int by = startY + n * (btnH + 4);
+    int colW = 245, btnH = 42, colGap = 10;
+    int startX = 20, startY = PANEL_Y + 10;
+
+    for (int col = 0; col < 3; col++) {
+        int gx = startX + col * (colW + colGap);
+
+        for (int row = 0; row < 2; row++) {
+            int slot   = kGridSlot[col][row];
             int moveId = actor->moveIds[slot];
             bool isEmpty = (moveId < 0);
+            int  group   = SlotGroupOf(slot);
+            Color border = kGroupBorder[group];
+
+            int bx = gx;
+            int by = startY + row * (btnH + 4);
             Color bg = (m->moveCursor == slot) ? (Color){80, 100, 200, 255}
                                                 : (Color){40, 40, 80, 255};
 
-            // Hotkey label corner (1..6)
+            // Hotkey label corner (1..6) — matches flat slot index, so the
+            // spill cell (col 0 row 1) shows "4" rather than "2".
             char hotkeyStr[4];
             snprintf(hotkeyStr, sizeof(hotkeyStr), "%d", slot + 1);
 
             if (isEmpty) {
                 bg = (Color){28, 28, 44, 255};
                 DrawRectangle(bx, by, colW, btnH, bg);
-                DrawRectangleLines(bx, by, colW, btnH, (Color){70, 70, 100, 255});
+                DrawRectangleLines(bx, by, colW, btnH,
+                    (Color){border.r / 2, border.g / 2, border.b / 2, 255});
                 DrawText(hotkeyStr, bx + 4, by + 4, 10, (Color){70, 80, 110, 255});
                 DrawText("--", bx + colW / 2 - 6, by + 10, 18, (Color){80, 80, 110, 255});
                 continue;
@@ -179,7 +206,7 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
             bool disabled      = broken || outOfRange;
             if (disabled && m->moveCursor != slot) bg = (Color){50, 50, 50, 255};
             DrawRectangle(bx, by, colW, btnH, bg);
-            DrawRectangleLines(bx, by, colW, btnH, (Color){120, 140, 220, 255});
+            DrawRectangleLines(bx, by, colW, btnH, border);
             DrawText(hotkeyStr, bx + 4, by + 4, 10, (Color){220, 200, 120, 255});
             Color nameColor = disabled ? GRAY : WHITE;
             DrawText(mv->name, bx + 20, by + 4, 13, nameColor);

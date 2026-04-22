@@ -65,13 +65,31 @@ static void AddHarborF1PostVictoryNpcs(MapBuildContext *ctx)
     }
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(p, 10, 15, 3, NPC_PENGUIN_ELDER);
-        NpcAddDialogue(p, "The chicks are splashing in the shallows again.");
+        NpcInit(p, 14, 15, 3, NPC_PENGUIN_ELDER);
+        NpcAddDialogue(p, "Arf! (A seal waddles past, belly full of sardines.)");
+    }
+
+    // Penguins out in the shallows — scenery, not reachable. Their idle bob
+    // over the water tile reads as swimming without needing a new sprite.
+    if (*ctx->npcCount < ctx->npcMax) {
+        Npc *p = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(p, 5, 6, 2, NPC_PENGUIN_ELDER);
+        NpcAddDialogue(p, "Ahh! The water's perfect.");
     }
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(p, 14, 15, 3, NPC_PENGUIN_ELDER);
-        NpcAddDialogue(p, "Arf! (A seal waddles past, belly full of sardines.)");
+        NpcInit(p, 10, 8, 0, NPC_PENGUIN_ELDER);
+        NpcAddDialogue(p, "First swim since the sailors came. Feels like home.");
+    }
+    if (*ctx->npcCount < ctx->npcMax) {
+        Npc *p = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(p, 17, 10, 1, NPC_PENGUIN_ELDER);
+        NpcAddDialogue(p, "Caught a sardine with my bare flippers! Ha!");
+    }
+    if (*ctx->npcCount < ctx->npcMax) {
+        Npc *p = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(p, 13, 11, 3, NPC_PENGUIN_ELDER);
+        NpcAddDialogue(p, "Chk-chk-chk! (A chick dives under and comes back up giggling.)");
     }
 }
 
@@ -308,8 +326,12 @@ void BuildHarborFloor1(MapBuildContext *ctx)
     if (ctx->captainDefeated) {
         // Post-victory: the dungeon is closed. No enemies, no captive scene,
         // no descent warp. Just happy penguins celebrating the harbor's
-        // return.
+        // return. Paint a visible sand path south and drop a return warp
+        // on the last tile so the player can always get back to the village.
         AddHarborF1PostVictoryNpcs(ctx);
+        TileMapSetTile(m, 8, 17, TILE_SAND);
+        TileMapSetTile(m, 8, 18, TILE_SAND);
+        AddWarp(ctx, 8, 18, MAP_OVERWORLD_HUB, 0, 11, 14, 3);
     } else {
         AddHarborF1Npcs(ctx);
         AddHarborF1Enemies(ctx);
