@@ -91,8 +91,39 @@ static void DiscardBagWeapon(InventoryUI *ui, Party *party)
     WeaponStack w;
     if (!InventoryTakeWeapon(&party->inventory, ui->cursor, &w)) return;
     const MoveDef *mv = GetMoveDef(w.moveId);
-    snprintf(ui->status, sizeof(ui->status), "Discarded %s.", mv->name);
+    // Discarding is a safety valve, not a clean exit. The salvager is the
+    // ecology-positive disposal path; pushing gear back into the water is
+    // framed as something Jan would rather not do.
+    snprintf(ui->status, sizeof(ui->status),
+             "Tossed %s into the surf. The tide carries it away...", mv->name);
     if (ui->cursor >= party->inventory.weaponCount && ui->cursor > 0) ui->cursor--;
+}
+
+// Emergency discard for an equipped broken weapon. The normal unequip path
+// fails when the bag is full, which would otherwise lock a player with a
+// broken item-attack slot they can't refill. Restricted to broken weapons
+// (durability == 0) so a stray keypress can't nuke fresh gear.
+static void DiscardEquippedWeapon(InventoryUI *ui, Party *party)
+{
+    if (ui->memberCursor < 0 || ui->memberCursor >= party->count) return;
+    Combatant *target = &party->members[ui->memberCursor];
+    int slot = ui->cursor;
+    if (slot < 0 || slot >= CREATURE_MAX_MOVES) return;
+    if (target->moveIds[slot] == -1) return;
+    if (target->moveDurability[slot] != 0) {
+        snprintf(ui->status, sizeof(ui->status),
+                 "Only broken weapons can be tossed directly.");
+        return;
+    }
+    int id, dur;
+    if (!CombatantUnequipWeapon(target, slot, &id, &dur)) {
+        snprintf(ui->status, sizeof(ui->status), "That slot isn't a weapon.");
+        return;
+    }
+    const MoveDef *mv = GetMoveDef(id);
+    snprintf(ui->status, sizeof(ui->status),
+             "Tossed the broken %s into the surf. A salvager would have taken it...",
+             mv->name);
 }
 
 static void UnequipMemberWeapon(InventoryUI *ui, Party *party)
@@ -177,11 +208,12 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party)
             if (ui->equippedFocus) UnequipMemberWeapon(ui, party);
             else                   EquipBagWeapon(ui, party);
         }
-        // Drop the weapon at the bag cursor. Jan tosses it onto the sand —
-        // gone for good. Equipped slots aren't discardable; unequip first.
-        if (!ui->equippedFocus &&
-            (IsKeyPressed(KEY_BACKSPACE) || IsKeyPressed(KEY_DELETE))) {
-            DiscardBagWeapon(ui, party);
+        // Drop the weapon at the cursor. Bag-side discards anything; equipped
+        // side only discards broken weapons, since the normal unequip path
+        // can't free a broken slot when the bag is full.
+        if (IsKeyPressed(KEY_BACKSPACE) || IsKeyPressed(KEY_DELETE)) {
+            if (ui->equippedFocus) DiscardEquippedWeapon(ui, party);
+            else                   DiscardBagWeapon(ui, party);
         }
     }
 
@@ -336,7 +368,7 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
         DrawRectangle(trackX, thumbY, 4, thumbH, (Color){140, 160, 220, 255});
     }
 
-    DrawText(ui->equippedFocus ? "Z: Unequip  Right: Bag  [ or ]: Switch Member  X/I: Close"
+    DrawText(ui->equippedFocus ? "Z: Unequip  Del: Toss Broken  Right: Bag  [ or ]: Switch Member  X/I: Close"
                                : "Z: Equip  Del: Discard  Left: Equipped  [ or ]: Switch  X/I: Close",
              60, 420, 14, GRAY);
 }

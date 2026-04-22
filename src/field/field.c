@@ -192,6 +192,10 @@ static void BeginNpcInteraction(FieldState *ow, int npcIdx)
         DonationUIOpen(&ow->donationUi, &ow->gs->party);
         return;
     }
+    if (n->type == NPC_SALVAGER) {
+        SalvagerUIOpen(&ow->salvagerUi, &ow->gs->party);
+        return;
+    }
     const char *pages[NPC_MAX_DIALOGUE_PAGES];
     char scratch[4][NPC_DIALOGUE_LEN];
     int count = BuildNpcInteraction(ow, npcIdx, pages, scratch);
@@ -875,6 +879,7 @@ void FieldInit(FieldState *ow, GameState *gs)
     InventoryUIInit(&ow->invUi);
     StatsUIInit(&ow->statsUi);
     DonationUIInit(&ow->donationUi);
+    SalvagerUIInit(&ow->salvagerUi);
 
     int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;
     int mapPixH = ow->map.height * TILE_SIZE * TILE_SCALE;
@@ -1063,6 +1068,11 @@ void FieldUpdate(FieldState *ow, float dt)
     // Food bank donation picker captures input while open
     if (ow->donationUi.active) {
         DonationUIUpdate(&ow->donationUi, &ow->gs->party, &ow->gs->villageReputation);
+        return;
+    }
+    // Salvager trade picker captures input while open
+    if (ow->salvagerUi.active) {
+        SalvagerUIUpdate(&ow->salvagerUi, &ow->gs->party);
         return;
     }
     // Open inventory with I (only while not moving / no dialogue)
@@ -1422,6 +1432,10 @@ void FieldDraw(const FieldState *ow)
 
     if (ow->donationUi.active) {
         DonationUIDraw(&ow->donationUi, &ow->gs->party, ow->gs->villageReputation);
+    }
+
+    if (ow->salvagerUi.active) {
+        SalvagerUIDraw(&ow->salvagerUi, &ow->gs->party);
     }
 
     if (ow->warpPromptIdx >= 0) {

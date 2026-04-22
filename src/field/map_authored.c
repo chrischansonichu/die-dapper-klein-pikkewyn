@@ -126,6 +126,10 @@ static void AddHubNpcs(MapBuildContext *ctx)
 {
     if (*ctx->npcCount + 2 > ctx->npcMax) return;
 
+    // Village Salvager — mirrors the dungeon encounter. Between rounds he
+    // sets up here and takes broken gear off anyone passing through so the
+    // scrap doesn't make its way back out into the water.
+
     // Village elder on the plaza. Dialogue is baked (no gate logic) since the
     // hub has no enemies for AllEnemiesDefeated-style triggers.
     Npc *elder = &ctx->npcs[(*ctx->npcCount)++];
@@ -150,6 +154,13 @@ static void AddHubNpcs(MapBuildContext *ctx)
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *scribe = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(scribe, 13, 6, 0, NPC_SCRIBE);
+    }
+
+    // Salvager — stands near the pond with his sack. Same NPC type appears
+    // mid-dungeon; the UI handles dialogue + trade there.
+    if (*ctx->npcCount < ctx->npcMax) {
+        Npc *salvager = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(salvager, 17, 3, 0, NPC_SALVAGER);
     }
 }
 

@@ -62,6 +62,7 @@ PROJECT_SOURCE_FILES  ?= \
     field/map_source.c \
     field/npc.c \
     field/player.c \
+    field/salvager_ui.c \
     field/stats_ui.c \
     field/tilemap.c \
     field/village.c \

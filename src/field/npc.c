@@ -166,6 +166,24 @@ static void DrawScribe(int px, int py, int sz, int dir) {
                       (Color){130,  40,  60, 255});
 }
 
+// Rust-coated belly + weathered orange hatband mark the salvager: he trades
+// fish for broken gear so the reefs don't end up choking on discarded hooks.
+// A small bulging sack drawn behind him sells the "scrap collector" silhouette
+// without forcing a whole new sprite.
+static void DrawSalvager(int px, int py, int sz, int dir) {
+    // Sack first so it sits behind the body.
+    const Color burlap     = (Color){150, 120,  70, 255};
+    const Color burlapDark = (Color){ 95,  75,  40, 255};
+    Rectangle sack = { px + sz * 0.72f, py + sz * 0.58f, sz * 0.22f, sz * 0.28f };
+    DrawRectangleRounded(sack, 0.5f, 10, burlap);
+    DrawRectangleRounded((Rectangle){sack.x, sack.y, sack.width, sack.height * 0.18f},
+                         0.4f, 6, burlapDark);
+
+    DrawPenguinPerson(px, py, sz, dir,
+                      (Color){200, 140,  80, 255},
+                      (Color){190, 110,  50, 255});
+}
+
 // Cape fur seal — warm brown with a lighter belly
 static void DrawSeal(int px, int py, int sz, int dir)
 {
@@ -252,6 +270,7 @@ void NpcDraw(const Npc *n, Camera2D cam)
         case NPC_KEEPER:        DrawKeeper(px, py, sz, n->dir);       break;
         case NPC_FOOD_BANK:     DrawFoodBank(px, py, sz, n->dir);     break;
         case NPC_SCRIBE:        DrawScribe(px, py, sz, n->dir);       break;
+        case NPC_SALVAGER:      DrawSalvager(px, py, sz, n->dir);     break;
     }
 }
 

@@ -19,6 +19,7 @@ typedef enum NpcType {
     NPC_KEEPER,      // hub barter NPC — trades loot for leveled rewards
     NPC_FOOD_BANK,   // hub donation NPC — accepts consumables for reputation
     NPC_SCRIBE,      // hub save NPC — writes the player's progress to disk
+    NPC_SALVAGER,    // roaming scrap-picker; trades broken weapons for fish
 } NpcType;
 
 struct FieldEnemy;

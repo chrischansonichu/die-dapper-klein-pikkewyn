@@ -14,6 +14,7 @@
 #include "inventory_ui.h"
 #include "stats_ui.h"
 #include "donation_ui.h"
+#include "salvager_ui.h"
 
 // Forward declaration — field.c reads/writes the persistent party + inventory
 // through this pointer; ownership lives in screen_gameplay.c.
@@ -62,6 +63,10 @@ typedef struct FieldState {
 
     // Food-bank donation picker (opened by NPC_FOOD_BANK interaction).
     DonationUI    donationUi;
+
+    // Salvager trade picker (opened by NPC_SALVAGER interaction) — hands over
+    // broken weapons in exchange for fish.
+    SalvagerUI    salvagerUi;
 
     // Warp confirmation prompt — -1 when no prompt is open, otherwise an
     // index into warps[]. Set by facing + Z'ing a warp tile; confirmed with

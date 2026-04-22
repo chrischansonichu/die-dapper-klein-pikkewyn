@@ -210,6 +210,16 @@ void BuildHarborProcFloor(MapBuildContext *ctx, int floor, unsigned seed)
     *ctx->spawnTileY = spawnRoomY * ROOM_H + 2;
     *ctx->spawnDir   = 2; // facing right, toward the first doorway
 
+    // Mid-dungeon salvager. Shows up exactly at the halfway floor (proc runs
+    // F2..F8 so F5 is the midpoint) and stands inside the spawn room — no
+    // enemies roll here, so the tile is guaranteed clear and the player can
+    // cash in before pushing on.
+    if (floor == 5 && *ctx->npcCount < ctx->npcMax) {
+        Npc *salvager = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(salvager, spawnRoomX * ROOM_W + 5,
+                          spawnRoomY * ROOM_H + 2, 1, NPC_SALVAGER);
+    }
+
     // Stairs-down warp — placed in the room diagonally opposite the spawn so
     // the player has to traverse the floor before descending. We prefer a
     // floor tile that already abuts a wall (non-floor neighbor) so the warp
