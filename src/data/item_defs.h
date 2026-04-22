@@ -29,7 +29,7 @@ typedef struct ItemDef {
 #define ITEM_KRILL_SNACK     0
 #define ITEM_FRESH_FISH      1
 #define ITEM_SARDINE         2
-#define ITEM_ANTARCTIC_ICE   3
+#define ITEM_PERLEMOEN       3
 #define ITEM_COUNT           4
 
 extern const ItemDef gItemDefs[ITEM_COUNT];

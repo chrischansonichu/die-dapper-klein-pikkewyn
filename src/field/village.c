@@ -64,7 +64,7 @@ static int TakeWeapons(Inventory *inv, int moveId, int count)
 //   level <= 3: FishingHook   + 1 Krill Snack
 //   level <= 6: ShellThrow    + 2 Fresh Fish
 //   level <= 9: SeaUrchinSpike + 1 Sardine
-//   level >=10: SeaUrchinSpike + 1 Antarctic Ice
+//   level >=10: SeaUrchinSpike + 1 Perlemoen
 // Weapon durability comes from its MoveDef default.
 typedef struct KeeperReward {
     int weaponMoveId;
@@ -78,7 +78,7 @@ static KeeperReward ComputeReward(int janLevel)
     if (janLevel <= 3)      { r.weaponMoveId = 1; r.fishItemId = ITEM_KRILL_SNACK;   r.fishCount = 1; }
     else if (janLevel <= 6) { r.weaponMoveId = 2; r.fishItemId = ITEM_FRESH_FISH;    r.fishCount = 2; }
     else if (janLevel <= 9) { r.weaponMoveId = 3; r.fishItemId = ITEM_SARDINE;       r.fishCount = 1; }
-    else                    { r.weaponMoveId = 3; r.fishItemId = ITEM_ANTARCTIC_ICE; r.fishCount = 1; }
+    else                    { r.weaponMoveId = 3; r.fishItemId = ITEM_PERLEMOEN;     r.fishCount = 1; }
     return r;
 }
 
@@ -136,5 +136,5 @@ bool VillageIsFoodItem(int itemId)
     return itemId == ITEM_KRILL_SNACK
         || itemId == ITEM_FRESH_FISH
         || itemId == ITEM_SARDINE
-        || itemId == ITEM_ANTARCTIC_ICE;
+        || itemId == ITEM_PERLEMOEN;
 }
