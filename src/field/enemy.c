@@ -2,6 +2,7 @@
 #include "enemy_sprites.h"
 #include "field.h"
 #include "../data/creature_defs.h"
+#include "../render/paper_harbor.h"
 #include <stdlib.h>  // abs
 #include <math.h>
 
@@ -344,7 +345,8 @@ void EnemyDraw(const FieldEnemy *e)
     // as the contact instead).
     if (!e->onWater) {
         DrawEllipse((int)cx, (int)(top + sz * 0.94f),
-                    sz * 0.30f, sz * 0.09f, (Color){0, 0, 0, 90});
+                    sz * 0.30f, sz * 0.09f,
+                    (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 90});
     }
 
     // Procedural rounded sailor — same visual family as the Elder Penguin
@@ -368,11 +370,11 @@ void EnemyDraw(const FieldEnemy *e)
     if (e->onWater) {
         float waterY = top + sz * 0.62f;
         float waterH = sz * 0.38f;
-        DrawRectangle((int)fpx, (int)waterY, (int)sz, (int)waterH,
-                      (Color){ 40, 120, 185, 230});
+        Color waterFill = gPH.waterDark; waterFill.a = 230;
+        DrawRectangle((int)fpx, (int)waterY, (int)sz, (int)waterH, waterFill);
         float timeNow = (float)GetTime();
         float wobble  = sinf(timeNow * 4.0f + (float)(e->tileX + e->tileY)) * 2.0f;
-        Color foam = (Color){220, 235, 250, 220};
+        Color foam = gPH.panel; foam.a = 220;
         DrawLineEx((Vector2){fpx + 4,          waterY + 4 + wobble},
                    (Vector2){fpx + sz * 0.35f, waterY + 2 + wobble},
                    2.0f, foam);
@@ -384,7 +386,7 @@ void EnemyDraw(const FieldEnemy *e)
     // Droplets popping off the head while drying off on land.
     if (e->dryingFrames > 0) {
         float tNorm = 1.0f - (float)e->dryingFrames / 24.0f;
-        Color drop = (Color){170, 220, 255, 230};
+        Color drop = gPH.water;
         float baseX = cx;
         float baseY = top + sz * 0.25f;
         for (int k = -2; k <= 2; k += 2) {
