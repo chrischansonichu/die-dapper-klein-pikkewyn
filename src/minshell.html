@@ -50,7 +50,11 @@
           margin: 0;
           padding: 0;
           width: 100%;
-          height: 100%;
+          /* dvh = dynamic viewport height — shrinks when the mobile URL bar is
+             visible so buttons at the bottom of the pad never hide behind it.
+             Fallback to vh for browsers that don't support dvh. */
+          height: 100vh;
+          height: 100dvh;
           background-color: #F7EFD9; /* Paper Harbor parchment — matches in-game bg */
           color: #2b2b2b;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -382,16 +386,39 @@
             }
 
             // Fullscreen request — runs when the ⛶ utilpad button is pressed.
-            // iOS Safari doesn't support Element.requestFullscreen on non-video
-            // elements, so wrap it defensively.
+            // Tries documentElement then canvas (some Android browsers only honor
+            // the request on the element being displayed), then falls back to
+            // emscripten's Module.requestFullscreen. iOS Safari refuses all three
+            // on non-video elements; tell the user so they know what happened.
             function toggleFullscreen() {
-                var el = document.documentElement;
-                var req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
-                if (req) {
-                    req.call(el).catch(function () { /* ignore */ });
-                } else if (Module && typeof Module.requestFullscreen === 'function') {
-                    Module.requestFullscreen(false, false);
+                if (document.fullscreenElement || document.webkitFullscreenElement) {
+                    var exit = document.exitFullscreen || document.webkitExitFullscreen;
+                    if (exit) { try { exit.call(document); } catch (e) {} }
+                    return;
                 }
+                var canvas  = document.getElementById('canvas');
+                var targets = [document.documentElement, canvas];
+                var tried   = 0;
+                function tryNext() {
+                    if (tried >= targets.length) {
+                        if (Module && typeof Module.requestFullscreen === 'function') {
+                            try { Module.requestFullscreen(false, false); } catch (e) {}
+                        } else {
+                            alert('Fullscreen is not supported by this browser. ' +
+                                  'On iOS, add to Home Screen for a fullscreen app.');
+                        }
+                        return;
+                    }
+                    var el  = targets[tried++];
+                    var req = el.requestFullscreen || el.webkitRequestFullscreen ||
+                              el.mozRequestFullScreen || el.msRequestFullscreen;
+                    if (!req) { tryNext(); return; }
+                    var p = req.call(el);
+                    if (p && typeof p.then === 'function') {
+                        p.then(function () {}, function () { tryNext(); });
+                    }
+                }
+                tryNext();
             }
 
             // Build a synthetic KeyboardEvent that GLFW's emscripten port will
@@ -504,29 +531,32 @@
             });
 
             // Keep the canvas height capped so the virtual pad always has room.
-            // Target: canvas takes at most ~55vh on portrait phones, leaving the
-            // pad a comfortable 45vh. Landscape gets the full width and whatever
-            // vertical space is left.
+            // Use visualViewport when available — it reports the height excluding
+            // the mobile URL bar, so the pad buttons can't be hidden behind it.
             function layout() {
                 if (!isTouch) return;
                 var wrap = document.getElementById('game-wrap');
-                var vh = window.innerHeight;
-                var vw = window.innerWidth;
+                var vh   = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+                var vw   = window.visualViewport ? window.visualViewport.width  : window.innerWidth;
                 var landscape = vw > vh;
-                // Canvas is 16:9 internally. Compute the width that gives us
-                // the desired cap, then clamp to the viewport width.
-                // Portrait: give the canvas ~70vh so it fills the phone's
-                // width on typical 9:19–9:20 screens with no side letterboxing,
-                // leaving the remaining ~30vh for the virtual pad.
-                var capH = landscape ? vh * 0.70 : vh * 0.70;
+                // Canvas cap — 60% on portrait leaves 40% for the pad, which is
+                // enough room even when the URL bar is showing.
+                var capH = landscape ? vh * 0.70 : vh * 0.60;
                 // Canvas is 450x800 (portrait) — wasm build's logical size.
                 var byH  = capH * (450 / 800);
                 var w    = Math.min(vw, byH);
                 wrap.style.width = w + 'px';
                 wrap.style.margin = '0 auto';
+                // Mirror the visible viewport height onto body so #vpad (flex:1)
+                // only ever grows to fit what the user can actually see.
+                document.body.style.height = vh + 'px';
             }
             window.addEventListener('resize', layout);
             window.addEventListener('orientationchange', layout);
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', layout);
+                window.visualViewport.addEventListener('scroll', layout);
+            }
             layout();
         })();
         </script>
