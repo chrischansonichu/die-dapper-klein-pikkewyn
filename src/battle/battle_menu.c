@@ -10,7 +10,7 @@
 // the portrait (mobile) layout gets enough vertical room for the action grid
 // and narration line without cropping.
 #if SCREEN_PORTRAIT
-    #define PANEL_H  180
+    #define PANEL_H  270
 #else
     #define PANEL_H  110
 #endif
@@ -199,7 +199,7 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
     };
 
 #if SCREEN_PORTRAIT
-    int colGap = 10, rowGap = 4, btnH = 42;
+    int colGap = 10, rowGap = 6, btnH = 72;
     int colW = (PANEL_W - 3 * colGap) / 2;
     int startX = colGap;
     int startY = PANEL_Y + 10;
@@ -232,13 +232,19 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
             char hotkeyStr[4];
             snprintf(hotkeyStr, sizeof(hotkeyStr), "%d", slot + 1);
 
+            // Portrait bumps all typography — cell is taller (72 vs 42), so we
+            // can afford a 24pt name + 18pt subline without crowding.
+            int hotkeyF = SCREEN_PORTRAIT ? 14 : 10;
+            int nameF   = SCREEN_PORTRAIT ? 24 : 13;
+            int subF    = SCREEN_PORTRAIT ? 18 : 10;
+
             if (isEmpty) {
                 bg = (Color){28, 28, 44, 255};
                 DrawRectangle(bx, by, colW, btnH, bg);
                 DrawRectangleLines(bx, by, colW, btnH,
                     (Color){border.r / 2, border.g / 2, border.b / 2, 255});
-                DrawText(hotkeyStr, bx + 4, by + 4, 10, (Color){70, 80, 110, 255});
-                DrawText("--", bx + colW / 2 - 6, by + 10, 18, (Color){80, 80, 110, 255});
+                DrawText(hotkeyStr, bx + 4, by + 4, hotkeyF, (Color){70, 80, 110, 255});
+                DrawText("--", bx + colW / 2 - 6, by + btnH / 2 - 9, 18, (Color){80, 80, 110, 255});
                 continue;
             }
 
@@ -250,31 +256,56 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
             if (disabled && m->moveCursor != slot) bg = (Color){50, 50, 50, 255};
             DrawRectangle(bx, by, colW, btnH, bg);
             DrawRectangleLines(bx, by, colW, btnH, border);
-            DrawText(hotkeyStr, bx + 4, by + 4, 10, (Color){220, 200, 120, 255});
+            DrawText(hotkeyStr, bx + 4, by + 4, hotkeyF, (Color){220, 200, 120, 255});
+
             Color nameColor = disabled ? GRAY : WHITE;
-            DrawText(mv->name, bx + 20, by + 4, 13, nameColor);
-            const char *rangeStr = (mv->range == RANGE_MELEE)  ? "MELEE" :
-                                   (mv->range == RANGE_RANGED) ? "RANGED" :
-                                   (mv->range == RANGE_AOE)    ? "AOE"    : "SELF";
-            char subline[32];
-            if (mv->power > 0) {
-                snprintf(subline, sizeof(subline), "%s  PWR %d", rangeStr, mv->power);
-            } else {
-                snprintf(subline, sizeof(subline), "%s", rangeStr);
-            }
-            DrawText(subline, bx + 20, by + 20, 10, GRAY);
+            int nameX = SCREEN_PORTRAIT ? bx + 26 : bx + 20;
+            int nameY = SCREEN_PORTRAIT ? by + 6  : by + 4;
+            DrawText(mv->name, nameX, nameY, nameF, nameColor);
+
+            // Subline combines range/PWR and durability into one row so the
+            // separate top-right DUR badge isn't needed — cleaner at any size.
+            // Range shortens to a single letter on portrait to make room.
+            const char *rangeFull  = (mv->range == RANGE_MELEE)  ? "MELEE" :
+                                     (mv->range == RANGE_RANGED) ? "RANGED" :
+                                     (mv->range == RANGE_AOE)    ? "AOE"    : "SELF";
+            const char *rangeShort = (mv->range == RANGE_MELEE)  ? "M" :
+                                     (mv->range == RANGE_RANGED) ? "R" :
+                                     (mv->range == RANGE_AOE)    ? "A" : "S";
+            const char *rStr = SCREEN_PORTRAIT ? rangeShort : rangeFull;
+
+            char subline[48];
             if (broken) {
-                DrawText("BROKEN", bx + colW - 52, by + 10, 10, RED);
+                snprintf(subline, sizeof(subline), "BROKEN");
             } else if (outOfRange) {
-                DrawText("TOO FAR", bx + colW - 54, by + 10, 10, (Color){220, 150, 60, 255});
+                snprintf(subline, sizeof(subline), "TOO FAR");
+            } else if (mv->power > 0 && dur >= 0) {
+                snprintf(subline, sizeof(subline), SCREEN_PORTRAIT
+                         ? "[%s/%d]  DUR %d"
+                         : "%s  PWR %d  DUR %d",
+                         rStr, mv->power, dur);
+            } else if (mv->power > 0) {
+                snprintf(subline, sizeof(subline), SCREEN_PORTRAIT
+                         ? "[%s/%d]" : "%s  PWR %d",
+                         rStr, mv->power);
             } else if (dur >= 0) {
-                char durStr[12];
-                snprintf(durStr, sizeof(durStr), "DUR %d", dur);
-                DrawText(durStr, bx + colW - 44, by + 10, 11, (Color){200, 180, 80, 255});
+                snprintf(subline, sizeof(subline), SCREEN_PORTRAIT
+                         ? "[%s]  DUR %d" : "%s  DUR %d",
+                         rStr, dur);
+            } else {
+                snprintf(subline, sizeof(subline), "%s", rangeFull);
             }
+            Color subColor = broken        ? RED
+                           : outOfRange    ? (Color){220, 150, 60, 255}
+                           : disabled      ? GRAY
+                                           : (Color){200, 180, 80, 255};
+            int subY = nameY + nameF + 4;
+            DrawText(subline, nameX, subY, subF, subColor);
         }
     }
-    DrawText("X: Back", PANEL_W - 70, PANEL_Y + PANEL_H - 16, 12, gPH.inkLight);
+    int backF = SCREEN_PORTRAIT ? 18 : 12;
+    int backW = MeasureText("X: Back", backF);
+    DrawText("X: Back", PANEL_W - backW - 10, PANEL_Y + PANEL_H - backF - 6, backF, gPH.inkLight);
 }
 
 void BattleMenuDrawItemSelect(const BattleMenuState *m, const Inventory *inv)
@@ -317,7 +348,7 @@ void BattleMenuDrawNarration(const char *text)
 
     // Word-wrap narration into the panel width so long action descriptions
     // (e.g. "Jan used fishinghook and cut seal's ropes") don't overflow.
-    int fontSize = SCREEN_PORTRAIT ? 24 : 20;
+    int fontSize = SCREEN_PORTRAIT ? 32 : 20;
     int textX    = PANEL_X + PANEL_PAD + 5;
     int textY    = PANEL_Y + PANEL_PAD + 10;
     int maxPx    = PANEL_W - (textX - PANEL_X) - PANEL_PAD;
@@ -342,7 +373,7 @@ void BattleMenuDrawNarration(const char *text)
     }
     if (lineLen > 0) DrawText(line, textX, textY, fontSize, gPH.ink);
 
-    int hintSize = SCREEN_PORTRAIT ? 16 : 14;
+    int hintSize = SCREEN_PORTRAIT ? 20 : 14;
     int hintW = MeasureText("Z: Continue", hintSize);
-    DrawText("Z: Continue", PANEL_W - hintW - 10, PANEL_Y + PANEL_H - 22, hintSize, gPH.inkLight);
+    DrawText("Z: Continue", PANEL_W - hintW - 10, PANEL_Y + PANEL_H - hintSize - 6, hintSize, gPH.inkLight);
 }

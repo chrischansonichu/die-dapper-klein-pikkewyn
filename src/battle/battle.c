@@ -1204,11 +1204,22 @@ static void DrawRosterPanel(const Combatant *roster, int count,
 {
     if (count <= 0) return;
 
-    const int rowH   = showXpBar ? 38 : 30;
-    const int padX   = 8;
-    const int padY   = 6;
-    const int panelW = 210;
-    const int panelH = padY * 2 + count * rowH;
+    // Portrait bumps every measurement — text was unreadable at 12pt/8px-bar
+    // on phones; card now uses ~18pt names + 14px HP bar so it scales with
+    // the rest of the mobile UI.
+    const int nameF   = SCREEN_PORTRAIT ? 18 : 12;
+    const int hpNumF  = SCREEN_PORTRAIT ? 14 : 10;
+    const int xpNumF  = SCREEN_PORTRAIT ? 12 :  9;
+    const int levelF  = SCREEN_PORTRAIT ? 14 : 10;
+    const int hpBarH  = SCREEN_PORTRAIT ? 14 :  8;
+    const int xpBarH  = SCREEN_PORTRAIT ?  6 :  4;
+    const int padX    = SCREEN_PORTRAIT ? 10 :  8;
+    const int padY    = SCREEN_PORTRAIT ?  8 :  6;
+    const int panelW  = SCREEN_PORTRAIT ? 217 : 210;
+    // Row height: name line + HP bar (+ xp bar if shown) + tight gaps.
+    const int rowH    = (nameF + 4) + hpBarH + 4 +
+                        (showXpBar ? (xpBarH + xpNumF + 4) : 0);
+    const int panelH  = padY * 2 + count * rowH;
 
     DrawRectangle(panelX, panelY, panelW, panelH, (Color){20, 20, 40, 220});
     DrawRectangleLines(panelX, panelY, panelW, panelH, (Color){80, 80, 140, 255});
@@ -1237,18 +1248,29 @@ static void DrawRosterPanel(const Combatant *roster, int count,
         Color nameCol = c->alive ? (Color){230, 230, 240, 255}
                                  : (Color){120, 120, 130, 180};
         if (flash > 0.0f) nameCol = (Color){255, 240, 150, 255};
-        DrawText(label, panelX + padX, rowY, 12, nameCol);
+        DrawText(label, panelX + padX, rowY, nameF, nameCol);
+
+        // HP numeric reads at the right end of the name row so it stays clear
+        // of the bar below.
+        char hpStr[24];
+        snprintf(hpStr, sizeof(hpStr), "%d/%d", c->alive ? c->hp : 0, c->maxHp);
+        int hpNumW = MeasureText(hpStr, hpNumF);
+        DrawText(hpStr, panelX + panelW - padX - hpNumW, rowY + (nameF - hpNumF),
+                 hpNumF,
+                 c->alive ? (Color){200, 210, 220, 255}
+                          : (Color){110, 110, 120, 200});
 
         if (flash > 0.0f) {
-            DrawText("LEVEL UP!", panelX + panelW - 64, rowY, 10,
-                     (Color){255, 230, 120, 255});
+            const char *lu = "LEVEL UP!";
+            int luW = MeasureText(lu, levelF);
+            DrawText(lu, panelX + panelW - padX - luW,
+                     rowY + nameF + 2, levelF, (Color){255, 230, 120, 255});
         }
 
         int barX = panelX + padX;
-        int barY = rowY + 14;
+        int barY = rowY + nameF + 4;
         int barW = panelW - padX * 2;
-        int barH = 8;
-        DrawRectangle(barX, barY, barW, barH, (Color){30, 30, 50, 255});
+        DrawRectangle(barX, barY, barW, hpBarH, (Color){30, 30, 50, 255});
         if (c->alive && c->maxHp > 0) {
             int fill = barW * c->hp / c->maxHp;
             if (fill < 0) fill = 0;
@@ -1256,31 +1278,25 @@ static void DrawRosterPanel(const Combatant *roster, int count,
             Color hpCol = (c->hp * 2 < c->maxHp)
                               ? (Color){220, 90, 70, 255}
                               : (Color){90, 200, 110, 255};
-            DrawRectangle(barX, barY, fill, barH, hpCol);
+            DrawRectangle(barX, barY, fill, hpBarH, hpCol);
         }
-        DrawRectangleLines(barX, barY, barW, barH, (Color){70, 70, 100, 255});
-
-        char hpStr[24];
-        snprintf(hpStr, sizeof(hpStr), "%d/%d", c->alive ? c->hp : 0, c->maxHp);
-        DrawText(hpStr, barX + barW - 48, barY - 12, 10,
-                 c->alive ? (Color){200, 210, 220, 255}
-                          : (Color){110, 110, 120, 200});
+        DrawRectangleLines(barX, barY, barW, hpBarH, (Color){70, 70, 100, 255});
 
         if (showXpBar) {
-            int xpY = barY + barH + 2;
-            int xpH = 4;
-            DrawRectangle(barX, xpY, barW, xpH, (Color){30, 30, 50, 255});
+            int xpY = barY + hpBarH + 2;
+            DrawRectangle(barX, xpY, barW, xpBarH, (Color){30, 30, 50, 255});
             if (c->xpToNext > 0) {
                 int xpFill = barW * c->xp / c->xpToNext;
                 if (xpFill < 0) xpFill = 0;
                 if (xpFill > barW) xpFill = barW;
-                DrawRectangle(barX, xpY, xpFill, xpH,
+                DrawRectangle(barX, xpY, xpFill, xpBarH,
                               (Color){110, 170, 240, 255});
             }
-            DrawRectangleLines(barX, xpY, barW, xpH, (Color){60, 60, 90, 255});
+            DrawRectangleLines(barX, xpY, barW, xpBarH, (Color){60, 60, 90, 255});
             char xpStr[24];
             snprintf(xpStr, sizeof(xpStr), "XP %d/%d", c->xp, c->xpToNext);
-            DrawText(xpStr, barX, xpY + xpH + 1, 9, (Color){150, 170, 210, 220});
+            DrawText(xpStr, barX, xpY + xpBarH + 1, xpNumF,
+                     (Color){150, 170, 210, 220});
         }
     }
 }
@@ -1295,7 +1311,8 @@ static void DrawRosters(const BattleContext *ctx)
         else             activeParty = te->idx;
     }
 
-    DrawRosterPanel(ctx->enemies, ctx->enemyCount, SCREEN_W - 210 - 8, 8, activeEnemy,
+    int rosterPanelW = SCREEN_PORTRAIT ? 217 : 210;
+    DrawRosterPanel(ctx->enemies, ctx->enemyCount, SCREEN_W - rosterPanelW - 8, 8, activeEnemy,
                     false, NULL);
     if (ctx->party) {
         DrawRosterPanel(ctx->party->members, ctx->party->count, 8, 8, activeParty,

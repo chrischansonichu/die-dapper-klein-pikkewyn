@@ -4,9 +4,9 @@
 #include <string.h>
 
 #if SCREEN_PORTRAIT
-    #define PANEL_H    170
-    #define PANEL_PAD  12
-    #define TEXT_SIZE  22
+    #define PANEL_H    230
+    #define PANEL_PAD  16
+    #define TEXT_SIZE  30
 #else
     #define PANEL_H    100
     #define PANEL_PAD  10
