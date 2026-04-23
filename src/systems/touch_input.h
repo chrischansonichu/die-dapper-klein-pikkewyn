@@ -39,4 +39,9 @@ int     TouchPressedDir(void);
 bool    TouchTapOccurred(Vector2 *outPos);
 bool    TouchTapInRect(Rectangle r);
 
+// Non-consuming peek at a pending tap. Used when a caller wants to inspect
+// the tap position (e.g. to decide whether to turn to face an NPC) before
+// letting a later consumer claim it. Returns false if no tap is pending.
+bool    TouchTapPeek(Vector2 *outPos);
+
 #endif // TOUCH_INPUT_H

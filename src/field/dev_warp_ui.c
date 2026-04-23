@@ -3,6 +3,7 @@
 #include "map_source.h"
 #include "../state/game_state.h"
 #include "../render/paper_harbor.h"
+#include "../screen_layout.h"
 #include <stdio.h>
 
 // Destination table. Spawn coordinates match the default FieldInit spawns for
@@ -72,8 +73,8 @@ void DevWarpUIDraw(const DevWarpUI *d)
     DrawRectangle(0, 0, sw, sh, gPH.dimmer);
     PHDrawPanel((Rectangle){x, y, W, H}, 0x801);
 
-    DrawText("DEV WARP", x + 12, y + 10, 18, gPH.ink);
-    DrawText("UP/DOWN select  Z warp  X close", x + 12, y + 32, 12, gPH.inkLight);
+    DrawText("DEV WARP", x + 12, y + 10, FS(18), gPH.ink);
+    DrawText("UP/DOWN select  Z warp  X close", x + 12, y + 32, FS(12), gPH.inkLight);
 
     const int ROW_H  = 22;
     const int VISIBLE = 9;
@@ -88,7 +89,7 @@ void DevWarpUIDraw(const DevWarpUI *d)
         bool sel = (i == d->cursor);
         Color bg = sel ? (Color){80, 70, 30, 255} : (Color){25, 25, 45, 220};
         DrawRectangle(x + 8, rowY - 2, W - 16, ROW_H - 2, bg);
-        DrawText(gDests[i].label, x + 16, rowY, 14, WHITE);
+        DrawText(gDests[i].label, x + 16, rowY, FS(14), WHITE);
     }
 
     // "DEV" watermark top-right so this build is obviously cheat-enabled.

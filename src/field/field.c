@@ -448,6 +448,14 @@ static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
         bool iIsCaptor = FieldEnemyIsCaptor(ow, i);
         if (!seedIsCaptor && iIsCaptor) continue;
         const FieldEnemy *e = &ow->enemies[i];
+        // An enemy that has already detected the player on its own (showing "!"
+        // or actively chasing) is force-recruited: it's the one that was about
+        // to join the fight next, so skipping it would spawn a "ghost aggro"
+        // that re-engages the moment the current battle ends.
+        if (e->aiState == ENEMY_ALERTED || e->aiState == ENEMY_CHASING) {
+            outIdxs[written++] = i;
+            continue;
+        }
         for (int k = 0; k < anchorCount; k++) {
             int d = Chebyshev(anchorX[k], anchorY[k], e->tileX, e->tileY);
             if (d > FIELD_AGGRO_RADIUS) continue;
@@ -1292,6 +1300,46 @@ void FieldUpdate(FieldState *ow, float dt)
         }
     }
 
+    // Tap-to-turn-and-interact: a tap on an orthogonally-adjacent NPC or warp
+    // tile rotates the player to face it before the IsInteractPressed check
+    // consumes the tap. Lets the mobile build "tap an NPC" without first
+    // walking into the right facing. Peek only — the tap is consumed below.
+    if (!ow->player.moving) {
+        Vector2 tp;
+        if (TouchTapPeek(&tp)) {
+            Vector2 world = GetScreenToWorld2D(tp, ow->camera);
+            int tpx = TILE_SIZE * TILE_SCALE;
+            int tx  = (int)(world.x / tpx);
+            int ty  = (int)(world.y / tpx);
+            int ddx = tx - ow->player.tileX;
+            int ddy = ty - ow->player.tileY;
+            int adx = ddx < 0 ? -ddx : ddx;
+            int ady = ddy < 0 ? -ddy : ddy;
+            bool ortho = (ddx == 0) ^ (ddy == 0);
+            if (ortho && adx + ady == 1) {
+                bool hasTarget = false;
+                for (int i = 0; i < ow->npcCount; i++) {
+                    const Npc *n = &ow->npcs[i];
+                    if (n->active && n->tileX == tx && n->tileY == ty) {
+                        hasTarget = true;
+                        break;
+                    }
+                }
+                if (!hasTarget && tx >= 0 && ty >= 0 &&
+                    tx < ow->map.width && ty < ow->map.height &&
+                    (TileMapGetFlags(&ow->map, tx, ty) & TILE_FLAG_WARP)) {
+                    hasTarget = true;
+                }
+                if (hasTarget) {
+                    if (ddx > 0)      ow->player.dir = 2;
+                    else if (ddx < 0) ow->player.dir = 1;
+                    else if (ddy > 0) ow->player.dir = 0;
+                    else              ow->player.dir = 3;
+                }
+            }
+        }
+    }
+
     // After step completes, check NPC or warp interaction. Warp tiles are
     // solid — the player can't step onto one, so they're only entered via
     // facing + Z, never passively by walking.
@@ -1588,21 +1636,43 @@ void FieldDraw(const FieldState *ow)
         }
     EndMode2D();
 
-    // HUD (screen space)
+    // HUD (screen space). Portrait uses a larger panel and bigger text —
+    // previous 14pt-in-160px layout read as "clipped Jan text" on mobile.
     if (ow->gs->party.count > 0) {
         const Combatant *jan = &ow->gs->party.members[0];
-        DrawRectangle(8, 8, 160, 52, (Color){10, 10, 30, 180});
-        DrawRectangleLines(8, 8, 160, 52, (Color){80, 80, 140, 255});
-        DrawText(jan->name, 14, 12, 14, WHITE);
+#if SCREEN_PORTRAIT
+        int px = 12, py = 12, pw = 240, ph = 78;
+        int nameF = 22, xpF = 14, barPad = 8;
+        int barW = pw - 2 * barPad;
+        int nameY = py + 6;
+        int hpY   = py + 34;
+        int hpH   = 12;
+        int xpY   = py + 52;
+        int xpH   = 8;
+        int xpTxtY = py + ph - xpF - 4;
+#else
+        int px = 8, py = 8, pw = 160, ph = 52;
+        int nameF = 14, xpF = 10, barPad = 6;
+        int barW = pw - 2 * barPad;
+        int nameY = py + 4;
+        int hpY   = py + 20;
+        int hpH   = 8;
+        int xpY   = py + 34;
+        int xpH   = 6;
+        int xpTxtY = py + ph - xpF - 2;
+#endif
+        DrawRectangle(px, py, pw, ph, (Color){10, 10, 30, 180});
+        DrawRectangleLines(px, py, pw, ph, (Color){80, 80, 140, 255});
+        DrawText(jan->name, px + barPad, nameY, nameF, WHITE);
         float hpPct = (float)jan->hp / (float)jan->maxHp;
-        DrawRectangle(14, 28, 140, 8, (Color){30, 30, 30, 255});
-        DrawRectangle(14, 28, (int)(140 * hpPct), 8, (Color){40, 200, 40, 255});
+        DrawRectangle(px + barPad, hpY, barW, hpH, (Color){30, 30, 30, 255});
+        DrawRectangle(px + barPad, hpY, (int)(barW * hpPct), hpH, (Color){40, 200, 40, 255});
         float xpPct = jan->xpToNext > 0 ? (float)jan->xp / (float)jan->xpToNext : 0.0f;
-        DrawRectangle(14, 42, 140, 6, (Color){20, 20, 50, 255});
-        DrawRectangle(14, 42, (int)(140 * xpPct), 6, (Color){80, 120, 220, 255});
+        DrawRectangle(px + barPad, xpY, barW, xpH, (Color){20, 20, 50, 255});
+        DrawRectangle(px + barPad, xpY, (int)(barW * xpPct), xpH, (Color){80, 120, 220, 255});
         char xpStr[32];
         snprintf(xpStr, sizeof(xpStr), "XP %d/%d", jan->xp, jan->xpToNext);
-        DrawText(xpStr, 14, 50, 10, (Color){120, 160, 220, 220});
+        DrawText(xpStr, px + barPad, xpTxtY, xpF, (Color){120, 160, 220, 220});
     }
 
     if (ow->mode == FIELD_FREE) {

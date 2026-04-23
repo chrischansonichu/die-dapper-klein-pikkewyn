@@ -5,6 +5,7 @@
 #include "../field/tilemap.h"
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
+#include "../screen_layout.h"
 #include "../systems/touch_input.h"
 #include <string.h>
 #include <stdio.h>
@@ -817,6 +818,18 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
 // battle camera. Returns false if the camera is NULL or the resulting tile is
 // outside the map — callers should bail out rather than clamp, because a tap
 // on the UI panel projects far outside the playfield and shouldn't count.
+// Shared "Back" button rect for BS_TARGET_SELECT, used by both the Draw pass
+// and the tap hit-test so they can't drift out of sync. Sits in the top-right
+// corner of the target-hint strip.
+static Rectangle TargetBackRect(void)
+{
+    int sw = GetScreenWidth();
+    int th = SCREEN_PORTRAIT ? 44 : 22;
+    int bw = SCREEN_PORTRAIT ? 90 : 64;
+    int bh = th - 6;
+    return (Rectangle){ (float)(sw - bw - 6), 3.0f, (float)bw, (float)bh };
+}
+
 static bool ScreenTapToTile(const TileMap *map, const Camera2D *camera,
                             Vector2 tapPos, int *outX, int *outY)
 {
@@ -1106,6 +1119,14 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
                 ctx->targetTile.x = nx;
                 ctx->targetTile.y = ny;
             }
+        }
+
+        // Tap the Back button → cancel targeting (same as X key). Must run
+        // before the tile-tap handler so the button wins over a world tile
+        // under it.
+        if (TouchTapInRect(TargetBackRect())) {
+            ctx->state = BS_MOVE_SELECT;
+            break;
         }
 
         // Tap a tile → snap the cursor there if it's in range. A second tap on
@@ -1425,10 +1446,25 @@ void BattleDrawUI(const BattleContext *ctx)
         // the world, and when the actor/target is near the bottom of the
         // screen the panel hides them. Render a thin top-screen hint strip
         // instead so the player can see the whole grid.
-        const char *hint = "Target: Arrows | Z=Confirm | X=Back";
-        int th = 22;
-        DrawRectangle(0, 0, GetScreenWidth(), th, (Color){0x3C, 0x28, 0x14, 200});
-        DrawText(hint, 10, 3, 16, (Color){0xF7, 0xEF, 0xD9, 240});
+        int sw = GetScreenWidth();
+        int th = SCREEN_PORTRAIT ? 44 : 22;
+        int fontSize = SCREEN_PORTRAIT ? 20 : 16;
+        DrawRectangle(0, 0, sw, th, (Color){0x3C, 0x28, 0x14, 220});
+        const char *hint = SCREEN_PORTRAIT
+            ? "Tap target · tap again to confirm"
+            : "Target: Arrows | Z=Confirm | X=Back";
+        DrawText(hint, 10, (th - fontSize) / 2, fontSize,
+                 (Color){0xF7, 0xEF, 0xD9, 240});
+        // Back button lives in the hint strip so the mobile build has an
+        // explicit cancel (no X key). Landscape keeps the X-key affordance
+        // in the hint text, but still gets the button for parity.
+        Rectangle back = TargetBackRect();
+        DrawRectangleRec(back, (Color){0x7A, 0x33, 0x2B, 240});
+        DrawRectangleLinesEx(back, 2, (Color){0xF7, 0xEF, 0xD9, 255});
+        int bw = MeasureText("Back", fontSize);
+        DrawText("Back", (int)(back.x + (back.width - bw) / 2),
+                 (int)(back.y + (back.height - fontSize) / 2),
+                 fontSize, (Color){0xF7, 0xEF, 0xD9, 255});
         break;
     }
     case BS_NARRATION:

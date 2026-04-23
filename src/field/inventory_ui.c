@@ -590,11 +590,11 @@ static void DrawTabHeader(InventoryTab tab)
         Color bg = (i == tab) ? (Color){80, 100, 200, 255} : (Color){30, 30, 60, 255};
         DrawRectangle(tx, y, tabW, 30, bg);
         DrawRectangleLines(tx, y, tabW, 30, (Color){120, 140, 220, 255});
-        int labelW = MeasureText(labels[i], 16);
-        DrawText(labels[i], tx + (tabW - labelW) / 2, y + 8, 16, WHITE);
+        int labelW = MeasureText(labels[i], FS(16));
+        DrawText(labels[i], tx + (tabW - labelW) / 2, y + 8, FS(16), WHITE);
     }
 #if !SCREEN_PORTRAIT
-    DrawText("TAB: switch", startX + INV_TAB_COUNT * (tabW + gap) + 14, y + 8, 14, GRAY);
+    DrawText("TAB: switch", startX + INV_TAB_COUNT * (tabW + gap) + 14, y + 8, FS(14), GRAY);
 #endif
 }
 
@@ -613,8 +613,7 @@ static void DrawItemsTab(const InventoryUI *ui, const Party *party)
 #if SCREEN_PORTRAIT
     int hbx = x, hby = tabBottomY + 6;
     DrawText(TextFormat("%s  HP %d/%d  ([ or ] switch)",
-                        active->name, active->hp, active->maxHp),
-             hbx, hby, 14, gPH.ink);
+                        active->name, active->hp, active->maxHp), hbx, hby, FS(14), gPH.ink);
     int barW = rowW;
     DrawRectangle(hbx, hby + 18, barW, 8, (Color){60, 50, 40, 180});
     float pct = (float)active->hp / (float)active->maxHp;
@@ -624,17 +623,16 @@ static void DrawItemsTab(const InventoryUI *ui, const Party *party)
     int y = 95;
     int hbx = 500, hby = 68;
     DrawText(TextFormat("%s  HP %d/%d  ([ or ] switch)",
-                        active->name, active->hp, active->maxHp),
-             hbx, hby, 14, gPH.ink);
+                        active->name, active->hp, active->maxHp), hbx, hby, FS(14), gPH.ink);
     DrawRectangle(hbx, hby + 18, 200, 8, (Color){60, 50, 40, 180});
     float pct = (float)active->hp / (float)active->maxHp;
     DrawRectangle(hbx, hby + 18, (int)(200 * pct), 8, (Color){110, 160, 80, 255});
 #endif
 
-    DrawText("Consumables", x, y, 18, gPH.ink);
+    DrawText("Consumables", x, y, FS(18), gPH.ink);
     y += 26;
     if (inv->itemCount == 0) {
-        DrawText("(Empty)", x, y, 16, gPH.inkLight);
+        DrawText("(Empty)", x, y, FS(16), gPH.inkLight);
     }
     for (int i = 0; i < inv->itemCount; i++) {
         const ItemDef *it = GetItemDef(inv->items[i].itemId);
@@ -645,20 +643,20 @@ static void DrawItemsTab(const InventoryUI *ui, const Party *party)
 #if SCREEN_PORTRAIT
         // Portrait: name + count on top line, desc on next, to avoid overflow.
         snprintf(buf, sizeof(buf), "%-14s x%d", it->name, inv->items[i].count);
-        DrawText(buf, x, y, 14, WHITE);
+        DrawText(buf, x, y, FS(14), WHITE);
         DrawText(it->desc, x + 140, y + 2, 11, (Color){200, 200, 220, 220});
 #else
         snprintf(buf, sizeof(buf), "%-16s x%-3d %s", it->name, inv->items[i].count, it->desc);
-        DrawText(buf, x, y, 14, WHITE);
+        DrawText(buf, x, y, FS(14), WHITE);
 #endif
         y += 24;
     }
 
 #if SCREEN_PORTRAIT
     int hintY = InvPanelY() + InvPanelH() - 28;
-    DrawText("Z: Use   [ or ]: Switch   X/I: Close", x, hintY, 12, gPH.inkLight);
+    DrawText("Z: Use   [ or ]: Switch   X/I: Close", x, hintY, FS(12), gPH.inkLight);
 #else
-    DrawText("Z: Use    [ or ]: Switch Member    X/I: Close", 60, 420, 14, gPH.inkLight);
+    DrawText("Z: Use    [ or ]: Switch Member    X/I: Close", 60, 420, FS(14), gPH.inkLight);
 #endif
 }
 
@@ -678,14 +676,14 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
     int colX = 60, y = 95;
     int rowW = 320;
 #endif
-    DrawText(TextFormat("%s's Moves  ([ or ] switch)", led->name), colX, y, 18, gPH.ink);
+    DrawText(TextFormat("%s's Moves  ([ or ] switch)", led->name), colX, y, FS(18), gPH.ink);
     y += 26;
     // Fixed-slot layout with group headers between rows.
     static const char *groupTitle[MOVE_GROUP_COUNT] = {
         "Attacks", "Item Attacks", "Specials"
     };
     for (int g = 0; g < MOVE_GROUP_COUNT; g++) {
-        DrawText(groupTitle[g], colX, y, 12, gPH.inkLight);
+        DrawText(groupTitle[g], colX, y, FS(12), gPH.inkLight);
         y += 16;
         int rowCount = MoveGroupSlotCount(g);
         for (int n = 0; n < rowCount; n++) {
@@ -696,7 +694,7 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
             char buf[96];
             if (led->moveIds[i] < 0) {
                 snprintf(buf, sizeof(buf), "  [slot %d]  --", i + 1);
-                DrawText(buf, colX, y, 14, GRAY);
+                DrawText(buf, colX, y, FS(14), GRAY);
             } else {
                 const MoveDef *mv = GetMoveDef(led->moveIds[i]);
                 const char *rs = (mv->range == RANGE_MELEE)  ? "MELEE" :
@@ -712,7 +710,7 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
                 } else {
                     snprintf(buf, sizeof(buf), "%d %-13s %s", i + 1, mv->name, stats);
                 }
-                DrawText(buf, colX, y, 14, WHITE);
+                DrawText(buf, colX, y, FS(14), WHITE);
             }
             y += 22;
         }
@@ -735,12 +733,11 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
     int bagRowW = 320;
     y = 95;
 #endif
-    DrawText(TextFormat("Weapon Bag  %d/%d", inv->weaponCount, INVENTORY_MAX_WEAPONS),
-             bagX, y, 18, gPH.ink);
+    DrawText(TextFormat("Weapon Bag  %d/%d", inv->weaponCount, INVENTORY_MAX_WEAPONS), bagX, y, FS(18), gPH.ink);
     y += 26;
     int listTop = y;
     if (inv->weaponCount == 0) {
-        DrawText("(Empty)", bagX, y, 16, gPH.inkLight);
+        DrawText("(Empty)", bagX, y, FS(16), gPH.inkLight);
     }
     int scrollTop = 0;
     if (!ui->equippedFocus && ui->cursor >= BAG_VISIBLE) {
@@ -763,7 +760,7 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
                          (mv->range == RANGE_AOE)    ? "AOE"    : "SELF";
         snprintf(buf, sizeof(buf), "%-13s PWR %d %-6s dur %d",
                  mv->name, mv->power, rs, inv->weapons[i].durability);
-        DrawText(buf, bagX, y, 14, WHITE);
+        DrawText(buf, bagX, y, FS(14), WHITE);
         y += 24;
     }
 
@@ -785,12 +782,10 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
 #if SCREEN_PORTRAIT
     int hintY = InvPanelY() + InvPanelH() - 28;
     DrawText(ui->equippedFocus ? "Z: Unequip  Del: Toss  Down: Bag  X/I: Close"
-                               : "Z: Equip  Del: Discard  Up: Equipped  X/I: Close",
-             InvContentX(), hintY, 11, gPH.inkLight);
+                               : "Z: Equip  Del: Discard  Up: Equipped  X/I: Close", InvContentX(), hintY, FS(11), gPH.inkLight);
 #else
     DrawText(ui->equippedFocus ? "Z: Unequip  Del: Toss Broken  Right: Bag  [ or ]: Switch Member  X/I: Close"
-                               : "Z: Equip  Del: Discard  Left: Equipped  [ or ]: Switch  X/I: Close",
-             60, 420, 14, gPH.inkLight);
+                               : "Z: Equip  Del: Discard  Left: Equipped  [ or ]: Switch  X/I: Close", 60, 420, FS(14), gPH.inkLight);
 #endif
 }
 
@@ -809,20 +804,20 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
     int colX = 60, y = 95;
     int rowW = 320;
 #endif
-    DrawText(TextFormat("%s's Armor  ([ or ] switch)", led->name), colX, y, 18, gPH.ink);
+    DrawText(TextFormat("%s's Armor  ([ or ] switch)", led->name), colX, y, FS(18), gPH.ink);
     y += 26;
     {
         bool sel = ui->equippedFocus;
         Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
         DrawRectangle(colX - 6, y - 2, rowW, 22, bg);
         if (led->armorItemId < 0) {
-            DrawText("(none)", colX, y, 14, GRAY);
+            DrawText("(none)", colX, y, FS(14), GRAY);
         } else {
             const ArmorDef *ad = GetArmorDef(led->armorItemId);
             char buf[96];
             snprintf(buf, sizeof(buf), "%-20s +%d DEF",
                      ad ? ad->name : "(unknown)", ad ? ad->defBonus : 0);
-            DrawText(buf, colX, y, 14, WHITE);
+            DrawText(buf, colX, y, FS(14), WHITE);
         }
     }
 
@@ -836,11 +831,10 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
     int bagRowW = 320;
     y = 95;
 #endif
-    DrawText(TextFormat("Armor Bag  %d/%d", inv->armorCount, INVENTORY_MAX_ARMORS),
-             bagX, y, 18, gPH.ink);
+    DrawText(TextFormat("Armor Bag  %d/%d", inv->armorCount, INVENTORY_MAX_ARMORS), bagX, y, FS(18), gPH.ink);
     y += 26;
     if (inv->armorCount == 0) {
-        DrawText("(Empty)", bagX, y, 16, gPH.inkLight);
+        DrawText("(Empty)", bagX, y, FS(16), gPH.inkLight);
     }
     for (int i = 0; i < inv->armorCount; i++) {
         const ArmorDef *ad = GetArmorDef(inv->armors[i].armorId);
@@ -850,19 +844,17 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
         char buf[96];
         snprintf(buf, sizeof(buf), "%-20s +%d DEF",
                  ad ? ad->name : "(unknown)", ad ? ad->defBonus : 0);
-        DrawText(buf, bagX, y, 14, WHITE);
+        DrawText(buf, bagX, y, FS(14), WHITE);
         y += 24;
     }
 
 #if SCREEN_PORTRAIT
     int hintY = InvPanelY() + InvPanelH() - 28;
     DrawText(ui->equippedFocus ? "Z: Remove   Down: Bag   X/I: Close"
-                               : "Z: Equip    Up: Equipped   X/I: Close",
-             InvContentX(), hintY, 12, gPH.inkLight);
+                               : "Z: Equip    Up: Equipped   X/I: Close", InvContentX(), hintY, FS(12), gPH.inkLight);
 #else
     DrawText(ui->equippedFocus ? "Z: Remove    Right: Bag    [ or ]: Switch Member    X/I: Close"
-                               : "Z: Equip     Left: Equipped   [ or ]: Switch Member    X/I: Close",
-             60, 420, 14, gPH.inkLight);
+                               : "Z: Equip     Left: Equipped   [ or ]: Switch Member    X/I: Close", 60, 420, FS(14), gPH.inkLight);
 #endif
 }
 
@@ -877,11 +869,11 @@ void InventoryUIDraw(const InventoryUI *ui, const Party *party, int villageReput
     ModalCloseButtonDraw(InvPanelRect());
 
     int titleY = InvPanelY() + 6;
-    DrawText("INVENTORY", InvContentX(), titleY, 18, gPH.ink);
+    DrawText("INVENTORY", InvContentX(), titleY, FS(18), gPH.ink);
     const char *repLabel = TextFormat(SCREEN_PORTRAIT ? "Rep: %d" : "Village Rep: %d",
                                       villageReputation);
-    int repW = MeasureText(repLabel, 16);
-    DrawText(repLabel, InvContentX() + InvContentW() - repW, titleY + 2, 16, gPH.ink);
+    int repW = MeasureText(repLabel, FS(16));
+    DrawText(repLabel, InvContentX() + InvContentW() - repW, titleY + 2, FS(16), gPH.ink);
     DrawTabHeader(ui->tab);
 
     if      (ui->tab == INV_TAB_ITEMS)   DrawItemsTab(ui, party);
@@ -889,5 +881,5 @@ void InventoryUIDraw(const InventoryUI *ui, const Party *party, int villageReput
     else                                 DrawArmorTab(ui, party);
 
     if (ui->status[0] != '\0')
-        DrawText(ui->status, InvContentX(), InvPanelY() + InvPanelH() - 50, 14, gPH.ink);
+        DrawText(ui->status, InvContentX(), InvPanelY() + InvPanelH() - 50, FS(14), gPH.ink);
 }

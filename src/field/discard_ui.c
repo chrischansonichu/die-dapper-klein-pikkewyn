@@ -3,6 +3,7 @@
 #include "../battle/inventory.h"
 #include "../data/move_defs.h"
 #include "../render/paper_harbor.h"
+#include "../screen_layout.h"
 #include "../systems/modal_close.h"
 #include <string.h>
 #include <stdio.h>
@@ -85,31 +86,26 @@ void DiscardUIDraw(const DiscardUI *d, const Party *party)
     PHDrawPanel(DiscPanelRect(), 0x701);
     ModalCloseButtonDraw(DiscPanelRect());
 
-    DrawText("WEAPON BAG FULL", 80, 72, 20, gPH.ink);
+    DrawText("WEAPON BAG FULL", 80, 72, FS(20), gPH.ink);
 
     const MoveDef *incoming = GetMoveDef(d->pendingMoveId);
 
     if (d->phase == DISC_PHASE_RESULT) {
         if (d->cancelled) {
-            DrawText(TextFormat("Refused the %s.", incoming->name),
-                     80, 130, 18, gPH.ink);
-            DrawText("It slips back into the sea.",
-                     80, 158, 16, gPH.inkLight);
+            DrawText(TextFormat("Refused the %s.", incoming->name), 80, 130, FS(18), gPH.ink);
+            DrawText("It slips back into the sea.", 80, 158, FS(16), gPH.inkLight);
         } else {
             const MoveDef *out = GetMoveDef(d->swappedOutMoveId);
-            DrawText(TextFormat("Tossed the %s into the surf.", out->name),
-                     80, 130, 18, gPH.ink);
-            DrawText(TextFormat("Took the %s.", incoming->name),
-                     80, 158, 18, gPH.ink);
+            DrawText(TextFormat("Tossed the %s into the surf.", out->name), 80, 130, FS(18), gPH.ink);
+            DrawText(TextFormat("Took the %s.", incoming->name), 80, 158, FS(18), gPH.ink);
         }
-        DrawText("Press any key to continue...", 80, H - 100, 14, gPH.inkLight);
+        DrawText("Press any key to continue...", 80, H - 100, FS(14), gPH.inkLight);
         return;
     }
 
     int x = 80, y = 110;
     DrawText(TextFormat("Incoming: %s (dur %d)",
-                        incoming->name, d->pendingDurability),
-             x, y, 18, gPH.ink);
+                        incoming->name, d->pendingDurability), x, y, FS(18), gPH.ink);
     y += 28;
     DrawText("Choose one to toss into the surf, or press X to refuse the new weapon.",
              x, y, 14, gPH.inkLight);
@@ -118,8 +114,7 @@ void DiscardUIDraw(const DiscardUI *d, const Party *party)
     const Inventory *inv = &party->inventory;
 
     if (d->entryCount == 0) {
-        DrawText("(Bag is somehow empty — press Z to take the new weapon.)",
-                 x, y, 16, gPH.inkLight);
+        DrawText("(Bag is somehow empty — press Z to take the new weapon.)", x, y, FS(16), gPH.inkLight);
     } else {
         // Matches SalvagerUI viewport geometry: 5 rows of 22px fit in the panel
         // below the header + intro lines and above the footer help.
@@ -144,7 +139,7 @@ void DiscardUIDraw(const DiscardUI *d, const Party *party)
             char buf[96];
             snprintf(buf, sizeof(buf), "  %-16s dur %-2d", mv->name, dur);
             Color text = (dur == 0) ? (Color){180, 120, 120, 255} : WHITE;
-            DrawText(buf, x, y, 16, text);
+            DrawText(buf, x, y, FS(16), text);
             y += ROW_H;
         }
 
@@ -162,6 +157,5 @@ void DiscardUIDraw(const DiscardUI *d, const Party *party)
         }
     }
 
-    DrawText("UP/DOWN: select   Z/Enter: swap   X: refuse new weapon",
-             x, H - 100, 14, gPH.inkLight);
+    DrawText("UP/DOWN: select   Z/Enter: swap   X: refuse new weapon", x, H - 100, FS(14), gPH.inkLight);
 }

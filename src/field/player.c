@@ -76,6 +76,16 @@ void PlayerUpdate(Player *p, const TileMap *m, const struct FieldState *f)
             p->dir = pressedDir;
             p->turnDelayFrames = 8;
         }
+        // Sustained hold pointing somewhere we're not facing — the one-shot
+        // TouchPressedDir can be lost when a touch-gesture redirect lands
+        // during a mid-step frame (player.moving blocks input resolution).
+        // When the step ends, heldDir still reports the new lock but the
+        // press is gone, leaving both turn and step branches inert. Treat
+        // a persistent heldDir != p->dir as intent to turn.
+        else if (heldDir != -1 && heldDir != p->dir) {
+            p->dir = heldDir;
+            p->turnDelayFrames = 8;
+        }
         else if (heldDir != -1 && heldDir == p->dir && p->turnDelayFrames == 0) {
             int nx = p->tileX + DIR_DX[heldDir];
             int ny = p->tileY + DIR_DY[heldDir];

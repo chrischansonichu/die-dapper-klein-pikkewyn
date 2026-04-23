@@ -75,7 +75,7 @@ static Rectangle ItemRowRect(int i)
     int startX = 20;
     int startY = PANEL_Y + 10;
     int rowW   = PANEL_W - 2 * startX;
-    int rowH   = SCREEN_PORTRAIT ? 28 : 22;
+    int rowH   = SCREEN_PORTRAIT ? 34 : 22;
     return (Rectangle){ (float)(startX - 2), (float)(startY + i * rowH - 2),
                         (float)rowW, (float)rowH };
 }
@@ -345,9 +345,9 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
 
             // Portrait bumps all typography — cell is taller (72 vs 42), so we
             // can afford a 24pt name + 18pt subline without crowding.
-            int hotkeyF = SCREEN_PORTRAIT ? 14 : 10;
-            int nameF   = SCREEN_PORTRAIT ? 24 : 13;
-            int subF    = SCREEN_PORTRAIT ? 18 : 10;
+            int hotkeyF = SCREEN_PORTRAIT ? 16 : 10;
+            int nameF   = SCREEN_PORTRAIT ? 26 : 13;
+            int subF    = SCREEN_PORTRAIT ? 20 : 10;
 
             if (isEmpty) {
                 bg = (Color){28, 28, 44, 255};
@@ -439,7 +439,7 @@ void BattleMenuDrawItemSelect(const BattleMenuState *m, const Inventory *inv)
         Rectangle back = BackButtonRect();
         DrawRectangleRec(back, (Color){40, 40, 80, 255});
         DrawRectangleLinesEx(back, 1, (Color){120, 140, 220, 255});
-        int backF  = SCREEN_PORTRAIT ? 18 : 12;
+        int backF  = SCREEN_PORTRAIT ? 22 : 12;
         int labelW = MeasureText("Back", backF);
         DrawText("Back", (int)(back.x + (back.width - labelW) / 2),
                  (int)(back.y + (back.height - backF) / 2),
@@ -447,10 +447,10 @@ void BattleMenuDrawItemSelect(const BattleMenuState *m, const Inventory *inv)
         return;
     }
 
-    int nameSize = SCREEN_PORTRAIT ? 20 : 16;
-    int descSize = SCREEN_PORTRAIT ? 14 : 12;
-    int hintSize = SCREEN_PORTRAIT ? 16 : 14;
-    int rowH = SCREEN_PORTRAIT ? 28 : 22;
+    int nameSize = SCREEN_PORTRAIT ? 24 : 16;
+    int descSize = SCREEN_PORTRAIT ? 18 : 12;
+    int hintSize = SCREEN_PORTRAIT ? 20 : 14;
+    int rowH = SCREEN_PORTRAIT ? 34 : 22;
     for (int i = 0; i < inv->itemCount && i < 4; i++) {
         const ItemDef *it = GetItemDef(inv->items[i].itemId);
         bool sel = (m->itemCursor == i);

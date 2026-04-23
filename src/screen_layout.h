@@ -26,4 +26,14 @@
     #define SCREEN_PORTRAIT 0
 #endif
 
+// Portrait font scaler. Desktop-composed UIs use 11–18pt text that reads as
+// pinpricks on a phone; wrap font-size arguments in FS(n) to get a ~1.5×
+// bump in the portrait build. Already-branched sites (SCREEN_PORTRAIT ? a : b)
+// should NOT use FS on top of that — you'll double-scale.
+#if SCREEN_PORTRAIT
+    #define FS(n) ((n) + ((n) + 1) / 2)
+#else
+    #define FS(n) (n)
+#endif
+
 #endif // SCREEN_LAYOUT_H

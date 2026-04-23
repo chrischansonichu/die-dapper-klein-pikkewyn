@@ -162,6 +162,13 @@ bool TouchTapOccurred(Vector2 *outPos)
     return false;
 }
 
+bool TouchTapPeek(Vector2 *outPos)
+{
+    if (!g.tapReady) return false;
+    if (outPos) *outPos = g.tapPos;
+    return true;
+}
+
 bool TouchTapInRect(Rectangle r)
 {
     if (!g.tapReady) return false;
