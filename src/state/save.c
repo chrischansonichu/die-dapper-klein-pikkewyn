@@ -7,7 +7,15 @@
 #include <stdint.h>
 #include <string.h>
 
-#define SAVE_PATH    "savegame.dat"
+#if defined(PLATFORM_WEB)
+    #include <emscripten.h>
+    // IDBFS is mounted at /save by the shell's preRun (see minshell.html) and
+    // populated from IndexedDB before main() runs. Writes land in MEMFS first;
+    // FS.syncfs(false, ...) flushes them back to IDB so they survive a reload.
+    #define SAVE_PATH "/save/savegame.dat"
+#else
+    #define SAVE_PATH "savegame.dat"
+#endif
 #define SAVE_MAGIC   0x504B5044u  // 'D','P','K','P' little-endian
 #define SAVE_VERSION 3u
 
@@ -124,7 +132,19 @@ bool SaveGame(const GameState *gs, int playerTileX, int playerTileY, int playerD
     }
     s.inventory = gs->party.inventory;
 
-    return SaveFileData(SAVE_PATH, &s, (int)sizeof(s));
+    bool ok = SaveFileData(SAVE_PATH, &s, (int)sizeof(s));
+#if defined(PLATFORM_WEB)
+    // Push MEMFS→IDB so the save survives a page reload. Async; we fire and
+    // forget — the next Load pulls from IDB on startup via preRun.
+    if (ok) {
+        EM_ASM(
+            FS.syncfs(false, function (err) {
+                if (err) console.warn('save syncfs failed:', err);
+            });
+        );
+    }
+#endif
+    return ok;
 }
 
 bool LoadGame(GameState *gs, int *outPlayerX, int *outPlayerY, int *outPlayerDir)

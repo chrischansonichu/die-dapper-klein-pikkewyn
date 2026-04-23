@@ -127,17 +127,22 @@
           touch-action: manipulation;
         }
 
-        /* Virtual Gameboy pad. Grid: left column = D-pad, middle = Start/Select,
-           right column = A/B. Sizes scale with viewport so phones of different
-           widths get proportional buttons. */
+        /* Virtual Gameboy pad. 2x2 grid:
+             top-left  = D-pad              top-right = [ and Tab utility buttons
+             bot-left  = Start/Select       bot-right = A / B
+           All button sizes use `min(col-relative, viewport-cap)` so they scale
+           with the phone's width without ever overflowing their grid cell. */
         #vpad {
           flex: 1 1 auto;
           display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          align-items: center;
-          justify-items: center;
-          padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0)) 8px;
-          gap: 8px;
+          grid-template-columns: 1fr 1fr;
+          grid-template-rows: auto auto;
+          align-items: start;
+          justify-items: stretch;
+          padding: 8px calc(8px + env(safe-area-inset-right, 0))
+                   calc(8px + env(safe-area-inset-bottom, 0))
+                   calc(8px + env(safe-area-inset-left, 0));
+          gap: 10px;
           min-height: 0;
           width: 100%;
           box-sizing: border-box;
@@ -165,14 +170,19 @@
           box-shadow: 0 1px 0 #2b2b2b;
           transform: translateY(2px);
         }
-        /* D-pad — a 3x3 grid where the corners are empty. */
+        /* D-pad — a 3x3 grid where the corners are empty. Sized against the
+           column width (minus gutter) and capped at 40vh so tall phones don't
+           stretch it vertically. */
         #dpad {
+          grid-column: 1;
+          grid-row: 1;
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           grid-template-rows: repeat(3, 1fr);
           gap: 4px;
-          width: min(42vw, 220px);
+          width: min(100%, 40vh, 240px);
           aspect-ratio: 1 / 1;
+          justify-self: start;
         }
         #dpad .vpad-btn {
           border-radius: 6px;
@@ -182,32 +192,57 @@
         #dpad .d-left  { grid-column: 1; grid-row: 2; }
         #dpad .d-right { grid-column: 3; grid-row: 2; }
         #dpad .d-down  { grid-column: 2; grid-row: 3; }
-        /* A/B stack — A top-right, B bottom-left (gameboy convention). */
+        /* Utility shoulder row — [ and Tab. Small rectangles, right-aligned
+           so they hug the screen edge where the thumb can reach. */
+        #utilpad {
+          grid-column: 2;
+          grid-row: 1;
+          display: flex;
+          gap: 8px;
+          justify-content: flex-end;
+          align-items: flex-start;
+          align-self: start;
+          width: 100%;
+        }
+        #utilpad .vpad-btn {
+          flex: 0 0 auto;
+          padding: 10px 14px;
+          border-radius: 10px;
+          font-size: 14px;
+          min-width: 44px;
+        }
+        /* A/B stack — A on top, B below. Circles. */
         #abpad {
-          position: relative;
-          width: min(42vw, 220px);
-          aspect-ratio: 1 / 1;
+          grid-column: 2;
+          grid-row: 2;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          align-items: flex-end;
+          justify-content: flex-start;
+          width: 100%;
         }
         #abpad .vpad-btn {
-          position: absolute;
-          width: 42%;
+          width: min(24vw, 80px);
           aspect-ratio: 1 / 1;
           border-radius: 50%;
           font-size: 22px;
         }
-        #abpad .btn-a { top: 4%;  right: 4%; background: #e7b2a0; }
-        #abpad .btn-b { bottom: 4%; left: 4%;  background: #a0c2e7; }
-        /* Start/Select — small pills in the middle column. */
+        #abpad .btn-a { background: #e7b2a0; }
+        #abpad .btn-b { background: #a0c2e7; }
+        /* Start / Select — small pills stacked in the bottom-left quadrant. */
         #centerpad {
+          grid-column: 1;
+          grid-row: 2;
           display: flex;
           flex-direction: column;
-          gap: 10px;
-          align-items: center;
-          justify-content: center;
+          gap: 8px;
+          align-items: flex-start;
+          justify-content: flex-start;
         }
         #centerpad .vpad-btn {
-          width: min(22vw, 110px);
-          padding: 8px 10px;
+          width: min(36vw, 140px);
+          padding: 10px 10px;
           border-radius: 16px;
           font-size: 12px;
           letter-spacing: 0.05em;
@@ -250,6 +285,10 @@
                 <button class="vpad-btn d-right" data-key="ArrowRight" data-keycode="39">▶</button>
                 <button class="vpad-btn d-down"  data-key="ArrowDown"  data-keycode="40">▼</button>
             </div>
+            <div id="utilpad">
+                <button class="vpad-btn" data-key="["   data-keycode="219">[</button>
+                <button class="vpad-btn" data-key="Tab" data-keycode="9">Tab</button>
+            </div>
             <div id="centerpad">
                 <button class="vpad-btn" data-key="Enter" data-keycode="13">Start</button>
                 <button class="vpad-btn" data-key="i"     data-keycode="73">Select</button>
@@ -281,7 +320,30 @@
                     canvas.addEventListener('touchstart', function(e){ e.preventDefault(); }, { passive: false });
                     canvas.addEventListener('touchmove',  function(e){ e.preventDefault(); }, { passive: false });
                     return canvas;
-                })()
+                })(),
+                // Persistent saves on the web build. MEMFS is the default (and
+                // evaporates on reload), so we mount IDBFS at /save and pull
+                // any previously-saved data into memory before main() runs.
+                // save.c writes to /save/savegame.dat and calls FS.syncfs to
+                // flush MEMFS → IndexedDB; the reverse pull happens here.
+                // addRunDependency / removeRunDependency makes emscripten wait
+                // for syncfs(true) to complete before invoking main().
+                preRun: [function () {
+                    try {
+                        FS.mkdir('/save');
+                    } catch (e) { /* already exists on hot reload — ignore */ }
+                    try {
+                        FS.mount(IDBFS, {}, '/save');
+                    } catch (e) {
+                        console.warn('IDBFS mount failed — saves will not persist:', e);
+                        return;
+                    }
+                    addRunDependency('idbfs-sync');
+                    FS.syncfs(true, function (err) {
+                        if (err) console.warn('save syncfs(load) failed:', err);
+                        removeRunDependency('idbfs-sync');
+                    });
+                }]
             };
         </script>
 
@@ -307,14 +369,16 @@
             function makeKeyEvent(type, key, keyCode) {
                 var ev = new KeyboardEvent(type, {
                     key: key,
-                    code: keyCode === 13 ? 'Enter'
-                         : keyCode === 38 ? 'ArrowUp'
-                         : keyCode === 40 ? 'ArrowDown'
-                         : keyCode === 37 ? 'ArrowLeft'
-                         : keyCode === 39 ? 'ArrowRight'
-                         : keyCode === 90 ? 'KeyZ'
-                         : keyCode === 88 ? 'KeyX'
-                         : keyCode === 73 ? 'KeyI'
+                    code: keyCode === 13  ? 'Enter'
+                         : keyCode === 9   ? 'Tab'
+                         : keyCode === 38  ? 'ArrowUp'
+                         : keyCode === 40  ? 'ArrowDown'
+                         : keyCode === 37  ? 'ArrowLeft'
+                         : keyCode === 39  ? 'ArrowRight'
+                         : keyCode === 90  ? 'KeyZ'
+                         : keyCode === 88  ? 'KeyX'
+                         : keyCode === 73  ? 'KeyI'
+                         : keyCode === 219 ? 'BracketLeft'
                          : ('Key' + (key || '').toUpperCase()),
                     bubbles: true,
                     cancelable: true,
