@@ -63,6 +63,15 @@
           display: flex;
           align-items: center;
           justify-content: center;
+          /* viewport-fit=cover lets the page sit under the notch / home
+             indicator / Dynamic Island on iPhone. Pad the body by the safe-
+             area insets so the canvas (centered via flex) is never placed
+             under system UI and its HUD corners stay reachable. */
+          box-sizing: border-box;
+          padding-top:    env(safe-area-inset-top, 0);
+          padding-bottom: env(safe-area-inset-bottom, 0);
+          padding-left:   env(safe-area-inset-left, 0);
+          padding-right:  env(safe-area-inset-right, 0);
         }
         canvas.emscripten {
           display: block;
@@ -240,15 +249,23 @@
             // Fit the canvas to the visible viewport while preserving the
             // 450x800 logical aspect. visualViewport reports height minus the
             // mobile URL bar, so the canvas shrinks when the bar slides in.
+            // Subtract the safe-area insets (notch, home indicator) — the body
+            // already pads by those, so the flex-centered canvas must fit in
+            // the remaining usable box or its edges land under system UI.
             function layout() {
                 var vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
                 var vw = window.visualViewport ? window.visualViewport.width  : window.innerWidth;
+                // Ask the body for its padded (content-box) size — that's the
+                // area we can safely fill. getBoundingClientRect includes
+                // padding; clientWidth/Height excludes it, which is what we want.
+                var usableW = document.body.clientWidth  || vw;
+                var usableH = document.body.clientHeight || vh;
                 document.body.style.height = vh + 'px';
                 if (!isTouch) return;  // desktop uses CSS-native 450x800
                 var aspect = 450 / 800;
-                var h = vh;
+                var h = usableH;
                 var w = h * aspect;
-                if (w > vw) { w = vw; h = w / aspect; }
+                if (w > usableW) { w = usableW; h = w / aspect; }
                 canvas.style.width  = w + 'px';
                 canvas.style.height = h + 'px';
             }
