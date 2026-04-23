@@ -4,50 +4,55 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 
-    <title>raylib web game</title>
+    <title>Die Dapper Klein Pikkewyn</title>
 
-    <meta name="title" content="raylib web game">
-    <meta name="description" content="New raylib web videogame, developed using raylib videogames library">
-    <meta name="keywords" content="raylib, games, html5, programming, C, C++, library, learn, videogames">
+    <meta name="title" content="Die Dapper Klein Pikkewyn">
+    <meta name="description" content="Die Dapper Klein Pikkewyn — the brave little penguin.">
+    <meta name="keywords" content="die dapper klein pikkewyn, penguin, raylib, games, html5">
     <meta name="viewport" content="width=device-width">
 
     <!-- Open Graph metatags for sharing -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="raylib web game">
+    <meta property="og:title" content="Die Dapper Klein Pikkewyn">
     <meta property="og:image:type" content="image/png">
-    <meta property="og:image" content="https://www.raylib.com/common/raylib_logo.png">
-    <meta property="og:image:alt" content="New raylib web videogame, developed using raylib videogames library" />
-    <meta property="og:site_name" content="raylib - example">
-    <meta property="og:url" content="https://www.raylib.com/games.html">
-    <meta property="og:description" content="New raylib web videogame, developed using raylib videogames library">
+    <meta property="og:image:alt" content="Die Dapper Klein Pikkewyn — the brave little penguin." />
+    <meta property="og:site_name" content="Die Dapper Klein Pikkewyn">
+    <meta property="og:description" content="Die Dapper Klein Pikkewyn — the brave little penguin.">
 
     <!-- Twitter metatags for sharing -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:site" content="@raysan5">
-    <meta name="twitter:title" content="raylib web game">
-    <meta name="twitter:image" content="https://www.raylib.com/common/raylib_logo.png">
-    <meta name="twitter:image:alt" content="New raylib web videogame, developed using raylib videogames library">
-    <meta name="twitter:url" content="https://www.raylib.com/games.html">
-    <meta name="twitter:description" content="New raylib web videogame, developed using raylib videogames library">
+    <meta name="twitter:title" content="Die Dapper Klein Pikkewyn">
+    <meta name="twitter:image:alt" content="Die Dapper Klein Pikkewyn — the brave little penguin.">
+    <meta name="twitter:description" content="Die Dapper Klein Pikkewyn — the brave little penguin.">
 
     <!-- Favicon -->
     <link rel="shortcut icon" href="https://www.raylib.com/favicon.ico">
 
     <!-- Web Style -->
+    <!--
+      image-rendering keeps small bitmap text from being bilinearly smeared
+      when the browser stretches the 800x450 canvas to the window (especially
+      on HiDPI / retina displays). Nearest-neighbour scaling keeps the raylib
+      default 10px font legible; the Paper Harbor wobble-line shapes still
+      read fine since they're already anti-aliased in the source pixels.
+    -->
     <style>
-        body { 
-          margin: 0px; 
-          overflow: hidden; 
-          background-color: black;
+        body {
+          margin: 0px;
+          overflow: hidden;
+          background-color: #F7EFD9; /* Paper Harbor parchment — matches in-game bg */
         }
-        canvas.emscripten { 
-          border: 0px none; 
-          background-color: black;
+        canvas.emscripten {
+          border: 0px none;
+          background-color: #F7EFD9;
           padding-left: 0;
           padding-right: 0;
           margin-left: auto;
           margin-right: auto;
           display: block;
+          image-rendering: pixelated;            /* Chrome / Edge */
+          image-rendering: -moz-crisp-edges;     /* Firefox */
+          image-rendering: crisp-edges;          /* spec */
         }
     </style>
     <script type='text/javascript' src="https://cdn.jsdelivr.net/gh/eligrey/FileSaver.js/dist/FileSaver.min.js"> </script>
