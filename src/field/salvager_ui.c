@@ -6,6 +6,7 @@
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
 #include "../systems/modal_close.h"
+#include "../systems/touch_input.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -16,6 +17,19 @@ static inline Rectangle SalPanelRect(void)
     return (Rectangle){ (float)margin, (float)margin,
                         (float)(W - 2 * margin), (float)(H - 2 * margin) };
 }
+
+// Shared layout between Update (tap hit-test) and Draw. The preamble uses
+// DrawTextWrapped whose final y depends on runtime MeasureText wrapping, so
+// we can't cheaply recompute row rects from scratch in Update. Instead, Draw
+// populates these rects every frame and Update reads them next frame. Taps
+// register at finger-up; the panel is guaranteed to have drawn by then.
+static struct SalLayoutShared {
+    int       visibleCount;
+    int       rowEntry[SALVAGER_MAX_ENTRIES];  // maps visible slot → entry idx
+    Rectangle rowRect[SALVAGER_MAX_ENTRIES];
+    Rectangle confirmBtn;
+    bool      confirmIsCommit;  // true when total>0 (label is "Hand Over")
+} sL;
 
 // Word-wrap `text` at `maxPx`, draw each line left-anchored at (x, *y). Updates
 // *y to the baseline below the last line drawn. Breaks on spaces; words longer
@@ -88,10 +102,15 @@ void SalvagerUIUpdate(SalvagerUI *s, Party *party)
 {
     if (!s->active) return;
 
+    // Claim any gesture that started inside the panel so a tap doesn't leak
+    // into the field walker after the dialog closes.
+    if (TouchGestureStartedIn(SalPanelRect())) TouchConsumeGesture();
+
     if (s->phase == SAL_PHASE_RESULT) {
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
             IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE) ||
-            ModalCloseButtonTapped(SalPanelRect())) {
+            ModalCloseButtonTapped(SalPanelRect()) ||
+            TouchTapInRect(SalPanelRect())) {
             SalvagerUIClose(s);
         }
         return;
@@ -101,6 +120,29 @@ void SalvagerUIUpdate(SalvagerUI *s, Party *party)
         || ModalCloseButtonTapped(SalPanelRect())) {
         SalvagerUIClose(s);
         return;
+    }
+
+    // Tap a row → toggle that entry's selection (and move the cursor onto it
+    // so the row tint reflects the current target).
+    for (int vi = 0; vi < sL.visibleCount; vi++) {
+        if (TouchTapInRect(sL.rowRect[vi])) {
+            int entry = sL.rowEntry[vi];
+            if (entry >= 0 && entry < s->entryCount) {
+                s->cursor      = entry;
+                s->give[entry] = !s->give[entry];
+            }
+            return;
+        }
+    }
+
+    // Tap the Confirm / Close button at the bottom-right of the panel.
+    if (TouchTapInRect(sL.confirmBtn)) {
+        if (!sL.confirmIsCommit) {
+            SalvagerUIClose(s);
+            return;
+        }
+        // Fall through to the commit path below by simulating a Z-press.
+        goto commit;
     }
 
     if (s->entryCount > 0) {
@@ -118,6 +160,7 @@ void SalvagerUIUpdate(SalvagerUI *s, Party *party)
     }
 
     if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
+    commit:;
         int total = SalvagerSelectedTotal(s);
         if (total == 0) {
             SalvagerUIClose(s);
@@ -159,6 +202,9 @@ void SalvagerUIUpdate(SalvagerUI *s, Party *party)
 void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
 {
     if (!s->active) return;
+
+    // Reset shared layout so a closed/reopened dialog can't inherit stale rects.
+    memset(&sL, 0, sizeof(sL));
 
     int W = GetScreenWidth(), H = GetScreenHeight();
     int margin  = SCREEN_PORTRAIT ? 20 : 60;
@@ -224,6 +270,7 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
 
         int listTop = y;
         int rowW = contentW - 10;
+        int vi = 0;
         for (int i = scrollTop; i < drawEnd; i++) {
             bool sel = (i == s->cursor);
             Color bg;
@@ -247,8 +294,14 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
             }
             Color text = s->broken[i] ? WHITE : (Color){200, 200, 200, 255};
             DrawText(buf, x, y, rowF, text);
+            // Record the tap rect for this visible row.
+            sL.rowEntry[vi] = i;
+            sL.rowRect[vi] = (Rectangle){ (float)(x - 6), (float)(y - 2),
+                                          (float)rowW, (float)(ROW_H - 2) };
+            vi++;
             y += ROW_H;
         }
+        sL.visibleCount = vi;
 
         if (s->entryCount > VISIBLE) {
             int trackX = x + rowW - 8;
@@ -268,11 +321,31 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
     int totalY  = H - margin - (SCREEN_PORTRAIT ? 80 : 70);
     DrawText(TextFormat("Hand over: %d   Fish received: %d", total, total),
              x, totalY, rowF, gPH.ink);
+
+    // Confirm / Close button — mobile's only way to commit the selection.
+    int btnW = SCREEN_PORTRAIT ? 160 : 140;
+    int btnH = SCREEN_PORTRAIT ? 44  : 32;
+    int btnX = W - margin - 20 - btnW;
+    int btnY = H - margin - (SCREEN_PORTRAIT ? 84 : 64);
+    sL.confirmBtn = (Rectangle){ (float)btnX, (float)btnY,
+                                 (float)btnW, (float)btnH };
+    sL.confirmIsCommit = (total > 0);
+    const char *btnLabel = sL.confirmIsCommit ? "Hand Over" : "Close";
+    Color btnBg   = sL.confirmIsCommit ? (Color){ 90, 130,  70, 255}
+                                       : (Color){ 70,  70, 100, 255};
+    Color btnEdge = sL.confirmIsCommit ? (Color){160, 210, 120, 255}
+                                       : (Color){150, 150, 200, 255};
+    DrawRectangle(btnX, btnY, btnW, btnH, btnBg);
+    DrawRectangleLines(btnX, btnY, btnW, btnH, btnEdge);
+    int lblW = MeasureText(btnLabel, rowF);
+    DrawText(btnLabel, btnX + (btnW - lblW) / 2,
+             btnY + (btnH - rowF) / 2, rowF, WHITE);
+
     if (SCREEN_PORTRAIT) {
         int hy = H - margin - 50;
-        DrawText("UP/DOWN: select   SPACE: toggle",
+        DrawText("Tap row: toggle   Tap button: confirm",
                  x, hy,                hintF, gPH.inkLight);
-        DrawText("Z/Enter: confirm   X: cancel",
+        DrawText("UP/DOWN: select   SPACE: toggle   Z: confirm   X: cancel",
                  x, hy + hintF + 4,    hintF, gPH.inkLight);
     } else {
         DrawText("UP/DOWN: select   SPACE: toggle   Z/Enter: confirm   X: cancel",
