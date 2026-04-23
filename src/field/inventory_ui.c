@@ -612,13 +612,19 @@ static void DrawItemsTab(const InventoryUI *ui, const Party *party)
     // it lives in the top-right of the tab body where it always did.
 #if SCREEN_PORTRAIT
     int hbx = x, hby = tabBottomY + 6;
-    DrawText(TextFormat("%s  HP %d/%d  ([ or ] switch)",
-                        active->name, active->hp, active->maxHp), hbx, hby, FS(14), gPH.ink);
+    // Highlight the tappable member-switcher strip so it reads as a button.
+    DrawRectangle(hbx - 4, hby - 2, rowW + 8, 20, (Color){40, 55, 90, 220});
+    DrawRectangleLines(hbx - 4, hby - 2, rowW + 8, 20, (Color){120, 140, 200, 255});
+    DrawText(TextFormat("%s  HP %d/%d", active->name, active->hp, active->maxHp),
+             hbx, hby, FS(14), WHITE);
+    const char *tapHint = (party->count > 1) ? "tap to switch >" : "";
+    int hintW = MeasureText(tapHint, FS(12));
+    DrawText(tapHint, hbx + rowW - hintW, hby + 2, FS(12), (Color){200, 210, 240, 220});
     int barW = rowW;
-    DrawRectangle(hbx, hby + 18, barW, 8, (Color){60, 50, 40, 180});
+    DrawRectangle(hbx, hby + 22, barW, 8, (Color){60, 50, 40, 180});
     float pct = (float)active->hp / (float)active->maxHp;
-    DrawRectangle(hbx, hby + 18, (int)(barW * pct), 8, (Color){110, 160, 80, 255});
-    int y = hby + 38;
+    DrawRectangle(hbx, hby + 22, (int)(barW * pct), 8, (Color){110, 160, 80, 255});
+    int y = hby + 42;
 #else
     int y = 95;
     int hbx = 500, hby = 68;
@@ -672,12 +678,21 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
     int rowW     = InvContentW();
     int equippedY = InvPanelY() + 86;
     int y        = equippedY;
+    DrawRectangle(colX - 4, y - 2, rowW + 8, 22, (Color){40, 55, 90, 220});
+    DrawRectangleLines(colX - 4, y - 2, rowW + 8, 22, (Color){120, 140, 200, 255});
+    DrawText(TextFormat("%s's Moves", led->name), colX, y, FS(16), WHITE);
+    if (party->count > 1) {
+        const char *th = "tap to switch >";
+        int tw = MeasureText(th, FS(12));
+        DrawText(th, colX + rowW - tw, y + 3, FS(12), (Color){200, 210, 240, 220});
+    }
+    y += 26;
 #else
     int colX = 60, y = 95;
     int rowW = 320;
-#endif
     DrawText(TextFormat("%s's Moves  ([ or ] switch)", led->name), colX, y, FS(18), gPH.ink);
     y += 26;
+#endif
     // Fixed-slot layout with group headers between rows.
     static const char *groupTitle[MOVE_GROUP_COUNT] = {
         "Attacks", "Item Attacks", "Specials"
@@ -800,12 +815,21 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
     int colX = InvContentX();
     int rowW = InvContentW();
     int y    = InvPanelY() + 86;
+    DrawRectangle(colX - 4, y - 2, rowW + 8, 22, (Color){40, 55, 90, 220});
+    DrawRectangleLines(colX - 4, y - 2, rowW + 8, 22, (Color){120, 140, 200, 255});
+    DrawText(TextFormat("%s's Armor", led->name), colX, y, FS(16), WHITE);
+    if (party->count > 1) {
+        const char *th = "tap to switch >";
+        int tw = MeasureText(th, FS(12));
+        DrawText(th, colX + rowW - tw, y + 3, FS(12), (Color){200, 210, 240, 220});
+    }
+    y += 26;
 #else
     int colX = 60, y = 95;
     int rowW = 320;
-#endif
     DrawText(TextFormat("%s's Armor  ([ or ] switch)", led->name), colX, y, FS(18), gPH.ink);
     y += 26;
+#endif
     {
         bool sel = ui->equippedFocus;
         Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
