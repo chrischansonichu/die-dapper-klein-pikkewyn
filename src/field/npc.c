@@ -74,33 +74,39 @@ void NpcTurnToFace(Npc *n, int tileX, int tileY)
     else if (dy < 0) n->dir = 3; // face up
 }
 
-// Cream-bellied old penguin in a top hat. accent sets the belly/hat-band
-// color so keeper / food-bank variants can reuse this silhouette.
-// hatBand != 0 paints a colored stripe around the hat brim (keeper = green,
-// food-bank = blue); elder leaves it off.
-static void DrawPenguinPerson(int px, int py, int sz, int dir, Color belly, Color hatBand, int seedSalt)
+// Cream-bellied penguin. `hasHat` draws the top hat (Mayor only); others
+// stretch the body into the freed vertical space so the overall silhouette
+// height is preserved. `hatBand` paints a colored stripe on the hat brim when
+// `hasHat` is set.
+static void DrawPenguinPerson(int px, int py, int sz, int dir, Color belly, Color hatBand, int seedSalt, bool hasHat)
 {
     const Color black  = gPH.inkDark;
     const Color orange = (Color){0xD8, 0x96, 0x3A, 255};
 
     float cx = px + sz / 2.0f;
 
-    // Top hat
-    float hatW = sz * 0.44f;
-    float hatH = sz * 0.22f;
-    Rectangle crown = { cx - hatW / 2.0f, py + sz * 0.02f, hatW, hatH };
-    DrawRectangleRec(crown, black);
-    Rectangle brim  = { cx - hatW / 2.0f - 3, py + sz * 0.22f, hatW + 6, sz * 0.06f };
-    DrawRectangleRec(brim, black);
-    if (hatBand.a > 0) {
-        Rectangle band = { cx - hatW / 2.0f, py + sz * 0.18f, hatW, sz * 0.04f };
-        DrawRectangleRec(band, hatBand);
+    if (hasHat) {
+        float hatW = sz * 0.44f;
+        float hatH = sz * 0.22f;
+        Rectangle crown = { cx - hatW / 2.0f, py + sz * 0.02f, hatW, hatH };
+        DrawRectangleRec(crown, black);
+        Rectangle brim  = { cx - hatW / 2.0f - 3, py + sz * 0.22f, hatW + 6, sz * 0.06f };
+        DrawRectangleRec(brim, black);
+        if (hatBand.a > 0) {
+            Rectangle band = { cx - hatW / 2.0f, py + sz * 0.18f, hatW, sz * 0.04f };
+            DrawRectangleRec(band, hatBand);
+        }
     }
 
-    // Body (rounded rectangle)
-    Rectangle body = { px + sz * 0.18f, py + sz * 0.30f, sz * 0.64f, sz * 0.60f };
+    // Body spans from just under the hat (or near the top of the sprite when
+    // there's no hat) down to the feet. Belly/eyes/beak/cane are expressed as
+    // fractions of the body height so they follow when the body stretches.
+    float bodyTopF = hasHat ? 0.30f : 0.05f;
+    float bodyBotF = 0.90f;
+    float bodyH    = bodyBotF - bodyTopF;
+
+    Rectangle body = { px + sz * 0.18f, py + sz * bodyTopF, sz * 0.64f, sz * bodyH };
     DrawRectangleRounded(body, 0.55f, 14, black);
-    // Wobbled ink outline along the body silhouette.
     PHWobbleLine((Vector2){body.x, body.y + sz * 0.10f},
                  (Vector2){body.x, body.y + body.height - sz * 0.10f},
                  0.8f, 1.5f, gPH.ink, seedSalt + 1);
@@ -108,12 +114,13 @@ static void DrawPenguinPerson(int px, int py, int sz, int dir, Color belly, Colo
                  (Vector2){body.x + body.width, body.y + body.height - sz * 0.10f},
                  0.8f, 1.5f, gPH.ink, seedSalt + 2);
 
-    // Belly (color varies by role)
-    Rectangle bellyRect = { px + sz * 0.30f, py + sz * 0.46f, sz * 0.40f, sz * 0.38f };
+    Rectangle bellyRect = { px + sz * 0.30f,
+                            py + sz * (bodyTopF + 0.267f * bodyH),
+                            sz * 0.40f,
+                            sz * (0.633f * bodyH) };
     DrawRectangleRounded(bellyRect, 0.6f, 12, belly);
 
-    // Eyes — small cream whites with ink pupil, shifted by facing
-    float eyeY  = py + sz * 0.40f;
+    float eyeY  = py + sz * (bodyTopF + 0.167f * bodyH);
     float pupilOffX = 0, pupilOffY = 0;
     if (dir == 0) pupilOffY =  1;
     if (dir == 3) pupilOffY = -1;
@@ -126,9 +133,8 @@ static void DrawPenguinPerson(int px, int py, int sz, int dir, Color belly, Colo
     DrawCircle((int)(eyeLX + pupilOffX), (int)(eyeY + pupilOffY), 1, black);
     DrawCircle((int)(eyeRX + pupilOffX), (int)(eyeY + pupilOffY), 1, black);
 
-    // Orange beak (triangle, rotated by facing)
     float bx = cx;
-    float by = py + sz * 0.52f;
+    float by = py + sz * (bodyTopF + 0.367f * bodyH);
     if (dir == 0) {
         DrawTriangle((Vector2){bx - 3, by}, (Vector2){bx, by + 5}, (Vector2){bx + 3, by}, orange);
     } else if (dir == 3) {
@@ -139,42 +145,43 @@ static void DrawPenguinPerson(int px, int py, int sz, int dir, Color belly, Colo
         DrawTriangle((Vector2){bx + 2, by - 3}, (Vector2){bx + 2, by + 3}, (Vector2){bx + 6, by}, orange);
     }
 
-    // Orange feet
     DrawRectangle((int)(px + sz * 0.28f), (int)(py + sz * 0.88f), (int)(sz * 0.14f), (int)(sz * 0.08f), orange);
     DrawRectangle((int)(px + sz * 0.58f), (int)(py + sz * 0.88f), (int)(sz * 0.14f), (int)(sz * 0.08f), orange);
 
-    // Cane
-    DrawLineEx((Vector2){px + sz * 0.90f, py + sz * 0.55f},
-               (Vector2){px + sz * 0.90f, py + sz * 0.92f}, 2.0f, orange);
+    // Cane only reads as "elder" with the hat — other NPCs lose it along with
+    // the hat so the silhouette doesn't feel like an elder without headwear.
+    if (hasHat) {
+        DrawLineEx((Vector2){px + sz * 0.90f, py + sz * (bodyTopF + 0.417f * bodyH)},
+                   (Vector2){px + sz * 0.90f, py + sz * 0.92f}, 2.0f, orange);
+    }
 }
 
 static void DrawPenguinElder(int px, int py, int sz, int dir) {
     DrawPenguinPerson(px, py, sz, dir,
                       (Color){0xEC, 0xDA, 0xAC, 255}, (Color){0, 0, 0, 0},
-                      0xC101);
+                      0xC101, true);
 }
 
 static void DrawKeeper(int px, int py, int sz, int dir) {
-    // Grass-bellied + dark grass hat-band — the trader in the village.
+    // Grass-bellied — the trader in the village.
     DrawPenguinPerson(px, py, sz, dir,
-                      gPH.grass, gPH.grassDark,
-                      0xC201);
+                      gPH.grass, (Color){0, 0, 0, 0},
+                      0xC201, false);
 }
 
 static void DrawFoodBank(int px, int py, int sz, int dir) {
-    // Water-bellied + dark water hat-band — the donation keeper.
+    // Water-bellied — the donation keeper.
     DrawPenguinPerson(px, py, sz, dir,
-                      gPH.water, gPH.waterDark,
-                      0xC301);
+                      gPH.water, (Color){0, 0, 0, 0},
+                      0xC301, false);
 }
 
 static void DrawScribe(int px, int py, int sz, int dir) {
-    // Parchment-belly + burgundy hat-band — the village archivist who saves
-    // the player's journey.
+    // Parchment-belly — the village archivist who saves the player's journey.
     DrawPenguinPerson(px, py, sz, dir,
                       (Color){0xE5, 0xD0, 0xA8, 255},
-                      (Color){0xA8, 0x50, 0x54, 255},
-                      0xC401);
+                      (Color){0, 0, 0, 0},
+                      0xC401, false);
 }
 
 // Rust-coated belly + weathered orange hatband mark the salvager: he trades
@@ -192,8 +199,8 @@ static void DrawSalvager(int px, int py, int sz, int dir) {
 
     DrawPenguinPerson(px, py, sz, dir,
                       (Color){0xC8, 0x9A, 0x6A, 255},
-                      (Color){0xA8, 0x74, 0x40, 255},
-                      0xC501);
+                      (Color){0, 0, 0, 0},
+                      0xC501, false);
 }
 
 // Sooty penguin with a forge-orange apron band. A small anvil silhouette sits
@@ -212,8 +219,8 @@ static void DrawBlacksmith(int px, int py, int sz, int dir) {
 
     DrawPenguinPerson(px, py, sz, dir,
                       (Color){0xD0, 0x96, 0x48, 255},   // forge-orange apron belly
-                      (Color){0x6E, 0x48, 0x28, 255},   // dark leather hat band
-                      0xC601);
+                      (Color){0, 0, 0, 0},
+                      0xC601, false);
 }
 
 // Cape fur seal — warm brown with a lighter belly
