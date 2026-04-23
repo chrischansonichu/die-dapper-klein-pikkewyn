@@ -5,6 +5,8 @@
 #include "../data/armor_defs.h"
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
+#include "../systems/modal_close.h"
+#include "../systems/touch_input.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -17,6 +19,171 @@ static inline int InvPanelW(void) { return SCREEN_W - 2 * InvPanelX(); }
 static inline int InvPanelH(void) { return SCREEN_H - 2 * InvPanelY(); }
 static inline int InvContentX(void) { return InvPanelX() + 20; }
 static inline int InvContentW(void) { return InvPanelW() - 40; }
+
+static inline Rectangle InvPanelRect(void) {
+    return (Rectangle){ InvPanelX(), InvPanelY(), InvPanelW(), InvPanelH() };
+}
+
+// Shared layout between Update (tap hit-test) and Draw so the two can't drift.
+// RebuildLayout() runs at the top of each so rects always reflect current state.
+// Rectangles left as {0} mean "not visible this frame" and will never hit.
+static struct InvLayout {
+    Rectangle tabs[INV_TAB_COUNT];
+    Rectangle memberSwitcher;
+    Rectangle itemRows[INVENTORY_MAX_ITEMS];
+    int       itemRowCount;
+    Rectangle equippedMoveRows[CREATURE_MAX_MOVES];
+    int       equippedMoveRowCount;
+    Rectangle weaponBagRows[INVENTORY_MAX_WEAPONS];
+    int       weaponBagFirst, weaponBagEnd;  // [first, end) visible inv indices
+    Rectangle equippedArmorRow;
+    Rectangle armorBagRows[INVENTORY_MAX_ARMORS];
+    int       armorBagRowCount;
+} sL;
+
+static void LayoutTabs(void)
+{
+#if SCREEN_PORTRAIT
+    int y     = InvPanelY() + 40;
+    int gap   = 6;
+    int tabW  = (InvContentW() - 2 * gap) / 3;
+    int startX = InvContentX();
+#else
+    int y      = 40;
+    int tabW   = 120;
+    int gap    = 10;
+    int startX = 120;
+#endif
+    for (int i = 0; i < INV_TAB_COUNT; i++) {
+        sL.tabs[i] = (Rectangle){
+            (float)(startX + i * (tabW + gap)), (float)y,
+            (float)tabW, 30.0f };
+    }
+}
+
+static void LayoutItems(const InventoryUI *ui, const Party *party)
+{
+    const Inventory *inv = &party->inventory;
+    int x = InvContentX();
+    int rowW = InvContentW();
+    int tabBottomY = InvPanelY() + 80;
+#if SCREEN_PORTRAIT
+    int hbx = x, hby = tabBottomY + 6;
+    sL.memberSwitcher = (Rectangle){ (float)hbx, (float)hby,
+                                     (float)rowW, 32.0f };
+    int y = hby + 38;
+#else
+    sL.memberSwitcher = (Rectangle){ 500.0f, 68.0f, 200.0f, 28.0f };
+    int y = 95;
+#endif
+    y += 26;  // "Consumables" header
+    sL.itemRowCount = inv->itemCount;
+    for (int i = 0; i < inv->itemCount && i < INVENTORY_MAX_ITEMS; i++) {
+        sL.itemRows[i] = (Rectangle){ (float)(x - 6), (float)(y - 2),
+                                      (float)rowW, 22.0f };
+        y += 24;
+    }
+    (void)ui;
+}
+
+static void LayoutWeapons(const InventoryUI *ui, const Party *party)
+{
+    const Inventory *inv  = &party->inventory;
+#if SCREEN_PORTRAIT
+    int colX     = InvContentX();
+    int rowW     = InvContentW();
+    int y        = InvPanelY() + 86;
+#else
+    int colX = 60, y = 95;
+    int rowW = 320;
+#endif
+    sL.memberSwitcher = (Rectangle){ (float)colX, (float)y,
+                                     (float)rowW, 22.0f };
+    y += 26;  // "XX's Moves" header
+    sL.equippedMoveRowCount = CREATURE_MAX_MOVES;
+    for (int g = 0; g < MOVE_GROUP_COUNT; g++) {
+        y += 16;  // group header
+        int rowCount = MoveGroupSlotCount(g);
+        for (int n = 0; n < rowCount; n++) {
+            int i = MOVE_GROUP_SLOT(g, n);
+            sL.equippedMoveRows[i] = (Rectangle){ (float)(colX - 6),
+                                                  (float)(y - 2),
+                                                  (float)rowW, 22.0f };
+            y += 22;
+        }
+        y += 4;
+    }
+
+#if SCREEN_PORTRAIT
+    const int BAG_VISIBLE = 6;
+    int bagX = colX, bagRowW = rowW;
+    y += 6;
+#else
+    const int BAG_VISIBLE = 10;
+    int bagX = 420, bagRowW = 320;
+    y = 95;
+#endif
+    y += 26;  // "Weapon Bag" header
+    int scrollTop = 0;
+    if (!ui->equippedFocus && ui->cursor >= BAG_VISIBLE) {
+        scrollTop = ui->cursor - BAG_VISIBLE + 1;
+    }
+    int maxScroll = inv->weaponCount - BAG_VISIBLE;
+    if (maxScroll < 0) maxScroll = 0;
+    if (scrollTop > maxScroll) scrollTop = maxScroll;
+    int drawEnd = scrollTop + BAG_VISIBLE;
+    if (drawEnd > inv->weaponCount) drawEnd = inv->weaponCount;
+    sL.weaponBagFirst = scrollTop;
+    sL.weaponBagEnd   = drawEnd;
+    for (int i = scrollTop; i < drawEnd; i++) {
+        sL.weaponBagRows[i] = (Rectangle){ (float)(bagX - 6), (float)(y - 2),
+                                           (float)bagRowW, 22.0f };
+        y += 24;
+    }
+}
+
+static void LayoutArmor(const InventoryUI *ui, const Party *party)
+{
+    const Inventory *inv = &party->inventory;
+#if SCREEN_PORTRAIT
+    int colX = InvContentX();
+    int rowW = InvContentW();
+    int y    = InvPanelY() + 86;
+#else
+    int colX = 60, y = 95;
+    int rowW = 320;
+#endif
+    sL.memberSwitcher = (Rectangle){ (float)colX, (float)y,
+                                     (float)rowW, 22.0f };
+    y += 26;  // "XX's Armor" header
+    sL.equippedArmorRow = (Rectangle){ (float)(colX - 6), (float)(y - 2),
+                                       (float)rowW, 22.0f };
+
+#if SCREEN_PORTRAIT
+    int bagX = colX, bagRowW = rowW;
+    y += 36;
+#else
+    int bagX = 420, bagRowW = 320;
+    y = 95;
+#endif
+    y += 26;  // "Armor Bag" header
+    sL.armorBagRowCount = inv->armorCount;
+    for (int i = 0; i < inv->armorCount && i < INVENTORY_MAX_ARMORS; i++) {
+        sL.armorBagRows[i] = (Rectangle){ (float)(bagX - 6), (float)(y - 2),
+                                          (float)bagRowW, 22.0f };
+        y += 24;
+    }
+    (void)ui;
+}
+
+static void RebuildLayout(const InventoryUI *ui, const Party *party)
+{
+    memset(&sL, 0, sizeof(sL));
+    LayoutTabs();
+    if (ui->tab == INV_TAB_ITEMS)        LayoutItems(ui, party);
+    else if (ui->tab == INV_TAB_WEAPONS) LayoutWeapons(ui, party);
+    else                                 LayoutArmor(ui, party);
+}
 
 void InventoryUIInit(InventoryUI *ui)
 {
@@ -218,11 +385,18 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
 {
     if (!ui->active) return false;
 
+    RebuildLayout(ui, party);
+
     // Close
-    if (IsKeyPressed(KEY_I) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_X)) {
+    if (IsKeyPressed(KEY_I) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_X)
+        || ModalCloseButtonTapped(InvPanelRect())) {
         InventoryUIClose(ui);
         return false;
     }
+
+    // Claim any gesture that started inside the panel so a tap that lands on
+    // a row doesn't also move the player afterwards.
+    if (TouchGestureStartedIn(InvPanelRect())) TouchConsumeGesture();
 
     // Tab switch — cycle ITEMS → WEAPONS → ARMOR → ITEMS.
     if (IsKeyPressed(KEY_TAB) || IsKeyPressed(KEY_E)) {
@@ -236,16 +410,27 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
         ui->equippedFocus = false;
         ui->status[0]     = '\0';
     }
+    for (int i = 0; i < INV_TAB_COUNT; i++) {
+        if (TouchTapInRect(sL.tabs[i])) {
+            ui->tab           = (InventoryTab)i;
+            ui->cursor        = 0;
+            ui->equippedFocus = false;
+            ui->status[0]     = '\0';
+            return true;
+        }
+    }
 
     // Party-member cycling — the inventory is shared, but actions always land
     // on one specific combatant. Bracket keys scroll through living members so
-    // the player can feed/equip any of them, not just Jan.
+    // the player can feed/equip any of them, not just Jan. On touch, tapping
+    // the member header advances to the next living member.
     if (party->count > 0) {
         if (IsKeyPressed(KEY_LEFT_BRACKET)) {
             ui->memberCursor = (ui->memberCursor - 1 + party->count) % party->count;
             ui->status[0] = '\0';
         }
-        if (IsKeyPressed(KEY_RIGHT_BRACKET)) {
+        if (IsKeyPressed(KEY_RIGHT_BRACKET)
+            || TouchTapInRect(sL.memberSwitcher)) {
             ui->memberCursor = (ui->memberCursor + 1) % party->count;
             ui->status[0] = '\0';
         }
@@ -259,6 +444,15 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
             if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) ui->cursor = (ui->cursor + 1) % n;
             if (ui->cursor >= n) ui->cursor = n - 1;
             if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) UseItemOnMember(ui, party);
+            // Tap-to-use: a tap on a row moves the cursor and consumes in one
+            // motion, mirroring the Z-press flow on desktop.
+            for (int i = 0; i < n && i < INVENTORY_MAX_ITEMS; i++) {
+                if (TouchTapInRect(sL.itemRows[i])) {
+                    ui->cursor = i;
+                    UseItemOnMember(ui, party);
+                    break;
+                }
+            }
         }
     } else if (ui->tab == INV_TAB_WEAPONS) {
         // Weapons tab: LEFT/RIGHT swaps focus between equipped and bag.
@@ -304,6 +498,23 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
             if (ui->equippedFocus) DiscardEquippedWeapon(ui, party);
             else                   DiscardBagWeapon(ui, party);
         }
+        // Tap-to-act: equipped slot → unequip, bag slot → equip.
+        for (int i = 0; i < equippedN; i++) {
+            if (TouchTapInRect(sL.equippedMoveRows[i])) {
+                ui->equippedFocus = true;
+                ui->cursor        = i;
+                UnequipMemberWeapon(ui, party, discard);
+                break;
+            }
+        }
+        for (int i = sL.weaponBagFirst; i < sL.weaponBagEnd; i++) {
+            if (TouchTapInRect(sL.weaponBagRows[i])) {
+                ui->equippedFocus = false;
+                ui->cursor        = i;
+                EquipBagWeapon(ui, party);
+                break;
+            }
+        }
     } else { // INV_TAB_ARMOR
         // Single equipped armor slot + bag list. LEFT focuses the equipped
         // slot, RIGHT focuses the bag. Z equips/unequips. On portrait the
@@ -337,6 +548,21 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
             if (ui->equippedFocus) UnequipMemberArmor(ui, party);
             else                   EquipBagArmor(ui, party);
+        }
+        // Tap-to-act mirrors the weapons tab: equipped row unequips, bag row
+        // equips.
+        if (TouchTapInRect(sL.equippedArmorRow)) {
+            ui->equippedFocus = true;
+            ui->cursor        = 0;
+            UnequipMemberArmor(ui, party);
+        }
+        for (int i = 0; i < sL.armorBagRowCount && i < INVENTORY_MAX_ARMORS; i++) {
+            if (TouchTapInRect(sL.armorBagRows[i])) {
+                ui->equippedFocus = false;
+                ui->cursor        = i;
+                EquipBagArmor(ui, party);
+                break;
+            }
         }
     }
 
@@ -644,8 +870,11 @@ void InventoryUIDraw(const InventoryUI *ui, const Party *party, int villageReput
 {
     if (!ui->active) return;
 
+    RebuildLayout(ui, party);
+
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), gPH.dimmer);
-    PHDrawPanel((Rectangle){InvPanelX(), InvPanelY(), InvPanelW(), InvPanelH()}, 0x601);
+    PHDrawPanel(InvPanelRect(), 0x601);
+    ModalCloseButtonDraw(InvPanelRect());
 
     int titleY = InvPanelY() + 6;
     DrawText("INVENTORY", InvContentX(), titleY, 18, gPH.ink);

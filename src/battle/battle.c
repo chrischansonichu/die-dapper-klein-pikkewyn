@@ -5,6 +5,7 @@
 #include "../field/tilemap.h"
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
+#include "../systems/touch_input.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -812,7 +813,26 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
     }
 }
 
-void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
+// Convert a screen-space tap position to a tile coordinate using the provided
+// battle camera. Returns false if the camera is NULL or the resulting tile is
+// outside the map — callers should bail out rather than clamp, because a tap
+// on the UI panel projects far outside the playfield and shouldn't count.
+static bool ScreenTapToTile(const TileMap *map, const Camera2D *camera,
+                            Vector2 tapPos, int *outX, int *outY)
+{
+    if (!camera) return false;
+    Vector2 world = GetScreenToWorld2D(tapPos, *camera);
+    int tp = TILE_SIZE * TILE_SCALE;
+    int tx = (int)(world.x / tp);
+    int ty = (int)(world.y / tp);
+    if (tx < 0 || ty < 0 || tx >= map->width || ty >= map->height) return false;
+    *outX = tx;
+    *outY = ty;
+    return true;
+}
+
+void BattleUpdate(BattleContext *ctx, const TileMap *map,
+                  const Camera2D *camera, float dt)
 {
     // Keep ctx->map in sync in case the caller swaps maps mid-battle (it
     // doesn't today, but the extra line is cheap and avoids a stale pointer
@@ -840,7 +860,8 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
     switch (ctx->state) {
 
     case BS_PREEMPTIVE_NARRATION:
-        if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
+        if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)
+            || TouchTapOccurred(NULL)) {
             ctx->preemptiveAttack = false;
             ctx->state = AllEnemiesFainted(ctx) ? BS_ROUND_END : BS_TURN_START;
         }
@@ -892,6 +913,29 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
             else if (IsKeyPressed(KEY_DOWN)  || IsKeyPressed(KEY_S)) dy = 1;
             else if (IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A)) dx = -1;
             else if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) dx = 1;
+
+            // Tap anywhere on the map → step one tile toward the tap (dominant
+            // axis wins, matching AIStepToward). Tapping the actor's own tile
+            // commits the move (same as pressing Z). Pixel-perfect adjacent-
+            // tile targeting was too fiddly on mobile; this lets the player
+            // "drag" through the dungeon with repeated directional taps.
+            Vector2 tapPos;
+            if (dx == 0 && dy == 0 && TouchTapOccurred(&tapPos)) {
+                int tx, ty;
+                if (ScreenTapToTile(map, camera, tapPos, &tx, &ty)) {
+                    int ddx = tx - actor->tileX;
+                    int ddy = ty - actor->tileY;
+                    if (ddx == 0 && ddy == 0) {
+                        ctx->movedThisTurn = true;
+                        ctx->state         = BS_ACTION_MENU;
+                        break;
+                    }
+                    int adx = ddx < 0 ? -ddx : ddx;
+                    int ady = ddy < 0 ? -ddy : ddy;
+                    if (adx >= ady) dx = ddx < 0 ? -1 : 1;
+                    else            dy = ddy < 0 ? -1 : 1;
+                }
+            }
 
             if ((dx != 0 || dy != 0) && ctx->moveBudget > 0) {
                 int nx = actor->tileX + dx;
@@ -1064,6 +1108,30 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
             }
         }
 
+        // Tap a tile → snap the cursor there if it's in range. A second tap on
+        // the already-selected tile commits (same as pressing Z). Out-of-range
+        // taps are ignored so a stray tap on an unreachable tile isn't a
+        // silent no-op that confuses the player.
+        Vector2 tapPos;
+        if (TouchTapOccurred(&tapPos)) {
+            int tx, ty;
+            if (ScreenTapToTile(map, camera, tapPos, &tx, &ty)) {
+                bool inRange = true;
+                if (actor && mv) {
+                    inRange = TileMoveReaches(map, TileOf(actor),
+                                              (TilePos){tx, ty}, mv->range);
+                }
+                if (inRange) {
+                    if (tx == ctx->targetTile.x && ty == ctx->targetTile.y) {
+                        ctx->state = BS_EXECUTE;
+                        break;
+                    }
+                    ctx->targetTile.x = tx;
+                    ctx->targetTile.y = ty;
+                }
+            }
+        }
+
         if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_BACKSPACE))
             ctx->state = BS_MOVE_SELECT;
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER))
@@ -1081,7 +1149,10 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
         break;
 
     case BS_NARRATION:
-        if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER))
+        // Tap anywhere to advance — no panel hit-test, narration is full
+        // width at the bottom so any tap is "continue."
+        if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)
+            || TouchTapOccurred(NULL))
             ctx->state = BS_ROUND_END;
         break;
 
@@ -1379,10 +1450,10 @@ void BattleDrawUI(const BattleContext *ctx)
 
 int BattleFinished(const BattleContext *ctx)
 {
-    if (ctx->state == BS_VICTORY &&
-        (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER))) return 1;
-    if (ctx->state == BS_DEFEAT &&
-        (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER))) return 2;
+    bool advance = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)
+                || TouchTapOccurred(NULL);
+    if (ctx->state == BS_VICTORY && advance) return 1;
+    if (ctx->state == BS_DEFEAT  && advance) return 2;
     if (ctx->state == BS_FLEE) return 3;
     return 0;
 }

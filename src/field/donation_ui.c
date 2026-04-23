@@ -5,8 +5,17 @@
 #include "../data/item_defs.h"
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
+#include "../systems/modal_close.h"
 #include <string.h>
 #include <stdio.h>
+
+static inline Rectangle DonPanelRect(void)
+{
+    int W = GetScreenWidth(), H = GetScreenHeight();
+    int margin = SCREEN_PORTRAIT ? 20 : 60;
+    return (Rectangle){ (float)margin, (float)margin,
+                        (float)(W - 2 * margin), (float)(H - 2 * margin) };
+}
 
 // Word-wrap `text` at `maxPx`, draw each line left-anchored at (x, *y). Updates
 // *y to the baseline below the last line drawn. Breaks on spaces; words longer
@@ -77,14 +86,16 @@ void DonationUIUpdate(DonationUI *d, Party *party, int *rep)
     if (d->phase == DON_PHASE_RESULT) {
         // Any confirm/cancel key closes the result page.
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
-            IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)) {
+            IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE) ||
+            ModalCloseButtonTapped(DonPanelRect())) {
             DonationUIClose(d);
         }
         return;
     }
 
     // Pick phase.
-    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)) {
+    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)
+        || ModalCloseButtonTapped(DonPanelRect())) {
         DonationUIClose(d);
         return;
     }
@@ -152,6 +163,7 @@ void DonationUIDraw(const DonationUI *d, const Party *party, int rep)
 
     DrawRectangle(0, 0, W, H, gPH.dimmer);
     PHDrawPanel((Rectangle){px, py, pw, ph}, 0x401);
+    ModalCloseButtonDraw((Rectangle){px, py, pw, ph});
 
     // Per-screen font sizes — portrait gets a notch bigger across the board
     // so phone-held players can actually read the banter.

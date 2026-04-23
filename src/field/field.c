@@ -11,6 +11,9 @@
 #include "../battle/battle_sprites.h"
 #include "../battle/battle_grid.h"
 #include "../render/paper_harbor.h"
+#include "../systems/touch_input.h"
+#include "../systems/fab_menu.h"
+#include "../screen_layout.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,10 +36,13 @@ static char gDropMsg[DROP_MSG_PAGES][DROP_MSG_LEN];
 #define RESCUE_GREET_LEN 160
 static char gRescueGreet[RESCUE_GREET_LEN];
 
-// Interact key: Z or Enter
+// Interact key: Z, Enter, or a touch-screen tap on the canvas. Tap-to-interact
+// lets the mobile build skip the Z button on the virtual pad and just tap the
+// NPC Jan is already facing. Consumes the tap so later checks don't double up.
 static bool IsInteractPressed(void)
 {
-    return IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER);
+    if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) return true;
+    return TouchTapOccurred(NULL);
 }
 
 bool FieldIsTileOccupied(const FieldState *ow, int x, int y, int ignoreEnemyIdx)
@@ -954,6 +960,7 @@ void FieldInit(FieldState *ow, GameState *gs)
     DiscardUIInit(&ow->discardUi);
     DevWarpUIInit(&ow->devWarpUi);
     StylePreviewInit(&ow->stylePreview);
+    FabMenuInit(&ow->fab);
 
     int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;
     int mapPixH = ow->map.height * TILE_SIZE * TILE_SCALE;
@@ -963,6 +970,11 @@ void FieldInit(FieldState *ow, GameState *gs)
 
 void FieldUpdate(FieldState *ow, float dt)
 {
+    // Touch/mouse state is tracked once per frame and read by whichever UI
+    // layer owns input this frame. Desktop keyboard paths still work in
+    // parallel; this only emits events when a pointer is actually active.
+    TouchInputUpdate();
+
     // In battle: BattleUpdate owns input. Once it finishes, resolve drops and
     // return to FIELD_FREE.
     if (ow->mode == FIELD_BATTLE) {
@@ -972,7 +984,7 @@ void FieldUpdate(FieldState *ow, float dt)
             DialogueUpdate(&ow->dialogue, dt);
             return;
         }
-        BattleUpdate(&ow->battle, &ow->map, dt);
+        BattleUpdate(&ow->battle, &ow->map, &ow->camera, dt);
 
         // Sync field-side sprites from combatant tiles so the player + enemy
         // sprites track the fight. Without this the yellow actor highlight
@@ -1131,7 +1143,9 @@ void FieldUpdate(FieldState *ow, float dt)
         return;
     }
 
-    // Warp confirmation prompt captures input while open.
+    // Warp confirmation prompt captures input while open. Mobile/tap: tapping
+    // inside the prompt box confirms (same as Z), tapping outside cancels
+    // (same as X). See FieldDraw for the matching rect.
     if (ow->warpPromptIdx >= 0) {
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
             ApplyWarp(ow, ow->warpPromptIdx);
@@ -1140,6 +1154,23 @@ void FieldUpdate(FieldState *ow, float dt)
         }
         if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)) {
             ow->warpPromptIdx = -1;
+            return;
+        }
+        Vector2 tp;
+        if (TouchTapOccurred(&tp)) {
+            int sw = GetScreenWidth(), sh = GetScreenHeight();
+            int boxW = 560, boxH = 140;
+            if (boxW > sw - 40) boxW = sw - 40;
+            int bx = (sw - boxW) / 2;
+            int by = (sh - boxH) / 2;
+            bool inside = (tp.x >= bx && tp.x < bx + boxW &&
+                           tp.y >= by && tp.y < by + boxH);
+            if (inside) {
+                ApplyWarp(ow, ow->warpPromptIdx);
+                ow->warpPromptIdx = -1;
+            } else {
+                ow->warpPromptIdx = -1;
+            }
         }
         return;
     }
@@ -1197,6 +1228,25 @@ void FieldUpdate(FieldState *ow, float dt)
         return;
     }
 #endif
+    // Floating mobile menu. Only offered in free roam; dialogue/moving frames
+    // are exempt so the user can't accidentally double-open while walking. The
+    // menu itself is modal when open — block field input behind it.
+    if (!ow->dialogue.active && !ow->player.moving) {
+        FabAction fa = FabMenuUpdate(&ow->fab);
+        switch (fa) {
+            case FAB_ACTION_INVENTORY: InventoryUIOpen(&ow->invUi); return;
+            case FAB_ACTION_STATS:     StatsUIOpen(&ow->statsUi);   return;
+            case FAB_ACTION_SAVE: {
+                bool ok = SaveGame(ow->gs, ow->player.tileX, ow->player.tileY,
+                                   ow->player.dir);
+                FabMenuShowSavedToast(&ow->fab, ok);
+                return;
+            }
+            case FAB_ACTION_NONE: default: break;
+        }
+        if (FabMenuIsOpen(&ow->fab)) return;
+    }
+
     // Open inventory with I (only while not moving / no dialogue)
     if (IsKeyPressed(KEY_I) && !ow->dialogue.active && !ow->player.moving) {
         InventoryUIOpen(&ow->invUi);
@@ -1556,8 +1606,26 @@ void FieldDraw(const FieldState *ow)
     }
 
     if (ow->mode == FIELD_FREE) {
+#if SCREEN_PORTRAIT
+        DrawText("Swipe to move   Tap to interact", 8,
+                 GetScreenHeight() - 22, 14, (Color){150, 150, 150, 200});
+#else
         DrawText("Arrows: Move | Z: Interact | I: Inventory", 8,
                  GetScreenHeight() - 22, 14, (Color){150, 150, 150, 200});
+#endif
+    }
+
+    // Floating menu button (and its popup, when open). Only in free roam with
+    // no other modal; battle has its own UI, modals own the screen themselves.
+    bool anyModal = ow->dialogue.active || ow->invUi.active || ow->statsUi.active
+                    || ow->donationUi.active || ow->salvagerUi.active
+                    || ow->blacksmithUi.active || ow->discardUi.active
+                    || ow->warpPromptIdx >= 0;
+#ifdef DEV_BUILD
+    anyModal = anyModal || ow->devWarpUi.active || ow->stylePreview.active;
+#endif
+    if (ow->mode == FIELD_FREE && !anyModal) {
+        FabMenuDraw(&ow->fab);
     }
 
     // Battle UI (screen space) — drawn after HUD so bottom-panel menus overlap.
@@ -1631,8 +1699,13 @@ void FieldDraw(const FieldState *ow)
         DrawText(title, bx + 20, by + 20, 20, gPH.ink);
         if (warn[0] != '\0')
             DrawText(warn, bx + 20, by + 52, 16, gPH.ink);
+#if SCREEN_PORTRAIT
+        DrawText("Tap box: Yes     Tap outside: No",
+                 bx + 20, by + boxH - 30, 14, gPH.inkLight);
+#else
         DrawText("Z / Enter: Yes    X / Esc: No",
                  bx + 20, by + boxH - 30, 14, gPH.inkLight);
+#endif
     }
 
     // Paper-grain overlay over the whole frame — reads as texture, not noise.

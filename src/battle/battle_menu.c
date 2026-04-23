@@ -3,6 +3,7 @@
 #include "../data/item_defs.h"
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
+#include "../systems/touch_input.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -22,6 +23,84 @@
 static const char *gActionLabels[BMENU_ACTION_COUNT] = {
     "FIGHT", "ITEM", "MOVE", "PASS"
 };
+
+// Shared geometry used by both Draw and the touch hit-test code, so taps land
+// exactly on what the player sees. All rects are in screen space.
+static Rectangle RootButtonRect(int i)
+{
+#if SCREEN_PORTRAIT
+    int btnGap = 10;
+    int btnW   = (PANEL_W - 3 * btnGap - 30) / 2;
+    int btnH   = 60;
+    int startX = (PANEL_W - (2 * btnW + btnGap)) / 2;
+    int startY = PANEL_Y + 30;
+    int rowGap = 10;
+#else
+    int btnW = 140, btnH = 40, startX = 490, startY = PANEL_Y + 15;
+    int btnGap = 10, rowGap = 8;
+#endif
+    int col = i % 2, row = i / 2;
+    return (Rectangle){ (float)(startX + col * (btnW + btnGap)),
+                        (float)(startY + row * (btnH + rowGap)),
+                        (float)btnW, (float)btnH };
+}
+
+// Indexed [col][row] to match kGridSlot, defined below in this file. Duplicated
+// here so helpers above don't need a forward decl.
+static const int kGridSlot[3][2] = {
+    {0, 3}, {1, 2}, {4, 5}
+};
+
+static Rectangle MoveCellRect(int col, int row)
+{
+#if SCREEN_PORTRAIT
+    int colGap = 10, rowGap = 6, btnH = 72;
+    int colW = (PANEL_W - 3 * colGap) / 2;
+    int startX = colGap;
+    int startY = PANEL_Y + 10;
+    // Portrait: visual col = data row, visual row = data col
+    int bx = startX + row * (colW + colGap);
+    int by = startY + col * (btnH + rowGap);
+#else
+    int colW = 245, btnH = 42, colGap = 10, rowGap = 4;
+    int startX = 20, startY = PANEL_Y + 10;
+    int bx = startX + col * (colW + colGap);
+    int by = startY + row * (btnH + rowGap);
+#endif
+    return (Rectangle){ (float)bx, (float)by, (float)colW, (float)btnH };
+}
+
+static Rectangle ItemRowRect(int i)
+{
+    int startX = 20;
+    int startY = PANEL_Y + 10;
+    int rowW   = PANEL_W - 2 * startX;
+    int rowH   = SCREEN_PORTRAIT ? 28 : 22;
+    return (Rectangle){ (float)(startX - 2), (float)(startY + i * rowH - 2),
+                        (float)rowW, (float)rowH };
+}
+
+// Full menu panel — taps that miss every button still get consumed so they
+// don't leak through to the field/world.
+static Rectangle PanelRect(void)
+{
+    return (Rectangle){ (float)PANEL_X, (float)PANEL_Y,
+                        (float)PANEL_W, (float)PANEL_H };
+}
+
+// "Back" chip in the top-right of the move/item panels. Big enough to be a
+// touch target on portrait, small enough to stay out of the cell grid.
+static Rectangle BackButtonRect(void)
+{
+#if SCREEN_PORTRAIT
+    int w = 64, h = 32, margin = 6;
+#else
+    int w = 44, h = 22, margin = 4;
+#endif
+    return (Rectangle){ (float)(PANEL_X + PANEL_W - w - margin),
+                        (float)(PANEL_Y + PANEL_H - h - margin),
+                        (float)w, (float)h };
+}
 
 void BattleMenuInit(BattleMenuState *m)
 {
@@ -43,6 +122,17 @@ int BattleMenuUpdateRoot(BattleMenuState *m)
 
     if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER))
         return m->rootCursor;
+
+    // Tap a button to commit directly — move cursor there and return the
+    // action in one gesture, mirroring the tap-to-act pattern used in the
+    // field inventory.
+    if (TouchGestureStartedIn(PanelRect())) TouchConsumeGesture();
+    for (int i = 0; i < BMENU_ACTION_COUNT; i++) {
+        if (TouchTapInRect(RootButtonRect(i))) {
+            m->rootCursor = i;
+            return i;
+        }
+    }
     return -1;
 }
 
@@ -53,11 +143,7 @@ int BattleMenuUpdateRoot(BattleMenuState *m)
 // by each cell's true group, which is how players see that the bottom-left
 // cell belongs to the item-attack family despite sitting in the Attacks
 // column.
-static const int kGridSlot[3][2] = {
-    {0, 3},  // col 0: Tackle (top) / Item2 (bottom) — mixed column
-    {1, 2},  // col 1: Item0 / Item1
-    {4, 5},  // col 2: Spec0 / Spec1
-};
+// kGridSlot defined near the top of this file (used by layout helpers too).
 
 static int SlotGroupOf(int slot)
 {
@@ -131,6 +217,20 @@ int BattleMenuUpdateMoveSelect(BattleMenuState *m, const Combatant *actor)
         if (actor->moveIds[m->moveCursor] < 0) return -1; // empty slot — reject
         return m->moveCursor;
     }
+
+    // Tap a cell → select that move directly.
+    if (TouchGestureStartedIn(PanelRect())) TouchConsumeGesture();
+    if (TouchTapInRect(BackButtonRect())) return -2;
+    for (int c = 0; c < 3; c++) {
+        for (int r = 0; r < 2; r++) {
+            if (TouchTapInRect(MoveCellRect(c, r))) {
+                int slot = kGridSlot[c][r];
+                if (actor->moveIds[slot] < 0) return -1;
+                m->moveCursor = slot;
+                return slot;
+            }
+        }
+    }
     return -1;
 }
 
@@ -138,6 +238,7 @@ int BattleMenuUpdateItemSelect(BattleMenuState *m, int itemCount)
 {
     if (itemCount < 1) {
         if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_BACKSPACE)) return -2;
+        if (TouchTapInRect(BackButtonRect())) return -2;
         return -1;
     }
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W))
@@ -148,6 +249,16 @@ int BattleMenuUpdateItemSelect(BattleMenuState *m, int itemCount)
 
     if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_BACKSPACE)) return -2;
     if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER))     return m->itemCursor;
+
+    if (TouchGestureStartedIn(PanelRect())) TouchConsumeGesture();
+    if (TouchTapInRect(BackButtonRect())) return -2;
+    int shown = itemCount < 4 ? itemCount : 4;
+    for (int i = 0; i < shown; i++) {
+        if (TouchTapInRect(ItemRowRect(i))) {
+            m->itemCursor = i;
+            return i;
+        }
+    }
     return -1;
 }
 
@@ -303,9 +414,15 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
             DrawText(subline, nameX, subY, subF, subColor);
         }
     }
-    int backF = SCREEN_PORTRAIT ? 18 : 12;
-    int backW = MeasureText("X: Back", backF);
-    DrawText("X: Back", PANEL_W - backW - 10, PANEL_Y + PANEL_H - backF - 6, backF, gPH.inkLight);
+    Rectangle back = BackButtonRect();
+    DrawRectangleRec(back, (Color){40, 40, 80, 255});
+    DrawRectangleLinesEx(back, 1, (Color){120, 140, 220, 255});
+    int backF  = SCREEN_PORTRAIT ? 18 : 12;
+    const char *label = "Back";
+    int labelW = MeasureText(label, backF);
+    DrawText(label, (int)(back.x + (back.width - labelW) / 2),
+             (int)(back.y + (back.height - backF) / 2),
+             backF, WHITE);
 }
 
 void BattleMenuDrawItemSelect(const BattleMenuState *m, const Inventory *inv)
@@ -319,8 +436,14 @@ void BattleMenuDrawItemSelect(const BattleMenuState *m, const Inventory *inv)
 
     if (inv->itemCount == 0) {
         DrawText("No items.", PANEL_X + PANEL_PAD + 10, PANEL_Y + PANEL_PAD + 15, 18, gPH.inkLight);
-        int backW = MeasureText("X: Back", 14);
-        DrawText("X: Back", PANEL_W - backW - 10, PANEL_Y + PANEL_H - 22, 14, gPH.inkLight);
+        Rectangle back = BackButtonRect();
+        DrawRectangleRec(back, (Color){40, 40, 80, 255});
+        DrawRectangleLinesEx(back, 1, (Color){120, 140, 220, 255});
+        int backF  = SCREEN_PORTRAIT ? 18 : 12;
+        int labelW = MeasureText("Back", backF);
+        DrawText("Back", (int)(back.x + (back.width - labelW) / 2),
+                 (int)(back.y + (back.height - backF) / 2),
+                 backF, WHITE);
         return;
     }
 
@@ -338,42 +461,98 @@ void BattleMenuDrawItemSelect(const BattleMenuState *m, const Inventory *inv)
         DrawText(buf, startX + 4, startY + i * rowH + 2, nameSize, WHITE);
         DrawText(it->desc, descX, startY + i * rowH + 4, descSize, GRAY);
     }
-    int hintW = MeasureText("X: Back | Z: Use", hintSize);
-    DrawText("X: Back | Z: Use", PANEL_W - hintW - 10, PANEL_Y + PANEL_H - 22, hintSize, gPH.inkLight);
+    Rectangle back = BackButtonRect();
+    DrawRectangleRec(back, (Color){40, 40, 80, 255});
+    DrawRectangleLinesEx(back, 1, (Color){120, 140, 220, 255});
+    int labelW = MeasureText("Back", hintSize);
+    DrawText("Back", (int)(back.x + (back.width - labelW) / 2),
+             (int)(back.y + (back.height - hintSize) / 2),
+             hintSize, WHITE);
+}
+
+// Flush one pending buffered line, applying word-wrap. Returns the y after
+// drawing (possibly multiple wrapped rows). Skips lines that would clip past
+// `yLimit`.
+static int FlushNarrationLine(const char *line, int fontSize, int textX,
+                              int y, int maxPx, int yLimit)
+{
+    if (y >= yLimit) return y;
+    if (MeasureText(line, fontSize) <= maxPx) {
+        DrawText(line, textX, y, fontSize, gPH.ink);
+        return y + fontSize + 4;
+    }
+    // Word-wrap: take chars until MeasureText overflows, back off to last space.
+    char buf[192];
+    int len = 0, lastSpace = -1;
+    for (int i = 0; line[i] != '\0'; i++) {
+        if (len >= (int)sizeof(buf) - 2) break;
+        buf[len++] = line[i];
+        buf[len]   = '\0';
+        if (line[i] == ' ') lastSpace = len - 1;
+        if (MeasureText(buf, fontSize) > maxPx && lastSpace > 0) {
+            buf[lastSpace] = '\0';
+            if (y < yLimit) {
+                DrawText(buf, textX, y, fontSize, gPH.ink);
+                y += fontSize + 4;
+            }
+            int rem = len - lastSpace - 1;
+            memmove(buf, buf + lastSpace + 1, rem);
+            len = rem;
+            buf[len] = '\0';
+            lastSpace = -1;
+        }
+    }
+    if (len > 0 && y < yLimit) {
+        DrawText(buf, textX, y, fontSize, gPH.ink);
+        y += fontSize + 4;
+    }
+    return y;
 }
 
 void BattleMenuDrawNarration(const char *text)
 {
-    PHDrawPanel((Rectangle){PANEL_X, PANEL_Y, PANEL_W, PANEL_H}, 0xA04);
+    // Narration panel is inset from the screen edges (like the dialogue box)
+    // — the action-menu panel's flush-edge layout was visually clipping the
+    // first character on wasm. Dialogue uses 20px side margins + generous
+    // inner padding; match that so narration reads at the same scale.
+    int sideMargin = 20;
+    int innerPad   = SCREEN_PORTRAIT ? 16 : 10;
+    int panelX = sideMargin;
+    int panelW = SCREEN_W - 2 * sideMargin;
+    int panelH = SCREEN_PORTRAIT ? 240 : 100;
+    int panelY = SCREEN_H - panelH - 20;
 
-    // Word-wrap narration into the panel width so long action descriptions
-    // (e.g. "Jan used fishinghook and cut seal's ropes") don't overflow.
-    int fontSize = SCREEN_PORTRAIT ? 32 : 20;
-    int textX    = PANEL_X + PANEL_PAD + 5;
-    int textY    = PANEL_Y + PANEL_PAD + 10;
-    int maxPx    = PANEL_W - (textX - PANEL_X) - PANEL_PAD;
+    PHDrawPanel((Rectangle){panelX, panelY, panelW, panelH}, 0xA04);
+
+    int fontSize = SCREEN_PORTRAIT ? 26 : 18;
+    int textX    = panelX + innerPad;
+    int textY    = panelY + innerPad;
+    int maxPx    = panelW - 2 * innerPad;
+    int hintSize = SCREEN_PORTRAIT ? 16 : 14;
+    int yLimit   = panelY + panelH - hintSize - 10;
+
+    // Narration strings use '\n' to separate logical lines (e.g. XP summary).
+    // Split on newline first, then word-wrap each line individually — earlier
+    // code ignored '\n' and word-wrap never saw the break, jumbling the rows.
     char line[192];
-    int lineLen = 0;
-    int lastSpace = -1;
-    for (int i = 0; text[i] != '\0'; i++) {
-        if (lineLen >= (int)sizeof(line) - 2) break;
-        line[lineLen++] = text[i];
-        line[lineLen]   = '\0';
-        if (text[i] == ' ') lastSpace = lineLen - 1;
-        if (MeasureText(line, fontSize) > maxPx && lastSpace > 0) {
-            line[lastSpace] = '\0';
-            DrawText(line, textX, textY, fontSize, gPH.ink);
-            textY += fontSize + 4;
-            int rem = lineLen - lastSpace - 1;
-            memmove(line, line + lastSpace + 1, rem);
-            lineLen = rem;
+    int  lineLen = 0;
+    for (int i = 0; ; i++) {
+        char c = text[i];
+        if (c == '\n' || c == '\0') {
             line[lineLen] = '\0';
-            lastSpace = -1;
+            if (lineLen > 0) {
+                textY = FlushNarrationLine(line, fontSize, textX, textY,
+                                           maxPx, yLimit);
+            }
+            lineLen = 0;
+            if (c == '\0') break;
+            continue;
         }
+        if (lineLen < (int)sizeof(line) - 1) line[lineLen++] = c;
     }
-    if (lineLen > 0) DrawText(line, textX, textY, fontSize, gPH.ink);
 
-    int hintSize = SCREEN_PORTRAIT ? 20 : 14;
-    int hintW = MeasureText("Z: Continue", hintSize);
-    DrawText("Z: Continue", PANEL_W - hintW - 10, PANEL_Y + PANEL_H - hintSize - 6, hintSize, gPH.inkLight);
+    const char *hint = "Z / tap: Continue";
+    int hintW = MeasureText(hint, hintSize);
+    DrawText(hint, panelX + panelW - hintW - innerPad,
+             panelY + panelH - hintSize - 6, hintSize, gPH.inkLight);
 }

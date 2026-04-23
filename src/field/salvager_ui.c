@@ -5,8 +5,17 @@
 #include "../data/item_defs.h"
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
+#include "../systems/modal_close.h"
 #include <string.h>
 #include <stdio.h>
+
+static inline Rectangle SalPanelRect(void)
+{
+    int W = GetScreenWidth(), H = GetScreenHeight();
+    int margin = SCREEN_PORTRAIT ? 20 : 60;
+    return (Rectangle){ (float)margin, (float)margin,
+                        (float)(W - 2 * margin), (float)(H - 2 * margin) };
+}
 
 // Word-wrap `text` at `maxPx`, draw each line left-anchored at (x, *y). Updates
 // *y to the baseline below the last line drawn. Breaks on spaces; words longer
@@ -81,13 +90,15 @@ void SalvagerUIUpdate(SalvagerUI *s, Party *party)
 
     if (s->phase == SAL_PHASE_RESULT) {
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
-            IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)) {
+            IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE) ||
+            ModalCloseButtonTapped(SalPanelRect())) {
             SalvagerUIClose(s);
         }
         return;
     }
 
-    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)) {
+    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)
+        || ModalCloseButtonTapped(SalPanelRect())) {
         SalvagerUIClose(s);
         return;
     }
@@ -166,6 +177,7 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
 
     DrawRectangle(0, 0, W, H, gPH.dimmer);
     PHDrawPanel((Rectangle){margin, margin, panelW, panelH}, 0x201);
+    ModalCloseButtonDraw((Rectangle){margin, margin, panelW, panelH});
 
     DrawText("SALVAGER", x, margin + 12, titleF, gPH.ink);
 

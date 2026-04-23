@@ -3,8 +3,15 @@
 #include "../battle/inventory.h"
 #include "../data/move_defs.h"
 #include "../render/paper_harbor.h"
+#include "../systems/modal_close.h"
 #include <string.h>
 #include <stdio.h>
+
+static inline Rectangle DiscPanelRect(void)
+{
+    int W = GetScreenWidth(), H = GetScreenHeight();
+    return (Rectangle){ 60.0f, 60.0f, (float)(W - 120), (float)(H - 120) };
+}
 
 void DiscardUIInit(DiscardUI *d)
 {
@@ -34,14 +41,16 @@ void DiscardUIUpdate(DiscardUI *d, Party *party)
     if (d->phase == DISC_PHASE_RESULT) {
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
             IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE) ||
-            IsKeyPressed(KEY_SPACE)) {
+            IsKeyPressed(KEY_SPACE) ||
+            ModalCloseButtonTapped(DiscPanelRect())) {
             DiscardUIClose(d);
         }
         return;
     }
 
     // Cancel → the incoming weapon is lost to the sea.
-    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)) {
+    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)
+        || ModalCloseButtonTapped(DiscPanelRect())) {
         d->cancelled = true;
         d->phase     = DISC_PHASE_RESULT;
         return;
@@ -73,7 +82,8 @@ void DiscardUIDraw(const DiscardUI *d, const Party *party)
 
     int W = GetScreenWidth(), H = GetScreenHeight();
     DrawRectangle(0, 0, W, H, gPH.dimmer);
-    PHDrawPanel((Rectangle){60, 60, W - 120, H - 120}, 0x701);
+    PHDrawPanel(DiscPanelRect(), 0x701);
+    ModalCloseButtonDraw(DiscPanelRect());
 
     DrawText("WEAPON BAG FULL", 80, 72, 20, gPH.ink);
 

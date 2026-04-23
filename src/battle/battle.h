@@ -126,8 +126,11 @@ void BattleBegin(BattleContext *ctx, Party *party, const struct TileMap *map,
                  bool preemptive);
 
 // Per-frame update. Needs the tilemap for walkability / LOS checks during the
-// MOVE phase, target select, and attack resolution.
-void BattleUpdate(BattleContext *ctx, const struct TileMap *map, float dt);
+// MOVE phase, target select, and attack resolution. The camera (may be NULL on
+// desktop-only paths) converts screen-space taps to world tiles during
+// BS_MOVE_PHASE and BS_TARGET_SELECT so touch input can move / target directly.
+void BattleUpdate(BattleContext *ctx, const struct TileMap *map,
+                  const Camera2D *camera, float dt);
 
 // Draw combat overlays (actor highlight, reachable tiles, target cursor) in
 // camera space, and bottom-panel UI in screen space. Call from FieldDraw

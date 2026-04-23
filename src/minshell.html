@@ -9,7 +9,7 @@
     <meta name="title" content="Die Dapper Klein Pikkewyn">
     <meta name="description" content="Die Dapper Klein Pikkewyn — the brave little penguin.">
     <meta name="keywords" content="die dapper klein pikkewyn, penguin, raylib, games, html5">
-    <!-- user-scalable=no is what keeps a tap on the D-pad from pinch-zooming the page on iOS. -->
+    <!-- user-scalable=no stops the browser from pinch-zooming on a fast tap. -->
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -34,16 +34,11 @@
 
     <!-- Web Style -->
     <!--
-      image-rendering keeps small bitmap text from being bilinearly smeared
-      when the browser stretches the 800x450 canvas to the window (especially
-      on HiDPI / retina displays). Nearest-neighbour scaling keeps the raylib
-      default 10px font legible; the Paper Harbor wobble-line shapes still
-      read fine since they're already anti-aliased in the source pixels.
-
-      Mobile layout: the canvas sits flush at the top of the viewport and the
-      virtual Gameboy-style pad fills the remaining vertical space. Desktop
-      users get the old centred-canvas look; the pad is hidden unless the
-      browser reports a touch device.
+      Full-canvas layout: the wasm build is portrait (450x800) and uses
+      in-canvas touch input (swipe to move, tap to interact, corner ⋮ menu for
+      stats / inventory / save). The HTML shell no longer paints a virtual
+      Gameboy pad — the only chrome is a small fullscreen toggle in the
+      top-left, out of the way of the in-canvas menu button (top-right).
     -->
     <style>
         html, body {
@@ -51,11 +46,11 @@
           padding: 0;
           width: 100%;
           /* dvh = dynamic viewport height — shrinks when the mobile URL bar is
-             visible so buttons at the bottom of the pad never hide behind it.
+             visible so the canvas is sized to what the user can actually see.
              Fallback to vh for browsers that don't support dvh. */
           height: 100vh;
           height: 100dvh;
-          background-color: #F7EFD9; /* Paper Harbor parchment — matches in-game bg */
+          background-color: #1a1a1a; /* letterbox bars when aspect doesn't match */
           color: #2b2b2b;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           overflow: hidden;
@@ -66,16 +61,8 @@
         }
         body {
           display: flex;
-          flex-direction: column;
-          align-items: stretch;
-          justify-content: flex-start;
-        }
-        #game-wrap {
-          width: 100%;
-          display: flex;
+          align-items: center;
           justify-content: center;
-          align-items: flex-start;
-          background-color: #000;
         }
         canvas.emscripten {
           display: block;
@@ -83,186 +70,49 @@
           background-color: #F7EFD9;
           padding: 0;
           margin: 0;
-          /* Canvas renders at 800x450 internally; let it stretch to fill the
-             wrap's width (aspect-ratio preserves the 16:9 logical frame). */
-          width: 100%;
-          max-width: 100%;
-          height: auto;
-          /* Wasm build renders at 450x800 — see src/screen_layout.h. */
-          aspect-ratio: 450 / 800;
+          /* JS sets width/height per frame so the canvas fits the visible
+             viewport and preserves the 450x800 aspect. */
           image-rendering: pixelated;            /* Chrome / Edge */
           image-rendering: -moz-crisp-edges;     /* Firefox */
           image-rendering: crisp-edges;          /* spec */
           touch-action: none;
         }
-        /* Desktop — centre the canvas at its native size, hide the pad. */
+
+        /* Desktop — render at native portrait resolution. Fullscreen button
+           still sits in the top-left but is rarely needed; desktop users hit
+           F11 instead. */
         @media (hover: hover) and (pointer: fine) {
-          body {
-            justify-content: center;
-            align-items: center;
-          }
-          #game-wrap {
-            width: auto;
-            background: transparent;
-          }
           canvas.emscripten {
-            /* Desktop devtools device-emulation fallback. The real desktop
-               binary isn't wasm, so this only matters if someone opens the
-               wasm build on a desktop browser — show it at native portrait. */
             width: 450px;
             height: 800px;
-            aspect-ratio: auto;
           }
-          #vpad { display: none !important; }
         }
 
-        /* Virtual Gameboy pad layout. Grid is 2 cols × 2 rows:
-             col1-row1 = D-pad                  col2-rows1-2 = right column
-             col1-row2 = Start / Select (row)                 (utilpad on top,
-                                                               then A, then B
-                                                               staggered down-right)
-           Right column uses a flex stack so A sits directly beside the dpad
-           and B drops diagonally below-right of A. */
-        #vpad {
-          flex: 1 1 auto;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          grid-template-rows: auto auto;
-          align-items: start;
-          justify-items: stretch;
-          padding: 8px calc(8px + env(safe-area-inset-right, 0))
-                   calc(8px + env(safe-area-inset-bottom, 0))
-                   calc(8px + env(safe-area-inset-left, 0));
-          gap: 10px;
-          min-height: 0;
-          width: 100%;
-          box-sizing: border-box;
-        }
-        #rightcol {
-          grid-column: 2;
-          grid-row: 1 / span 2;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-          width: 100%;
-          min-width: 0;
-        }
-        .vpad-btn {
-          background: #d9c9a3;
+        /* Floating fullscreen toggle. Small, translucent, parchment-styled so
+           it doesn't clash with the in-canvas UI. Top-left so it doesn't
+           collide with the in-game ⋮ menu button, which sits top-right. */
+        #fs-btn {
+          position: fixed;
+          top: calc(8px + env(safe-area-inset-top, 0));
+          left: calc(8px + env(safe-area-inset-left, 0));
+          width: 36px;
+          height: 36px;
+          background: rgba(217, 201, 163, 0.85);
           color: #2b2b2b;
-          border: 2px solid #2b2b2b;
-          box-shadow: 0 3px 0 #2b2b2b;
-          border-radius: 10px;
-          font-weight: 700;
+          border: 1.5px solid #2b2b2b;
+          border-radius: 8px;
           font-size: 18px;
-          text-align: center;
           line-height: 1;
-          touch-action: none;
-          -webkit-user-select: none;
-          user-select: none;
           display: flex;
           align-items: center;
           justify-content: center;
-          transition: transform 40ms, box-shadow 40ms, background 40ms;
+          cursor: pointer;
+          z-index: 10;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
         }
-        .vpad-btn.pressed {
-          background: #b89f6c;
-          box-shadow: 0 1px 0 #2b2b2b;
-          transform: translateY(2px);
-        }
-        /* D-pad — a 3x3 grid where the corners are empty. Sized against the
-           column width (minus gutter) and capped at 40vh so tall phones don't
-           stretch it vertically. */
-        #dpad {
-          grid-column: 1;
-          grid-row: 1;
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          grid-template-rows: repeat(3, 1fr);
-          gap: 4px;
-          width: min(100%, 40vh, 240px);
-          aspect-ratio: 1 / 1;
-          justify-self: start;
-        }
-        #dpad .vpad-btn {
-          border-radius: 6px;
-          font-size: 22px;
-        }
-        #dpad .d-up    { grid-column: 2; grid-row: 1; }
-        #dpad .d-left  { grid-column: 1; grid-row: 2; }
-        #dpad .d-right { grid-column: 3; grid-row: 2; }
-        #dpad .d-down  { grid-column: 2; grid-row: 3; }
-        /* Utility shoulder row — [ and Tab. Small rectangles, right-aligned
-           so they hug the screen edge where the thumb can reach. */
-        #utilpad {
-          display: flex;
-          gap: 5px;
-          justify-content: flex-end;
-          align-items: flex-start;
-          width: 100%;
-          flex-wrap: wrap;
-        }
-        #utilpad .vpad-btn {
-          flex: 0 0 auto;
-          padding: 8px 9px;
-          border-radius: 8px;
-          font-size: 13px;
-          min-width: 36px;
-        }
-        /* A/B stack — A sits near the left edge of the right column (beside
-           the dpad), B is staggered down-and-right so they read as a diagonal
-           pair rather than a vertical column. Circles. */
-        #abpad {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-          align-items: flex-start;
-          justify-content: flex-start;
-          width: 100%;
-        }
-        #abpad .vpad-btn {
-          width: min(30vw, 104px);
-          aspect-ratio: 1 / 1;
-          border-radius: 50%;
-          font-size: 26px;
-        }
-        /* A sits slightly inset from the left edge of the right column so it
-           doesn't kiss the dpad; B stagger pulls further up into A's vertical
-           space for a tighter classic Gameboy A/B diagonal. */
-        #abpad .btn-a {
-          background: #e7b2a0;
-          align-self: flex-start;
-          margin-left: 18px;
-          margin-top: -24px;
-        }
-        #abpad .btn-b {
-          background: #a0c2e7;
-          align-self: flex-end;
-          margin-top: -24px;
-        }
-        /* Start / Select — horizontal row of pills underneath the D-pad.
-           Negative margin-top pulls the row up a touch so it sits closer to
-           the dpad instead of floating near the bottom of its grid cell. */
-        #centerpad {
-          grid-column: 1;
-          grid-row: 2;
-          display: flex;
-          flex-direction: row;
-          gap: 8px;
-          align-items: flex-start;
-          justify-content: flex-start;
-          flex-wrap: wrap;
-          width: 100%;
-          margin-top: -16px;
-        }
-        #centerpad .vpad-btn {
-          flex: 1 1 0;
-          min-width: 0;
-          padding: 10px 8px;
-          border-radius: 16px;
-          font-size: 12px;
-          letter-spacing: 0.05em;
-          text-transform: uppercase;
+        #fs-btn:active {
+          background: rgba(184, 159, 108, 0.95);
         }
     </style>
     <script type='text/javascript' src="https://cdn.jsdelivr.net/gh/eligrey/FileSaver.js/dist/FileSaver.min.js"> </script>
@@ -286,37 +136,8 @@
     </script>
     </head>
     <body>
-        <div id="game-wrap">
-            <canvas class=emscripten id=canvas oncontextmenu=event.preventDefault() tabindex=-1></canvas>
-        </div>
-        <!-- Virtual pad: data-key values are what GLFW/raylib sees via synthetic
-             KeyboardEvents. Using the raw letter ("z"/"x") and ArrowX codes keeps
-             the mapping in lock-step with the rest of the game's input surface
-             (arrows + Z/X/Enter/I already accepted by every menu). -->
-        <div id="vpad" aria-hidden="true">
-            <div id="dpad">
-                <button class="vpad-btn d-up"    data-key="ArrowUp"    data-keycode="38">▲</button>
-                <button class="vpad-btn d-left"  data-key="ArrowLeft"  data-keycode="37">◀</button>
-                <button class="vpad-btn d-right" data-key="ArrowRight" data-keycode="39">▶</button>
-                <button class="vpad-btn d-down"  data-key="ArrowDown"  data-keycode="40">▼</button>
-            </div>
-            <div id="rightcol">
-                <div id="utilpad">
-                    <button class="vpad-btn" data-key="["   data-keycode="219">[</button>
-                    <button class="vpad-btn" data-key="Tab" data-keycode="9">Tab</button>
-                    <button class="vpad-btn" data-key="c"   data-keycode="67">Menu</button>
-                    <button class="vpad-btn" data-action="fullscreen" aria-label="Fullscreen">⛶</button>
-                </div>
-                <div id="abpad">
-                    <button class="vpad-btn btn-a" data-key="z" data-keycode="90">Z</button>
-                    <button class="vpad-btn btn-b" data-key="x" data-keycode="88">X</button>
-                </div>
-            </div>
-            <div id="centerpad">
-                <button class="vpad-btn" data-key="Enter" data-keycode="13">Start</button>
-                <button class="vpad-btn" data-key="i"     data-keycode="73">Select</button>
-            </div>
-        </div>
+        <canvas class=emscripten id=canvas oncontextmenu=event.preventDefault() tabindex=-1></canvas>
+        <button id="fs-btn" aria-label="Fullscreen">⛶</button>
         <p id="output" style="display:none"></p>
         <script>
             var Module = {
@@ -334,8 +155,8 @@
                 })(),
                 canvas: (function() {
                     var canvas = document.getElementById('canvas');
-                    // Prevent right-click context menu and most browser touch
-                    // gestures so the pad doesn't scroll the page on drag.
+                    // Prevent right-click context menu and native touch gestures
+                    // (scroll / pinch-zoom / long-press image-save) on the canvas.
                     canvas.addEventListener('touchstart', function(e){ e.preventDefault(); }, { passive: false });
                     canvas.addEventListener('touchmove',  function(e){ e.preventDefault(); }, { passive: false });
                     return canvas;
@@ -374,29 +195,20 @@
 
         <script>
         (function () {
-            // Touch-only devices get the virtual pad. On desktop the CSS media
-            // query hides it, but we still double-check here because some
-            // hybrid devices (touchscreen laptops) report both.
+            var canvas = document.getElementById('canvas');
+            var fsBtn  = document.getElementById('fs-btn');
             var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-            var vpad    = document.getElementById('vpad');
-            if (!isTouch) {
-                // Hidden anyway by CSS, but remove from the flow entirely on
-                // non-touch so the canvas doesn't get pushed off centre.
-                vpad.style.display = 'none';
-            }
 
-            // Fullscreen request — runs when the ⛶ utilpad button is pressed.
-            // Tries documentElement then canvas (some Android browsers only honor
-            // the request on the element being displayed), then falls back to
-            // emscripten's Module.requestFullscreen. iOS Safari refuses all three
-            // on non-video elements; tell the user so they know what happened.
+            // Fullscreen toggle — tries documentElement, then canvas, then
+            // emscripten's Module.requestFullscreen. iOS Safari refuses all
+            // three on non-video elements; surface that to the user so they
+            // know Add to Home Screen is the real fullscreen path on iOS.
             function toggleFullscreen() {
                 if (document.fullscreenElement || document.webkitFullscreenElement) {
                     var exit = document.exitFullscreen || document.webkitExitFullscreen;
                     if (exit) { try { exit.call(document); } catch (e) {} }
                     return;
                 }
-                var canvas  = document.getElementById('canvas');
                 var targets = [document.documentElement, canvas];
                 var tried   = 0;
                 function tryNext() {
@@ -420,136 +232,25 @@
                 }
                 tryNext();
             }
-
-            // Build a synthetic KeyboardEvent that GLFW's emscripten port will
-            // accept. The constructor-level `keyCode`/`which` are ignored by
-            // modern browsers; we override them with defineProperty so GLFW's
-            // `e.keyCode` lookup still returns the right value.
-            function makeKeyEvent(type, key, keyCode) {
-                var ev = new KeyboardEvent(type, {
-                    key: key,
-                    code: keyCode === 13  ? 'Enter'
-                         : keyCode === 9   ? 'Tab'
-                         : keyCode === 38  ? 'ArrowUp'
-                         : keyCode === 40  ? 'ArrowDown'
-                         : keyCode === 37  ? 'ArrowLeft'
-                         : keyCode === 39  ? 'ArrowRight'
-                         : keyCode === 90  ? 'KeyZ'
-                         : keyCode === 88  ? 'KeyX'
-                         : keyCode === 73  ? 'KeyI'
-                         : keyCode === 67  ? 'KeyC'
-                         : keyCode === 219 ? 'BracketLeft'
-                         : ('Key' + (key || '').toUpperCase()),
-                    bubbles: true,
-                    cancelable: true,
-                    composed: true,
-                    repeat: false,
-                    which: keyCode,
-                    keyCode: keyCode,
-                });
-                // defineProperty guarantees these read correctly in GLFW.
-                Object.defineProperty(ev, 'keyCode', { get: function () { return keyCode; } });
-                Object.defineProperty(ev, 'which',   { get: function () { return keyCode; } });
-                return ev;
-            }
-
-            // Dispatch to every plausible target. Emscripten's GLFW attaches
-            // its keydown/keyup listeners in slightly different places between
-            // versions (canvas vs document vs window), so firing at all three
-            // is cheap insurance against version drift.
-            function dispatchKey(type, key, keyCode) {
-                var canvas = document.getElementById('canvas');
-                [document, canvas, window].forEach(function (t) {
-                    if (!t) return;
-                    t.dispatchEvent(makeKeyEvent(type, key, keyCode));
-                });
-            }
-
-            // Track which keys are currently "held" per button so repeated
-            // touchstart events (e.g. user drags finger off and back on) don't
-            // stack into infinite press/release pairs.
-            var activeButtons = new WeakMap();
-
-            function pressButton(btn) {
-                if (activeButtons.get(btn)) return;
-                activeButtons.set(btn, true);
-                btn.classList.add('pressed');
-                // Buttons with data-action run a DOM side-effect on press (e.g.
-                // fullscreen request) instead of firing a synthetic key event.
-                if (btn.dataset.action === 'fullscreen') {
-                    toggleFullscreen();
-                    return;
-                }
-                dispatchKey('keydown', btn.dataset.key, parseInt(btn.dataset.keycode, 10));
-            }
-
-            function releaseButton(btn) {
-                if (!activeButtons.get(btn)) return;
-                activeButtons.set(btn, false);
-                btn.classList.remove('pressed');
-                if (btn.dataset.action) return;  // no paired keyup for action buttons
-                dispatchKey('keyup', btn.dataset.key, parseInt(btn.dataset.keycode, 10));
-            }
-
-            // Wire every virtual button. Use pointer events where available so
-            // the same handler serves finger and mouse (desktop devtools device
-            // emulation, testing with a trackpad, etc.).
-            var buttons = Array.prototype.slice.call(document.querySelectorAll('.vpad-btn'));
-            buttons.forEach(function (btn) {
-                // Stop the OS/browser from treating long-press as text-selection
-                // or image-save.
-                btn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-
-                if (window.PointerEvent) {
-                    btn.addEventListener('pointerdown', function (e) {
-                        e.preventDefault();
-                        btn.setPointerCapture(e.pointerId);
-                        pressButton(btn);
-                    });
-                    btn.addEventListener('pointerup', function (e) {
-                        e.preventDefault();
-                        releaseButton(btn);
-                    });
-                    btn.addEventListener('pointercancel', function () { releaseButton(btn); });
-                    btn.addEventListener('pointerleave',  function () { releaseButton(btn); });
-                } else {
-                    btn.addEventListener('touchstart', function (e) { e.preventDefault(); pressButton(btn); }, { passive: false });
-                    btn.addEventListener('touchend',   function (e) { e.preventDefault(); releaseButton(btn); }, { passive: false });
-                    btn.addEventListener('touchcancel',function ()  { releaseButton(btn); });
-                    btn.addEventListener('mousedown',  function (e) { e.preventDefault(); pressButton(btn); });
-                    btn.addEventListener('mouseup',    function (e) { e.preventDefault(); releaseButton(btn); });
-                    btn.addEventListener('mouseleave', function ()  { releaseButton(btn); });
-                }
+            fsBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                toggleFullscreen();
             });
 
-            // If the page is backgrounded mid-press, release everything so the
-            // game doesn't see a stuck direction when we come back.
-            document.addEventListener('visibilitychange', function () {
-                if (document.visibilityState !== 'visible') {
-                    buttons.forEach(releaseButton);
-                }
-            });
-
-            // Keep the canvas height capped so the virtual pad always has room.
-            // Use visualViewport when available — it reports the height excluding
-            // the mobile URL bar, so the pad buttons can't be hidden behind it.
+            // Fit the canvas to the visible viewport while preserving the
+            // 450x800 logical aspect. visualViewport reports height minus the
+            // mobile URL bar, so the canvas shrinks when the bar slides in.
             function layout() {
-                if (!isTouch) return;
-                var wrap = document.getElementById('game-wrap');
-                var vh   = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-                var vw   = window.visualViewport ? window.visualViewport.width  : window.innerWidth;
-                var landscape = vw > vh;
-                // Canvas cap — 60% on portrait leaves 40% for the pad, which is
-                // enough room even when the URL bar is showing.
-                var capH = landscape ? vh * 0.70 : vh * 0.60;
-                // Canvas is 450x800 (portrait) — wasm build's logical size.
-                var byH  = capH * (450 / 800);
-                var w    = Math.min(vw, byH);
-                wrap.style.width = w + 'px';
-                wrap.style.margin = '0 auto';
-                // Mirror the visible viewport height onto body so #vpad (flex:1)
-                // only ever grows to fit what the user can actually see.
+                var vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+                var vw = window.visualViewport ? window.visualViewport.width  : window.innerWidth;
                 document.body.style.height = vh + 'px';
+                if (!isTouch) return;  // desktop uses CSS-native 450x800
+                var aspect = 450 / 800;
+                var h = vh;
+                var w = h * aspect;
+                if (w > vw) { w = vw; h = w / aspect; }
+                canvas.style.width  = w + 'px';
+                canvas.style.height = h + 'px';
             }
             window.addEventListener('resize', layout);
             window.addEventListener('orientationchange', layout);

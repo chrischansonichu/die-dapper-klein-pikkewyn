@@ -4,6 +4,8 @@
 #include "../data/creature_defs.h"
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
+#include "../systems/modal_close.h"
+#include "../systems/touch_input.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -38,6 +40,29 @@ static inline int PanelH(void)  { return GetScreenHeight() - 2 * PanelY(); }
 static inline int ContentX(void){ return PanelX() + 20; }
 static inline int ContentW(void){ return PanelW() - 40; }
 
+static inline Rectangle PanelRect(void) {
+    return (Rectangle){ PanelX(), PanelY(), PanelW(), PanelH() };
+}
+
+// Geometry shared between DrawMemberList and the touch hit-test path.
+// Keep in sync with the row layout inside DrawMemberList below.
+static Rectangle MemberRowRect(int i)
+{
+#if SCREEN_PORTRAIT
+    int x = ContentX();
+    int w = ContentW();
+    int baseY = PanelY() + 40;
+#else
+    int x = 60;
+    int w = 180;
+    int baseY = 95;
+#endif
+    int rowH = FS_BODY + 8;
+    int rowY = baseY + FS_LABEL + 8 + i * (rowH + 2);
+    return (Rectangle){ (float)(x - 6), (float)(rowY - 2),
+                        (float)w, (float)(rowH + 2) };
+}
+
 void StatsUIInit(StatsUI *ui)
 {
     ui->active = false;
@@ -61,10 +86,15 @@ bool StatsUIUpdate(StatsUI *ui, Party *party)
 {
     if (!ui->active) return false;
 
-    if (IsKeyPressed(KEY_C) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_X)) {
+    if (IsKeyPressed(KEY_C) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_X)
+        || ModalCloseButtonTapped(PanelRect())) {
         StatsUIClose(ui);
         return false;
     }
+
+    // Swallow any gesture that starts inside the panel so a tap can't leak
+    // through as field movement after the modal closes.
+    if (TouchGestureStartedIn(PanelRect())) TouchConsumeGesture();
 
     int n = party->count;
     if (n > 0) {
@@ -75,6 +105,12 @@ bool StatsUIUpdate(StatsUI *ui, Party *party)
          || IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D))
             ui->cursor = (ui->cursor + 1) % n;
         if (ui->cursor >= n) ui->cursor = n - 1;
+        for (int i = 0; i < n; i++) {
+            if (TouchTapInRect(MemberRowRect(i))) {
+                ui->cursor = i;
+                break;
+            }
+        }
     }
 
     return ui->active;
@@ -179,7 +215,8 @@ void StatsUIDraw(const StatsUI *ui, const Party *party)
     if (!ui->active) return;
 
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), gPH.dimmer);
-    PHDrawPanel((Rectangle){PanelX(), PanelY(), PanelW(), PanelH()}, 0x501);
+    PHDrawPanel(PanelRect(), 0x501);
+    ModalCloseButtonDraw(PanelRect());
 
     DrawText("STATUS", ContentX(), PanelY() + 6, FS_LABEL, gPH.ink);
 

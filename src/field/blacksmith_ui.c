@@ -4,8 +4,15 @@
 #include "../data/move_defs.h"
 #include "../data/forge_recipes.h"
 #include "../render/paper_harbor.h"
+#include "../systems/modal_close.h"
 #include <string.h>
 #include <stdio.h>
+
+static inline Rectangle BsPanelRect(void)
+{
+    int W = GetScreenWidth(), H = GetScreenHeight();
+    return (Rectangle){ 60.0f, 60.0f, (float)(W - 120), (float)(H - 120) };
+}
 
 void BlacksmithUIInit(BlacksmithUI *b)
 {
@@ -224,6 +231,14 @@ void BlacksmithUIUpdate(BlacksmithUI *b, Party *party, int *villageReputation,
 {
     if (!b->active) return;
 
+    // Tap the close button from any phase exits the shop entirely. (Keyboard
+    // ESCAPE still does back-out-one-step below — the X icon is the unambiguous
+    // "leave the shop" affordance on touch.)
+    if (ModalCloseButtonTapped(BsPanelRect())) {
+        BlacksmithUIClose(b);
+        return;
+    }
+
     // DiscardUI from an UPGRADE overflow is owned by field.c; we stay passive
     // while it's running. Any key on the RESULT page closes us.
     if (b->phase == SMITH_PHASE_RESULT) {
@@ -362,7 +377,8 @@ void BlacksmithUIDraw(const BlacksmithUI *b, const Party *party,
 
     int W = GetScreenWidth(), H = GetScreenHeight();
     DrawRectangle(0, 0, W, H, gPH.dimmer);
-    PHDrawPanel((Rectangle){60, 60, W - 120, H - 120}, 0x301);
+    PHDrawPanel(BsPanelRect(), 0x301);
+    ModalCloseButtonDraw(BsPanelRect());
 
     DrawText("BLACKSMITH", 80, 72, 20, gPH.ink);
     DrawText(TextFormat("Rep: %d", villageReputation), W - 180, 74, 16, gPH.ink);

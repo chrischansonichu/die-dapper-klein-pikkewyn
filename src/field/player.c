@@ -1,6 +1,7 @@
 #include "player.h"
 #include "field.h"
 #include "../render/paper_harbor.h"
+#include "../systems/touch_input.h"
 #include <math.h>
 
 static const int DIR_DX[4] = {  0, -1,  1,  0 };
@@ -34,6 +35,8 @@ static int ResolveIntentDir(void)
     if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) d = 1;
     if (IsKeyDown(KEY_DOWN)  || IsKeyDown(KEY_S)) d = 0;
     if (IsKeyDown(KEY_UP)    || IsKeyDown(KEY_W)) d = 3;
+    int td = TouchHeldDir();
+    if (td != -1) d = td;
     return d;
 }
 static int ResolvePressedDir(void)
@@ -43,6 +46,8 @@ static int ResolvePressedDir(void)
     if (IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A)) d = 1;
     if (IsKeyPressed(KEY_DOWN)  || IsKeyPressed(KEY_S)) d = 0;
     if (IsKeyPressed(KEY_UP)    || IsKeyPressed(KEY_W)) d = 3;
+    int tp = TouchPressedDir();
+    if (tp != -1) d = tp;
     return d;
 }
 

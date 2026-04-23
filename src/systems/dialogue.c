@@ -1,6 +1,7 @@
 #include "dialogue.h"
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
+#include "touch_input.h"
 #include <string.h>
 
 #if SCREEN_PORTRAIT
@@ -79,8 +80,11 @@ void DialogueUpdate(DialogueBox *d, float dt)
         if (d->visibleChars > fullLen) d->visibleChars = fullLen;
     }
 
-    // Z/Enter to advance
-    if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
+    // Z/Enter/tap to advance. Tap-anywhere mirrors Z so the mobile build
+    // doesn't need a virtual A button to read text.
+    bool advance = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)
+                   || TouchTapOccurred(NULL);
+    if (advance) {
         if (d->visibleChars < fullLen) {
             // Skip to end of page
             d->visibleChars = fullLen;

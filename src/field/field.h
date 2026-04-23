@@ -19,6 +19,7 @@
 #include "discard_ui.h"
 #include "dev_warp_ui.h"
 #include "../dev/style_preview.h"
+#include "../systems/fab_menu.h"
 
 // Forward declaration — field.c reads/writes the persistent party + inventory
 // through this pointer; ownership lives in screen_gameplay.c.
@@ -100,6 +101,10 @@ typedef struct FieldState {
     // and the FieldEnemy array via enemyFieldIdx in BattleContext.
     FieldMode     mode;
     BattleContext battle;
+
+    // Mobile/wasm floating menu — tap-in button in the canvas corner that
+    // reaches stats, inventory, and save without a keyboard.
+    FabMenu       fab;
 } FieldState;
 
 void FieldInit(FieldState *f, struct GameState *gs);
