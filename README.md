@@ -11,12 +11,12 @@ Play along during development at https://dapper.bdhimes.com
 
 #### Overview:
 
-Top-down, pixel art RPG in the general artistic style of Pokémon Red.
+Top-down, pixel art JRPG with turn-based combat in the overworld.
 
 #### Story:
 
 The game follows a small, but brave little African penguin, as he attempts to save his colony from starvation at the
-hands of Chinese fishing vessels off the Cape. Jan de Pikkewyn (working name) will utilize various weapons and
+hands of Chinese fishing vessels off the Cape. Jan de Pikkewyn will utilize various weapons and
 eventually armor in his quest to defeat the Chinese sailors and sink their ships.
 
 #### Mechanics:
@@ -41,6 +41,9 @@ I'm going to attempt to program this in C, using the raylib library.
 - Acquire friends to help you fight
 - Acquire weapons to fight with
 - Distance-aware combat system
+- Environmental combat system (penguins move faster in water than humans)
+- Use weapons in unique ways (attack an enemy with your fishing hook, or use it to free your friend from his ropes)
+- Mobile WASM build
 
 ### Controls
 
