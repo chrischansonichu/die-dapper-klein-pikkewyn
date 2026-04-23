@@ -125,6 +125,13 @@ say "building game (BUILD_MODE=$BUILD_MODE)"
     ln -sf die-dapper-klein-pikkewyn.html index.html
 )
 
+# favicon.ico lives under src/resources so it also gets preloaded into the
+# wasm VFS, but the browser needs it served directly next to index.html for
+# the <link rel="icon"> in minshell.html to resolve.
+if [[ -f "$SRC_DIR/resources/favicon.ico" ]]; then
+    cp "$SRC_DIR/resources/favicon.ico" "$BUILD_DIR/favicon.ico"
+fi
+
 say "build ok → $BUILD_DIR"
 
 if (( SERVE )); then
