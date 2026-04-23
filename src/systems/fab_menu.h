@@ -16,6 +16,9 @@ typedef enum {
     FAB_ACTION_INVENTORY,
     FAB_ACTION_STATS,
     FAB_ACTION_SAVE,
+#ifdef DEV_BUILD
+    FAB_ACTION_DEV_WARP,
+#endif
 } FabAction;
 
 typedef struct {

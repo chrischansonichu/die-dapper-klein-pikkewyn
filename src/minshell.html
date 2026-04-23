@@ -247,21 +247,28 @@
             });
 
             // Fit the canvas to the visible viewport while preserving the
-            // 450x800 logical aspect. visualViewport reports height minus the
-            // mobile URL bar, so the canvas shrinks when the bar slides in.
-            // Subtract the safe-area insets (notch, home indicator) — the body
-            // already pads by those, so the flex-centered canvas must fit in
-            // the remaining usable box or its edges land under system UI.
+            // 450x800 logical aspect. The body is sized with 100dvh + safe-
+            // area padding in CSS; read the padded content box directly so
+            // the canvas is never placed under the notch or home indicator.
+            //
+            // iOS Safari subtlety: on reload, the URL bar / visualViewport /
+            // env(safe-area-inset-*) can all transition across the first few
+            // hundred ms. If layout() runs before they settle, the canvas
+            // gets sized against a momentarily-wrong content box and stays
+            // there until the next resize event. Run layout() again after a
+            // few animation frames + a short timeout to catch the final state.
             function layout() {
-                var vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-                var vw = window.visualViewport ? window.visualViewport.width  : window.innerWidth;
-                // Ask the body for its padded (content-box) size — that's the
-                // area we can safely fill. getBoundingClientRect includes
-                // padding; clientWidth/Height excludes it, which is what we want.
-                var usableW = document.body.clientWidth  || vw;
-                var usableH = document.body.clientHeight || vh;
-                document.body.style.height = vh + 'px';
                 if (!isTouch) return;  // desktop uses CSS-native 450x800
+                // Read the actual padded content box — computedStyle accounts
+                // for env(safe-area-inset-*) once CSS has resolved it.
+                var cs = getComputedStyle(document.body);
+                var padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+                var padY = parseFloat(cs.paddingTop)  + parseFloat(cs.paddingBottom);
+                var vv = window.visualViewport;
+                var vh = vv ? vv.height : window.innerHeight;
+                var vw = vv ? vv.width  : window.innerWidth;
+                var usableW = Math.max(0, vw - padX);
+                var usableH = Math.max(0, vh - padY);
                 var aspect = 450 / 800;
                 var h = usableH;
                 var w = h * aspect;
@@ -271,11 +278,23 @@
             }
             window.addEventListener('resize', layout);
             window.addEventListener('orientationchange', layout);
+            window.addEventListener('load', layout);
             if (window.visualViewport) {
                 window.visualViewport.addEventListener('resize', layout);
-                window.visualViewport.addEventListener('scroll', layout);
+                // Intentionally NOT listening to visualViewport.scroll — on
+                // iOS it fires during URL-bar transitions and feeds layout()
+                // transient heights, which is exactly the "cropped on reload"
+                // symptom. The resize event alone covers URL-bar settle.
             }
-            layout();
+            // Defer the initial run so CSS env() has resolved and the URL bar
+            // has finished its entry animation. Multiple passes cover the
+            // iOS reload case where safe-area-inset-* values flip partway in.
+            requestAnimationFrame(function () {
+                layout();
+                requestAnimationFrame(layout);
+                setTimeout(layout, 120);
+                setTimeout(layout, 400);
+            });
         })();
         </script>
 

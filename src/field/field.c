@@ -1250,6 +1250,11 @@ void FieldUpdate(FieldState *ow, float dt)
                 FabMenuShowSavedToast(&ow->fab, ok);
                 return;
             }
+#ifdef DEV_BUILD
+            case FAB_ACTION_DEV_WARP:
+                DevWarpUIOpen(&ow->devWarpUi);
+                return;
+#endif
             case FAB_ACTION_NONE: default: break;
         }
         if (FabMenuIsOpen(&ow->fab)) return;

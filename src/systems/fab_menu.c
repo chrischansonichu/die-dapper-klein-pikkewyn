@@ -24,10 +24,18 @@
     #define DOT_STEP       9
 #endif
 
-#define MENU_ITEMS 4
+#ifdef DEV_BUILD
+    #define MENU_ITEMS 5
+#else
+    #define MENU_ITEMS 4
+#endif
 
 static const char *kLabels[MENU_ITEMS] = {
+#ifdef DEV_BUILD
+    "Character", "Inventory", "Save", "Dev Warp", "Close"
+#else
     "Character", "Inventory", "Save", "Close"
+#endif
 };
 
 Rectangle FabButtonRect(void)
@@ -94,7 +102,12 @@ FabAction FabMenuUpdate(FabMenu *f)
                 case 0: return FAB_ACTION_STATS;
                 case 1: return FAB_ACTION_INVENTORY;
                 case 2: return FAB_ACTION_SAVE;
-                case 3: return FAB_ACTION_NONE;
+#ifdef DEV_BUILD
+                case 3: return FAB_ACTION_DEV_WARP;
+                case 4: return FAB_ACTION_NONE;  // Close
+#else
+                case 3: return FAB_ACTION_NONE;  // Close
+#endif
             }
         }
     }
