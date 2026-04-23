@@ -4,8 +4,40 @@
 #include "../battle/inventory.h"
 #include "../data/item_defs.h"
 #include "../render/paper_harbor.h"
+#include "../screen_layout.h"
 #include <string.h>
 #include <stdio.h>
+
+// Word-wrap `text` at `maxPx`, draw each line left-anchored at (x, *y). Updates
+// *y to the baseline below the last line drawn. Breaks on spaces; words longer
+// than maxPx overflow rather than split mid-word.
+static void DrawTextWrapped(const char *text, int x, int *y, int maxPx,
+                            int fontSize, int lineGap, Color color)
+{
+    char line[256];
+    int lineLen = 0;
+    int lastSpace = -1;
+    for (int i = 0; text[i] != '\0'; i++) {
+        if (lineLen >= (int)sizeof(line) - 2) break;
+        line[lineLen++] = text[i];
+        line[lineLen]   = '\0';
+        if (text[i] == ' ') lastSpace = lineLen - 1;
+        if (MeasureText(line, fontSize) > maxPx && lastSpace > 0) {
+            line[lastSpace] = '\0';
+            DrawText(line, x, *y, fontSize, color);
+            *y += fontSize + lineGap;
+            int rem = lineLen - lastSpace - 1;
+            memmove(line, line + lastSpace + 1, rem);
+            lineLen = rem;
+            line[lineLen] = '\0';
+            lastSpace = -1;
+        }
+    }
+    if (lineLen > 0) {
+        DrawText(line, x, *y, fontSize, color);
+        *y += fontSize + lineGap;
+    }
+}
 
 void DonationUIInit(DonationUI *d)
 {
@@ -111,54 +143,88 @@ void DonationUIDraw(const DonationUI *d, const Party *party, int rep)
     if (!d->active) return;
 
     int W = GetScreenWidth(), H = GetScreenHeight();
-    DrawRectangle(0, 0, W, H, gPH.dimmer);
-    PHDrawPanel((Rectangle){60, 60, W - 120, H - 120}, 0x401);
+    int margin = SCREEN_PORTRAIT ? 20 : 60;
+    int px = margin, py = margin;
+    int pw = W - 2 * margin, ph = H - 2 * margin;
+    int contentX = px + 20;
+    int contentPad = 20;
+    int contentW = pw - 2 * contentPad;
 
-    DrawText("FOOD BANK", 80, 72, 20, gPH.ink);
-    DrawText(TextFormat("Village Rep: %d", rep), W - 240, 76, 16, gPH.ink);
+    DrawRectangle(0, 0, W, H, gPH.dimmer);
+    PHDrawPanel((Rectangle){px, py, pw, ph}, 0x401);
+
+    // Per-screen font sizes — portrait gets a notch bigger across the board
+    // so phone-held players can actually read the banter.
+    int titleF = SCREEN_PORTRAIT ? 28 : 20;
+    int repF   = SCREEN_PORTRAIT ? 20 : 16;
+    int bodyF  = SCREEN_PORTRAIT ? 22 : 16;
+    int quoteF = SCREEN_PORTRAIT ? 20 : 16;
+    int promptF= SCREEN_PORTRAIT ? 20 : 14;
+    int rowH   = bodyF + 10;
+
+    DrawText("FOOD BANK", contentX, py + 12, titleF, gPH.ink);
+    const char *repLabel = TextFormat("Rep: %d", rep);
+    int repW = MeasureText(repLabel, repF);
+    DrawText(repLabel, px + pw - repW - contentPad, py + 16, repF, gPH.ink);
+
+    int hintFont    = SCREEN_PORTRAIT ? 16 : 14;
+    int bottomStart = H - margin - (SCREEN_PORTRAIT ? 80 : 100);
 
     if (d->phase == DON_PHASE_RESULT) {
-        DrawText(TextFormat("You donated %d item%s. Thank you, Jan.",
-                            d->donatedTotal, d->donatedTotal == 1 ? "" : "s"),
-                 80, 130, 18, gPH.ink);
-        DrawText(TextFormat("Reputation is now %d.", d->repAfter),
-                 80, 160, 18, gPH.ink);
-        DrawText("The young ones will eat tonight.",
-                 80, 200, 16, gPH.inkLight);
-        DrawText("Press any key to continue...", 80, H - 100, 14, gPH.inkLight);
+        int y = py + 60;
+        DrawTextWrapped(TextFormat("You donated %d item%s. Thank you, Jan.",
+                                   d->donatedTotal, d->donatedTotal == 1 ? "" : "s"),
+                        contentX, &y, contentW, bodyF, 4, gPH.ink);
+        DrawTextWrapped(TextFormat("Reputation is now %d.", d->repAfter),
+                        contentX, &y, contentW, bodyF, 4, gPH.ink);
+        y += 8;
+        DrawTextWrapped("The young ones will eat tonight.",
+                        contentX, &y, contentW, quoteF, 4, gPH.inkLight);
+        DrawText("Press any key to continue...",
+                 contentX, bottomStart, hintFont, gPH.inkLight);
         return;
     }
 
     const Inventory *inv = &party->inventory;
-    int x = 80, y = 110;
-    DrawText("\"The food bank feeds the young and the displaced.\"",
-             x, y, 16, gPH.inkLight);
-    y += 22;
-    DrawText("\"Every item you give = +1 village reputation.\"",
-             x, y, 16, gPH.inkLight);
-    y += 30;
+    int y = py + 50;
+    DrawTextWrapped("\"The food bank feeds the young and the displaced.\"",
+                    contentX, &y, contentW, quoteF, 4, gPH.inkLight);
+    DrawTextWrapped("\"Every item you give = +1 village reputation.\"",
+                    contentX, &y, contentW, quoteF, 4, gPH.inkLight);
+    y += 8;
 
     if (d->entryCount == 0) {
-        DrawText("(You have no food to donate right now.)", x, y, 16, gPH.inkLight);
+        DrawTextWrapped("(You have no food to donate right now.)",
+                        contentX, &y, contentW, quoteF, 4, gPH.inkLight);
     } else {
-        DrawText("Choose how many to give:", x, y, 14, gPH.ink);
-        y += 24;
+        DrawText("Choose how many to give:", contentX, y, promptF, gPH.ink);
+        y += promptF + 10;
+        int rowW = contentW;
         for (int i = 0; i < d->entryCount; i++) {
             bool sel = (i == d->cursor);
             Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
-            DrawRectangle(x - 6, y - 2, W - 200, 24, bg);
+            DrawRectangle(contentX - 6, y - 2, rowW, rowH - 2, bg);
             const ItemDef *it = GetItemDef(inv->items[d->itemIdx[i]].itemId);
             char buf[96];
             snprintf(buf, sizeof(buf), "%-16s have %-2d    give: %d",
                      it->name, d->maxCount[i], d->donate[i]);
-            DrawText(buf, x, y, 16, WHITE);
-            y += 26;
+            DrawText(buf, contentX, y, bodyF, WHITE);
+            y += rowH;
         }
     }
 
     int total = DonationTotal(d);
     DrawText(TextFormat("Total donated: %d  (rep gain: +%d)", total, total),
-             x, H - 140, 16, gPH.ink);
-    DrawText("UP/DOWN: select   LEFT/RIGHT: adjust   Z/Enter: confirm   X: cancel",
-             x, H - 100, 14, gPH.inkLight);
+             contentX, bottomStart - 30, bodyF, gPH.ink);
+    if (SCREEN_PORTRAIT) {
+        DrawText("UP/DOWN: select",
+                 contentX, bottomStart,                  hintFont, gPH.inkLight);
+        DrawText("LEFT/RIGHT: adjust",
+                 contentX, bottomStart + hintFont + 4,   hintFont, gPH.inkLight);
+        DrawText("Z: confirm   X: cancel",
+                 contentX, bottomStart + 2*(hintFont+4), hintFont, gPH.inkLight);
+    } else {
+        DrawText("UP/DOWN: select   LEFT/RIGHT: adjust   Z/Enter: confirm   X: cancel",
+                 contentX, bottomStart, hintFont, gPH.inkLight);
+    }
 }

@@ -1,13 +1,13 @@
 #include "style_preview.h"
 #include "raylib.h"
+#include "../screen_layout.h"
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
 
-// Screen is fixed 800x450 (see raylib_game.c). Scene area centered with
-// margins for title/swatches on top and a sample UI panel on the bottom.
-#define SCREEN_W 800
-#define SCREEN_H 450
+// Scene area centered with margins for title/swatches on top and a sample UI
+// panel on the bottom. SCREEN_W / SCREEN_H come from screen_layout.h and match
+// whatever the build target's logical canvas is.
 
 #define SP_COLS 12
 #define SP_ROWS 6

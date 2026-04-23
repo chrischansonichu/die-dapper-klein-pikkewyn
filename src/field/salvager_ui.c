@@ -4,8 +4,40 @@
 #include "../data/move_defs.h"
 #include "../data/item_defs.h"
 #include "../render/paper_harbor.h"
+#include "../screen_layout.h"
 #include <string.h>
 #include <stdio.h>
+
+// Word-wrap `text` at `maxPx`, draw each line left-anchored at (x, *y). Updates
+// *y to the baseline below the last line drawn. Breaks on spaces; words longer
+// than maxPx overflow rather than split mid-word.
+static void DrawTextWrapped(const char *text, int x, int *y, int maxPx,
+                            int fontSize, int lineGap, Color color)
+{
+    char line[256];
+    int lineLen = 0;
+    int lastSpace = -1;
+    for (int i = 0; text[i] != '\0'; i++) {
+        if (lineLen >= (int)sizeof(line) - 2) break;
+        line[lineLen++] = text[i];
+        line[lineLen]   = '\0';
+        if (text[i] == ' ') lastSpace = lineLen - 1;
+        if (MeasureText(line, fontSize) > maxPx && lastSpace > 0) {
+            line[lastSpace] = '\0';
+            DrawText(line, x, *y, fontSize, color);
+            *y += fontSize + lineGap;
+            int rem = lineLen - lastSpace - 1;
+            memmove(line, line + lastSpace + 1, rem);
+            lineLen = rem;
+            line[lineLen] = '\0';
+            lastSpace = -1;
+        }
+    }
+    if (lineLen > 0) {
+        DrawText(line, x, *y, fontSize, color);
+        *y += fontSize + lineGap;
+    }
+}
 
 void SalvagerUIInit(SalvagerUI *s)
 {
@@ -118,46 +150,58 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
     if (!s->active) return;
 
     int W = GetScreenWidth(), H = GetScreenHeight();
-    DrawRectangle(0, 0, W, H, gPH.dimmer);
-    PHDrawPanel((Rectangle){60, 60, W - 120, H - 120}, 0x201);
+    int margin  = SCREEN_PORTRAIT ? 20 : 60;
+    int x       = margin + 20;
+    int panelW  = W - 2 * margin;
+    int panelH  = H - 2 * margin;
+    int contentW= panelW - 40;
+    // Per-screen font sizes — portrait bumps body / quote / hint so phone
+    // players can read without squinting.
+    int titleF  = SCREEN_PORTRAIT ? 28 : 20;
+    int bodyF   = SCREEN_PORTRAIT ? 22 : 18;
+    int rowF    = SCREEN_PORTRAIT ? 20 : 16;
+    int quoteF  = SCREEN_PORTRAIT ? 20 : 16;
+    int hintF   = SCREEN_PORTRAIT ? 16 : 14;
+    int promptF = SCREEN_PORTRAIT ? 20 : 14;
 
-    DrawText("SALVAGER", 80, 72, 20, gPH.ink);
+    DrawRectangle(0, 0, W, H, gPH.dimmer);
+    PHDrawPanel((Rectangle){margin, margin, panelW, panelH}, 0x201);
+
+    DrawText("SALVAGER", x, margin + 12, titleF, gPH.ink);
 
     if (s->phase == SAL_PHASE_RESULT) {
-        DrawText(TextFormat("Handed over %d piece%s of gear.",
-                            s->handedTotal, s->handedTotal == 1 ? "" : "s"),
-                 80, 130, 18, gPH.ink);
-        DrawText(TextFormat("Received %d Fresh Fish.", s->fishGained),
-                 80, 160, 18, gPH.ink);
-        DrawText("\"Better in my sack than on the seabed. Safe travels.\"",
-                 80, 200, 16, gPH.inkLight);
-        DrawText("Press any key to continue...", 80, H - 100, 14, gPH.inkLight);
+        int y = margin + 60;
+        DrawTextWrapped(TextFormat("Handed over %d piece%s of gear.",
+                                   s->handedTotal, s->handedTotal == 1 ? "" : "s"),
+                        x, &y, contentW, bodyF, 6, gPH.ink);
+        DrawTextWrapped(TextFormat("Received %d Fresh Fish.", s->fishGained),
+                        x, &y, contentW, bodyF, 6, gPH.ink);
+        y += 8;
+        DrawTextWrapped("\"Better in my sack than on the seabed. Safe travels.\"",
+                        x, &y, contentW, quoteF, 4, gPH.inkLight);
+        DrawText("Press any key to continue...", x, H - margin - 40, hintF, gPH.inkLight);
         return;
     }
 
     const Inventory *inv = &party->inventory;
-    int x = 80, y = 110;
-    DrawText("\"Just making my rounds. I'll take any gear off your hands —\"",
-             x, y, 16, gPH.inkLight);
-    y += 22;
-    DrawText("\"broken or not, so it doesn't end up tangled in a flipper. One fish per piece.\"",
-             x, y, 16, gPH.inkLight);
-    y += 30;
+    int y = margin + 50;
+    DrawTextWrapped("\"Just making my rounds. I'll take any gear off your hands —\"",
+                    x, &y, contentW, quoteF, 4, gPH.inkLight);
+    DrawTextWrapped("\"broken or not, so it doesn't end up tangled in a flipper. One fish per piece.\"",
+                    x, &y, contentW, quoteF, 4, gPH.inkLight);
+    y += 10;
 
     if (s->entryCount == 0) {
-        DrawText("(Your weapon bag is empty - nothing to salvage today.)",
-                 x, y, 16, gPH.inkLight);
+        DrawTextWrapped("(Your weapon bag is empty - nothing to salvage today.)",
+                        x, &y, contentW, quoteF, 4, gPH.inkLight);
     } else {
-        DrawText("Pick the pieces to hand over:", x, y, 14, gPH.ink);
-        y += 24;
+        DrawText("Pick the pieces to hand over:", x, y, promptF, gPH.ink);
+        y += promptF + 8;
 
-        // Viewport — clamp visible rows and scroll with the cursor so a
-        // fully-packed bag (up to SALVAGER_MAX_ENTRIES) still fits the panel.
-        // The panel is ~330px tall at 800x450; with the header + two dialogue
-        // lines above and the "Hand over" + help footer below, only about
-        // 110px is available for the list itself — 5 rows at 22px each.
-        const int VISIBLE    = 5;
-        const int ROW_H      = 22;
+        // Visible-row budget changes per build — portrait panel is taller so
+        // more rows fit, but the bigger font also consumes more height.
+        const int VISIBLE  = SCREEN_PORTRAIT ? 8 : 5;
+        const int ROW_H    = rowF + 10;
         int scrollTop = 0;
         if (s->cursor >= VISIBLE) scrollTop = s->cursor - VISIBLE + 1;
         int maxScroll = s->entryCount - VISIBLE;
@@ -167,32 +211,35 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
         if (drawEnd > s->entryCount) drawEnd = s->entryCount;
 
         int listTop = y;
+        int rowW = contentW - 10;
         for (int i = scrollTop; i < drawEnd; i++) {
             bool sel = (i == s->cursor);
             Color bg;
             if (sel)             bg = (Color){ 90,  60,  30, 255};
             else if (s->give[i]) bg = (Color){ 55,  40,  20, 255};
             else                 bg = (Color){ 25,  20,  12, 220};
-            DrawRectangle(x - 6, y - 2, W - 200, 24, bg);
+            DrawRectangle(x - 6, y - 2, rowW, ROW_H - 2, bg);
             const MoveDef *mv = GetMoveDef(inv->weapons[s->weaponIdx[i]].moveId);
             int dur = inv->weapons[s->weaponIdx[i]].durability;
             char buf[96];
             const char *mark = s->give[i] ? "[x]" : "[ ]";
-            snprintf(buf, sizeof(buf), "%s  %-16s dur %-2d  %s",
-                     mark, mv->name, dur,
-                     s->broken[i] ? "(broken)" : "(still usable)");
-            // Keep broken items visually prominent so the player notices them
-            // first, but all rows are togglable now.
+            // Portrait has less horizontal room — drop the "(broken)" /
+            // "(still usable)" trailer and rely on the row tint instead.
+            if (SCREEN_PORTRAIT) {
+                snprintf(buf, sizeof(buf), "%s %-14s dur %-2d",
+                         mark, mv->name, dur);
+            } else {
+                snprintf(buf, sizeof(buf), "%s  %-16s dur %-2d  %s",
+                         mark, mv->name, dur,
+                         s->broken[i] ? "(broken)" : "(still usable)");
+            }
             Color text = s->broken[i] ? WHITE : (Color){200, 200, 200, 255};
-            DrawText(buf, x, y, 16, text);
+            DrawText(buf, x, y, rowF, text);
             y += ROW_H;
         }
 
-        // Scroll bar — only drawn when the list actually overflows. Track
-        // sits just inside the panel's right edge; thumb height reflects the
-        // visible fraction.
         if (s->entryCount > VISIBLE) {
-            int trackX = W - 80;
+            int trackX = x + rowW - 8;
             int trackY = listTop - 2;
             int trackH = VISIBLE * ROW_H;
             DrawRectangle(trackX, trackY, 4, trackH, (Color){40, 30, 15, 220});
@@ -206,8 +253,17 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
     }
 
     int total = SalvagerSelectedTotal(s);
+    int totalY  = H - margin - (SCREEN_PORTRAIT ? 80 : 70);
     DrawText(TextFormat("Hand over: %d   Fish received: %d", total, total),
-             x, H - 140, 16, gPH.ink);
-    DrawText("UP/DOWN: select   SPACE: toggle   Z/Enter: confirm   X: cancel",
-             x, H - 100, 14, gPH.inkLight);
+             x, totalY, rowF, gPH.ink);
+    if (SCREEN_PORTRAIT) {
+        int hy = H - margin - 50;
+        DrawText("UP/DOWN: select   SPACE: toggle",
+                 x, hy,                hintF, gPH.inkLight);
+        DrawText("Z/Enter: confirm   X: cancel",
+                 x, hy + hintF + 4,    hintF, gPH.inkLight);
+    } else {
+        DrawText("UP/DOWN: select   SPACE: toggle   Z/Enter: confirm   X: cancel",
+                 x, H - margin - 30, hintF, gPH.inkLight);
+    }
 }

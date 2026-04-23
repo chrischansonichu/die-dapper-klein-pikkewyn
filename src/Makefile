@@ -313,7 +313,10 @@ ifeq ($(PLATFORM),PLATFORM_WEB)
     # --preload-file resources   # specify a resources folder for data compilation
     # --source-map-base          # allow debugging in browser with source map
     # --shell-file shell.html    # define a custom shell .html and output extension
-    LDFLAGS += -sUSE_GLFW=3 -sTOTAL_MEMORY=$(BUILD_WEB_HEAP_SIZE) -sSTACK_SIZE=$(BUILD_WEB_STACK_SIZE) -sFORCE_FILESYSTEM=1 -sMINIFY_HTML=0
+    # -lidbfs.js links the IDBFS filesystem backend used by src/state/save.c
+    # to persist savegame.dat to IndexedDB (see src/minshell.html preRun).
+    # Without it, FS.mount(IDBFS, ...) is a no-op and saves vanish on reload.
+    LDFLAGS += -sUSE_GLFW=3 -sTOTAL_MEMORY=$(BUILD_WEB_HEAP_SIZE) -sSTACK_SIZE=$(BUILD_WEB_STACK_SIZE) -sFORCE_FILESYSTEM=1 -sMINIFY_HTML=0 -lidbfs.js
 
     # Build using asyncify
     ifeq ($(BUILD_WEB_ASYNCIFY),TRUE)

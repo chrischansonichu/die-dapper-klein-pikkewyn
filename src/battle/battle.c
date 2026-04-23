@@ -4,6 +4,7 @@
 #include "../data/item_defs.h"
 #include "../field/tilemap.h"
 #include "../render/paper_harbor.h"
+#include "../screen_layout.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1294,7 +1295,7 @@ static void DrawRosters(const BattleContext *ctx)
         else             activeParty = te->idx;
     }
 
-    DrawRosterPanel(ctx->enemies, ctx->enemyCount, 800 - 210 - 8, 8, activeEnemy,
+    DrawRosterPanel(ctx->enemies, ctx->enemyCount, SCREEN_W - 210 - 8, 8, activeEnemy,
                     false, NULL);
     if (ctx->party) {
         DrawRosterPanel(ctx->party->members, ctx->party->count, 8, 8, activeParty,

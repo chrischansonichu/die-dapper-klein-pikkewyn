@@ -3,25 +3,17 @@
 
 #include <stdbool.h>
 #include "../battle/party.h"
-#include "../battle/battle_grid.h"
 
 //----------------------------------------------------------------------------------
-// StatsUI - overlay for viewing party stats and setting the default battle layout.
-// Opened with C on the field. TAB switches between tabs.
+// StatsUI - overlay for viewing party stats. Opened with C on the field (or
+// the "Menu" button on the mobile virtual pad). The old LAYOUT tab was removed
+// when the grid-positioning battle system was retired; Party.preferredCell is
+// still persisted for save-format stability but is no longer user-editable.
 //----------------------------------------------------------------------------------
-
-typedef enum StatsTab {
-    STATS_TAB_STATS = 0,
-    STATS_TAB_LAYOUT,
-    STATS_TAB_COUNT,
-} StatsTab;
 
 typedef struct StatsUI {
-    bool     active;
-    StatsTab tab;
-    int      cursor;         // STATS tab: party index being inspected
-    GridPos  layoutCursor;   // LAYOUT tab: currently highlighted cell
-    int      layoutHeld;     // LAYOUT tab: party idx picked up, or -1
+    bool active;
+    int  cursor;   // party index being inspected
 } StatsUI;
 
 void StatsUIInit(StatsUI *ui);

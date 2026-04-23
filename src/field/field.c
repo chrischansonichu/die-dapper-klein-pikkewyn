@@ -1623,6 +1623,7 @@ void FieldDraw(const FieldState *ow)
         }
         int sw = GetScreenWidth(), sh = GetScreenHeight();
         int boxW = 560, boxH = 140;
+        if (boxW > sw - 40) boxW = sw - 40;
         int bx = (sw - boxW) / 2;
         int by = (sh - boxH) / 2;
         DrawRectangle(0, 0, sw, sh, gPH.dimmer);

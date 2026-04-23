@@ -1,13 +1,51 @@
 #include "dialogue.h"
 #include "../render/paper_harbor.h"
+#include "../screen_layout.h"
 #include <string.h>
 
+#if SCREEN_PORTRAIT
+    #define PANEL_H    170
+    #define PANEL_PAD  12
+    #define TEXT_SIZE  22
+#else
+    #define PANEL_H    100
+    #define PANEL_PAD  10
+    #define TEXT_SIZE  18
+#endif
 #define PANEL_X    20
-#define PANEL_Y    340
-#define PANEL_W    760
-#define PANEL_H    100
-#define PANEL_PAD  10
-#define TEXT_SIZE  18
+#define PANEL_W    (SCREEN_W - 40)
+#define PANEL_Y    (SCREEN_H - PANEL_H - 20)
+
+// Word-wrap src into dst at maxPx by inserting '\n' in place of the last space
+// that fits. Words longer than maxPx are allowed to overflow. DrawText respects
+// embedded newlines, so the typewriter substring logic works unchanged.
+static void WrapText(const char *src, char *dst, int dstCap, int maxPx, int fontSize)
+{
+    int di = 0;
+    int lineStart = 0;
+    for (int i = 0; src[i] != '\0' && di < dstCap - 2; i++) {
+        char c = src[i];
+        if (c == '\n') {
+            dst[di++] = '\n';
+            lineStart = di;
+            continue;
+        }
+        dst[di++] = c;
+        dst[di] = '\0';
+        int lineW = MeasureText(dst + lineStart, fontSize);
+        if (lineW > maxPx) {
+            int lastSpace = -1;
+            for (int k = di - 1; k > lineStart; k--) {
+                if (dst[k] == ' ') { lastSpace = k; break; }
+            }
+            if (lastSpace >= 0) {
+                dst[lastSpace] = '\n';
+                lineStart = lastSpace + 1;
+            }
+        }
+    }
+    dst[di] = '\0';
+}
 
 void DialogueBegin(DialogueBox *d, const char *pages[], int count, float charSpeed)
 {
@@ -19,9 +57,9 @@ void DialogueBegin(DialogueBox *d, const char *pages[], int count, float charSpe
     d->active       = true;
     d->finished     = false;
 
+    int wrapPx = PANEL_W - 2 * PANEL_PAD;
     for (int i = 0; i < d->pageCount; i++) {
-        strncpy(d->pages[i], pages[i], DIALOGUE_PAGE_LEN - 1);
-        d->pages[i][DIALOGUE_PAGE_LEN - 1] = '\0';
+        WrapText(pages[i], d->pages[i], DIALOGUE_PAGE_LEN, wrapPx, TEXT_SIZE);
     }
 }
 

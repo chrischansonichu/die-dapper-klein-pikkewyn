@@ -1,3 +1,8 @@
+# Local wasm build workspace — scripts/build-web.sh bootstraps emsdk + raylib
+# into this directory and writes the compiled game here. Contents are ~500MB
+# on a fresh install; none of it belongs in git.
+.cache/
+
 # Prerequisites
 *.d
 

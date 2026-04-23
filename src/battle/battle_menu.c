@@ -2,14 +2,21 @@
 #include "../data/move_defs.h"
 #include "../data/item_defs.h"
 #include "../render/paper_harbor.h"
+#include "../screen_layout.h"
 #include <string.h>
 #include <stdio.h>
 
-// Panel dimensions
+// Action-menu panel — bottom-anchored, full width. Heights tuned per build so
+// the portrait (mobile) layout gets enough vertical room for the action grid
+// and narration line without cropping.
+#if SCREEN_PORTRAIT
+    #define PANEL_H  180
+#else
+    #define PANEL_H  110
+#endif
+#define PANEL_W      SCREEN_W
 #define PANEL_X      0
-#define PANEL_Y      340
-#define PANEL_W      800
-#define PANEL_H      110
+#define PANEL_Y      (SCREEN_H - PANEL_H)
 #define PANEL_PAD    10
 
 static const char *gActionLabels[BMENU_ACTION_COUNT] = {
@@ -96,6 +103,19 @@ int BattleMenuUpdateMoveSelect(BattleMenuState *m, const Combatant *actor)
     }
     SlotToGrid(m->moveCursor, &col, &row);
 
+    // On portrait the visual grid is transposed (2 visual cols × 3 visual
+    // rows), so UP/DOWN moves between visual rows = data cols, and LEFT/RIGHT
+    // moves between visual cols = data rows.
+#if SCREEN_PORTRAIT
+    if (IsKeyPressed(KEY_UP)    || IsKeyPressed(KEY_W))
+        m->moveCursor = FindNonEmptySlot(actor, col, row, -1, 0);
+    if (IsKeyPressed(KEY_DOWN)  || IsKeyPressed(KEY_S))
+        m->moveCursor = FindNonEmptySlot(actor, col, row,  1, 0);
+    if (IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A))
+        m->moveCursor = FindNonEmptySlot(actor, col, row, 0, -1);
+    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D))
+        m->moveCursor = FindNonEmptySlot(actor, col, row, 0,  1);
+#else
     if (IsKeyPressed(KEY_UP)    || IsKeyPressed(KEY_W))
         m->moveCursor = FindNonEmptySlot(actor, col, row, 0, -1);
     if (IsKeyPressed(KEY_DOWN)  || IsKeyPressed(KEY_S))
@@ -104,6 +124,7 @@ int BattleMenuUpdateMoveSelect(BattleMenuState *m, const Combatant *actor)
         m->moveCursor = FindNonEmptySlot(actor, col, row, -1, 0);
     if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D))
         m->moveCursor = FindNonEmptySlot(actor, col, row,  1, 0);
+#endif
 
     if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_BACKSPACE)) return -2;
     if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
@@ -134,18 +155,30 @@ void BattleMenuDrawRoot(const BattleMenuState *m, bool moveDisabled)
 {
     PHDrawPanel((Rectangle){PANEL_X, PANEL_Y, PANEL_W, PANEL_H}, 0xA01);
 
+#if SCREEN_PORTRAIT
+    int btnGap = 10;
+    int btnW   = (PANEL_W - 3 * btnGap - 30) / 2;
+    int btnH   = 60;
+    int startX = (PANEL_W - (2 * btnW + btnGap)) / 2;
+    int startY = PANEL_Y + 30;
+    int rowGap = 10;
+#else
     int btnW = 140, btnH = 40, startX = 490, startY = PANEL_Y + 15;
+    int btnGap = 10, rowGap = 8;
+#endif
     for (int i = 0; i < BMENU_ACTION_COUNT; i++) {
         int col = i % 2, row = i / 2;
-        int bx = startX + col * (btnW + 10);
-        int by = startY + row * (btnH + 8);
+        int bx = startX + col * (btnW + btnGap);
+        int by = startY + row * (btnH + rowGap);
         bool dim  = (i == BMENU_MOVE && moveDisabled);
         Color bg  = (m->rootCursor == i) ? (Color){80, 100, 200, 255} : (Color){40, 40, 80, 255};
         if (dim && m->rootCursor != i) bg = (Color){30, 30, 40, 255};
         Color text = dim ? GRAY : WHITE;
         DrawRectangle(bx, by, btnW, btnH, bg);
         DrawRectangleLines(bx, by, btnW, btnH, (Color){120, 140, 220, 255});
-        DrawText(gActionLabels[i], bx + 12, by + 12, 18, text);
+        int labelSize = SCREEN_PORTRAIT ? 26 : 18;
+        int labelW = MeasureText(gActionLabels[i], labelSize);
+        DrawText(gActionLabels[i], bx + (btnW - labelW) / 2, by + (btnH - labelSize) / 2, labelSize, text);
     }
     // Arrow indicator
     DrawText(">", PANEL_X + PANEL_PAD, PANEL_Y + PANEL_PAD, 20, gPH.ink);
@@ -165,12 +198,17 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
         [MOVE_GROUP_SPECIAL]     = (Color){180, 140, 220, 255}, // violet
     };
 
-    int colW = 245, btnH = 42, colGap = 10;
+#if SCREEN_PORTRAIT
+    int colGap = 10, rowGap = 4, btnH = 42;
+    int colW = (PANEL_W - 3 * colGap) / 2;
+    int startX = colGap;
+    int startY = PANEL_Y + 10;
+#else
+    int colW = 245, btnH = 42, colGap = 10, rowGap = 4;
     int startX = 20, startY = PANEL_Y + 10;
+#endif
 
     for (int col = 0; col < 3; col++) {
-        int gx = startX + col * (colW + colGap);
-
         for (int row = 0; row < 2; row++) {
             int slot   = kGridSlot[col][row];
             int moveId = actor->moveIds[slot];
@@ -178,8 +216,14 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
             int  group   = SlotGroupOf(slot);
             Color border = kGroupBorder[group];
 
-            int bx = gx;
-            int by = startY + row * (btnH + 4);
+#if SCREEN_PORTRAIT
+            // Portrait: visual col = data row (0..1), visual row = data col (0..2)
+            int bx = startX + row * (colW + colGap);
+            int by = startY + col * (btnH + rowGap);
+#else
+            int bx = startX + col * (colW + colGap);
+            int by = startY + row * (btnH + rowGap);
+#endif
             Color bg = (m->moveCursor == slot) ? (Color){80, 100, 200, 255}
                                                 : (Color){40, 40, 80, 255};
 
@@ -237,31 +281,68 @@ void BattleMenuDrawItemSelect(const BattleMenuState *m, const Inventory *inv)
 {
     PHDrawPanel((Rectangle){PANEL_X, PANEL_Y, PANEL_W, PANEL_H}, 0xA03);
 
+    int startX = 20;
+    int startY = PANEL_Y + 10;
+    int rowW   = PANEL_W - 2 * startX;
+    int descX  = startX + (SCREEN_PORTRAIT ? (rowW - 120) : 300);
+
     if (inv->itemCount == 0) {
         DrawText("No items.", PANEL_X + PANEL_PAD + 10, PANEL_Y + PANEL_PAD + 15, 18, gPH.inkLight);
-        DrawText("X: Back", 640, PANEL_Y + PANEL_H - 22, 14, gPH.inkLight);
+        int backW = MeasureText("X: Back", 14);
+        DrawText("X: Back", PANEL_W - backW - 10, PANEL_Y + PANEL_H - 22, 14, gPH.inkLight);
         return;
     }
 
-    int rowH = 22;
-    int startX = 20;
-    int startY = PANEL_Y + 10;
+    int nameSize = SCREEN_PORTRAIT ? 20 : 16;
+    int descSize = SCREEN_PORTRAIT ? 14 : 12;
+    int hintSize = SCREEN_PORTRAIT ? 16 : 14;
+    int rowH = SCREEN_PORTRAIT ? 28 : 22;
     for (int i = 0; i < inv->itemCount && i < 4; i++) {
         const ItemDef *it = GetItemDef(inv->items[i].itemId);
         bool sel = (m->itemCursor == i);
         Color c  = sel ? (Color){80, 100, 200, 255} : (Color){30, 30, 60, 255};
-        DrawRectangle(startX - 2, startY + i * rowH - 2, 500, rowH, c);
+        DrawRectangle(startX - 2, startY + i * rowH - 2, rowW, rowH, c);
         char buf[64];
         snprintf(buf, sizeof(buf), "%-14s x%d", it->name, inv->items[i].count);
-        DrawText(buf, startX + 4, startY + i * rowH + 2, 16, WHITE);
-        DrawText(it->desc, startX + 300, startY + i * rowH + 4, 12, GRAY);
+        DrawText(buf, startX + 4, startY + i * rowH + 2, nameSize, WHITE);
+        DrawText(it->desc, descX, startY + i * rowH + 4, descSize, GRAY);
     }
-    DrawText("X: Back | Z: Use", 600, PANEL_Y + PANEL_H - 22, 14, gPH.inkLight);
+    int hintW = MeasureText("X: Back | Z: Use", hintSize);
+    DrawText("X: Back | Z: Use", PANEL_W - hintW - 10, PANEL_Y + PANEL_H - 22, hintSize, gPH.inkLight);
 }
 
 void BattleMenuDrawNarration(const char *text)
 {
     PHDrawPanel((Rectangle){PANEL_X, PANEL_Y, PANEL_W, PANEL_H}, 0xA04);
-    DrawText(text, PANEL_X + PANEL_PAD + 5, PANEL_Y + PANEL_PAD + 10, 20, gPH.ink);
-    DrawText("Z: Continue", PANEL_W - 120, PANEL_Y + PANEL_H - 22, 14, gPH.inkLight);
+
+    // Word-wrap narration into the panel width so long action descriptions
+    // (e.g. "Jan used fishinghook and cut seal's ropes") don't overflow.
+    int fontSize = SCREEN_PORTRAIT ? 24 : 20;
+    int textX    = PANEL_X + PANEL_PAD + 5;
+    int textY    = PANEL_Y + PANEL_PAD + 10;
+    int maxPx    = PANEL_W - (textX - PANEL_X) - PANEL_PAD;
+    char line[192];
+    int lineLen = 0;
+    int lastSpace = -1;
+    for (int i = 0; text[i] != '\0'; i++) {
+        if (lineLen >= (int)sizeof(line) - 2) break;
+        line[lineLen++] = text[i];
+        line[lineLen]   = '\0';
+        if (text[i] == ' ') lastSpace = lineLen - 1;
+        if (MeasureText(line, fontSize) > maxPx && lastSpace > 0) {
+            line[lastSpace] = '\0';
+            DrawText(line, textX, textY, fontSize, gPH.ink);
+            textY += fontSize + 4;
+            int rem = lineLen - lastSpace - 1;
+            memmove(line, line + lastSpace + 1, rem);
+            lineLen = rem;
+            line[lineLen] = '\0';
+            lastSpace = -1;
+        }
+    }
+    if (lineLen > 0) DrawText(line, textX, textY, fontSize, gPH.ink);
+
+    int hintSize = SCREEN_PORTRAIT ? 16 : 14;
+    int hintW = MeasureText("Z: Continue", hintSize);
+    DrawText("Z: Continue", PANEL_W - hintW - 10, PANEL_Y + PANEL_H - 22, hintSize, gPH.inkLight);
 }
