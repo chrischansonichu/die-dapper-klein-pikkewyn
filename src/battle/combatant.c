@@ -1,8 +1,12 @@
 #include "combatant.h"
+#include "party.h"
 #include "../data/armor_defs.h"
 #include "../field/tilemap.h"
 #include "raylib.h"
 #include <string.h>
+
+_Static_assert(COMBATANT_PARTY_MAX == PARTY_MAX,
+               "COMBATANT_PARTY_MAX must track PARTY_MAX in party.h");
 
 // Derive stats from base values + per-class growth at the current level.
 // Does NOT touch c->hp — callers decide whether to full-heal or preserve it.
@@ -38,6 +42,14 @@ void CombatantInit(Combatant *c, int creatureId, int level)
     c->tileY       = 0;
     c->armorItemId = -1;
     c->enraged     = false;
+    for (int i = 0; i < COMBATANT_PARTY_MAX; i++) c->damageTakenFrom[i] = 0;
+    c->moveAnim.dx       = 0.0f;
+    c->moveAnim.dy       = 0.0f;
+    c->moveAnim.startDx  = 0.0f;
+    c->moveAnim.startDy  = 0.0f;
+    c->moveAnim.timer    = 0.0f;
+    c->moveAnim.duration = 0.0f;
+    c->moveAnim.active   = false;
 
     RecomputeStats(c);
     c->hp = c->maxHp;
@@ -190,6 +202,55 @@ int CombatantHeal(Combatant *c, int amount)
     c->hp += amount;
     if (c->hp > c->maxHp) c->hp = c->maxHp;
     return c->hp - before;
+}
+
+void CombatantStartMoveAnim(Combatant *c, int prevTileX, int prevTileY,
+                            int tileSizePx, float durationSec)
+{
+    if (!c || durationSec <= 0.0f) {
+        if (c) c->moveAnim.active = false;
+        return;
+    }
+    // tileX/Y have already been snapped to the new tile; the tween draws from
+    // the old tile back to it, so the initial offset points *backwards*.
+    float sx = (float)(prevTileX - c->tileX) * (float)tileSizePx;
+    float sy = (float)(prevTileY - c->tileY) * (float)tileSizePx;
+    c->moveAnim.startDx  = sx;
+    c->moveAnim.startDy  = sy;
+    c->moveAnim.dx       = sx;
+    c->moveAnim.dy       = sy;
+    c->moveAnim.timer    = 0.0f;
+    c->moveAnim.duration = durationSec;
+    c->moveAnim.active   = true;
+}
+
+void CombatantUpdateMoveAnim(Combatant *c, float dt)
+{
+    if (!c || !c->moveAnim.active) return;
+    c->moveAnim.timer += dt;
+    float t = c->moveAnim.duration > 0.0f
+                  ? (c->moveAnim.timer / c->moveAnim.duration)
+                  : 1.0f;
+    if (t >= 1.0f) {
+        c->moveAnim.dx = 0.0f;
+        c->moveAnim.dy = 0.0f;
+        c->moveAnim.active = false;
+        return;
+    }
+    // Ease-out cubic: offset shrinks from start to 0 over the step.
+    float inv  = 1.0f - t;
+    float ease = 1.0f - inv * inv * inv;
+    c->moveAnim.dx = c->moveAnim.startDx * (1.0f - ease);
+    c->moveAnim.dy = c->moveAnim.startDy * (1.0f - ease);
+}
+
+Vector2 CombatantVisualPixelPos(const Combatant *c, int tileSizePx)
+{
+    Vector2 p = {0};
+    if (!c) return p;
+    p.x = (float)(c->tileX * tileSizePx) + c->moveAnim.dx;
+    p.y = (float)(c->tileY * tileSizePx) + c->moveAnim.dy;
+    return p;
 }
 
 void ApplyStatusMove(Combatant *targets[], int count, const MoveDef *move, bool isEnemy)

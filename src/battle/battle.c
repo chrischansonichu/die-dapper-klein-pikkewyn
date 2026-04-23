@@ -62,12 +62,17 @@ static int ApplyRangeFalloff(int dmg, const Combatant *actor,
     return reduced;
 }
 
-static Combatant *GetCurrentActor(BattleContext *ctx)
+Combatant *BattleGetCurrentActor(BattleContext *ctx)
 {
     if (ctx->currentTurn >= ctx->turnCount) return NULL;
     TurnEntry *te = &ctx->turnOrder[ctx->currentTurn];
     if (te->isEnemy) return &ctx->enemies[te->idx];
     return &ctx->party->members[te->idx];
+}
+
+static Combatant *GetCurrentActor(BattleContext *ctx)
+{
+    return BattleGetCurrentActor(ctx);
 }
 
 static bool CurrentActorIsEnemy(const BattleContext *ctx)
@@ -140,77 +145,148 @@ static bool CombatTileWalkable(const TileMap *m, const BattleContext *ctx,
 
 // ---------- AI ----------
 
-static int ChoosePartyTarget(const BattleContext *ctx)
+// Deterministic aggro-based party-target selection:
+//  1. Prefer the party member who has dealt the most damage to THIS enemy so
+//     far this battle (`enemy->damageTakenFrom[i]`).
+//  2. Tiebreak by current threat = (atk + hp): whoever is the bigger lingering
+//     problem. On the opening turn (no damage yet) this is the whole decision.
+//  3. Bound members are filtered out; if everyone is bound (or dead) we fall
+//     back to attacking anyone alive so the enemy still narrates a hit.
+// No RNG — party focus-fire is a design feature, not a bug.
+static int ChoosePartyTarget(const BattleContext *ctx, const Combatant *enemy)
 {
-    int candidates[PARTY_MAX];
-    int candCount = 0;
+    int best       = -1;
+    int bestDmg    = -1;
+    int bestThreat = -1;
     for (int i = 0; i < ctx->party->count; i++) {
         const Combatant *m = &ctx->party->members[i];
         if (!m->alive) continue;
         if (CombatantHasStatus(m, STATUS_BOUND)) continue;
-        candidates[candCount++] = i;
-    }
-    if (candCount == 0) {
-        for (int i = 0; i < ctx->party->count; i++) {
-            if (!ctx->party->members[i].alive) continue;
-            candidates[candCount++] = i;
+        int dmg    = enemy ? enemy->damageTakenFrom[i] : 0;
+        int threat = m->atk + m->hp;
+        if (dmg > bestDmg ||
+            (dmg == bestDmg && threat > bestThreat)) {
+            best = i; bestDmg = dmg; bestThreat = threat;
         }
     }
-    if (candCount == 0) return -1;
-    return candidates[GetRandomValue(0, candCount - 1)];
+    if (best >= 0) return best;
+    // All alive party members are bound — fall through to any living target
+    // (ignoring bind) so the enemy still acts instead of passing silently.
+    for (int i = 0; i < ctx->party->count; i++) {
+        const Combatant *m = &ctx->party->members[i];
+        if (!m->alive) continue;
+        int threat = m->atk + m->hp;
+        if (threat > bestThreat) { best = i; bestThreat = threat; }
+    }
+    return best;
 }
 
-// Step the enemy one tile toward `target`, preferring the axis with the
-// greater delta. Blocked directions fall through to the other axis.
+// BFS scratch clamp: we never flood more than this many tiles in each
+// direction from the actor. Dungeons are finite and small; a 24-tile
+// radius covers every playable floor with room to spare and keeps the
+// queue bounded to a few hundred cells.
+#define AI_BFS_RADIUS 24
+#define AI_BFS_DIAM   (AI_BFS_RADIUS * 2 + 1)
+
+// Returns the first-step tile toward `goal`, or the actor's own tile if no
+// path exists within the clamp. `goal` is treated as walkable even when
+// occupied (so the path can end adjacent to the target); every other tile
+// uses CombatTileWalkable for passability.
+//
+// BFS over a (2*radius+1)^2 window centred on the actor. Parent-pointer
+// reconstruction walks backwards from goal to actor and returns the tile
+// one step off actor's current cell.
+static TilePos BFSNextStep(const TileMap *m, const BattleContext *ctx,
+                           const Combatant *actor, TilePos goal)
+{
+    TilePos fallback = { actor->tileX, actor->tileY };
+    if (actor->tileX == goal.x && actor->tileY == goal.y) return fallback;
+
+    int originX = actor->tileX - AI_BFS_RADIUS;
+    int originY = actor->tileY - AI_BFS_RADIUS;
+
+    static int  parent[AI_BFS_DIAM * AI_BFS_DIAM];
+    static bool visited[AI_BFS_DIAM * AI_BFS_DIAM];
+    for (int i = 0; i < AI_BFS_DIAM * AI_BFS_DIAM; i++) { parent[i] = -1; visited[i] = false; }
+
+    // Ring queue sized to the window — worst case the whole window is
+    // reachable so that's the upper bound.
+    static int queue[AI_BFS_DIAM * AI_BFS_DIAM];
+    int qHead = 0, qTail = 0;
+
+    int startLocalX = actor->tileX - originX;
+    int startLocalY = actor->tileY - originY;
+    int startIdx = startLocalY * AI_BFS_DIAM + startLocalX;
+    visited[startIdx] = true;
+    queue[qTail++] = startIdx;
+
+    int goalIdx = -1;
+    int goalLocalX = goal.x - originX;
+    int goalLocalY = goal.y - originY;
+    bool goalInWindow = (goalLocalX >= 0 && goalLocalX < AI_BFS_DIAM &&
+                         goalLocalY >= 0 && goalLocalY < AI_BFS_DIAM);
+
+    static const int ndx[4] = { 1, -1, 0, 0 };
+    static const int ndy[4] = { 0, 0, 1, -1 };
+
+    while (qHead < qTail && goalIdx < 0) {
+        int cur = queue[qHead++];
+        int cx  = cur % AI_BFS_DIAM;
+        int cy  = cur / AI_BFS_DIAM;
+        int worldX = originX + cx;
+        int worldY = originY + cy;
+        if (worldX == goal.x && worldY == goal.y) { goalIdx = cur; break; }
+
+        for (int d = 0; d < 4; d++) {
+            int nlx = cx + ndx[d];
+            int nly = cy + ndy[d];
+            if (nlx < 0 || nly < 0 || nlx >= AI_BFS_DIAM || nly >= AI_BFS_DIAM) continue;
+            int nIdx = nly * AI_BFS_DIAM + nlx;
+            if (visited[nIdx]) continue;
+            int nwx = originX + nlx;
+            int nwy = originY + nly;
+            bool isGoal = (nwx == goal.x && nwy == goal.y);
+            // Goal cell is treated as passable even if a combatant stands there;
+            // every other cell must clear the normal combat-walkable predicate.
+            if (!isGoal && !CombatTileWalkable(m, ctx, actor, nwx, nwy)) continue;
+            visited[nIdx] = true;
+            parent[nIdx]  = cur;
+            queue[qTail++] = nIdx;
+            if (isGoal) { goalIdx = nIdx; break; }
+        }
+    }
+
+    if (goalIdx < 0 || !goalInWindow) return fallback;
+
+    // Walk back from goal to the cell whose parent is the start — that's the
+    // first step. If the goal is the start's neighbour, this loop runs once.
+    int cur = goalIdx;
+    while (parent[cur] != startIdx && parent[cur] != -1) cur = parent[cur];
+    if (parent[cur] == -1) return fallback; // unreachable
+
+    int firstLocalX = cur % AI_BFS_DIAM;
+    int firstLocalY = cur / AI_BFS_DIAM;
+    TilePos next = { originX + firstLocalX, originY + firstLocalY };
+    return next;
+}
+
+// Step the enemy one tile toward `target` using BFS so walls/alcoves don't
+// trap the AI. Falls back to no-op when no path exists within the clamp.
 static void AIStepToward(BattleContext *ctx, const TileMap *m, Combatant *actor,
                          TilePos target)
 {
-    int dx = target.x - actor->tileX;
-    int dy = target.y - actor->tileY;
-    int sx = dx > 0 ? 1 : (dx < 0 ? -1 : 0);
-    int sy = dy > 0 ? 1 : (dy < 0 ? -1 : 0);
-
-    bool horizFirst = abs(dx) >= abs(dy);
-    for (int pass = 0; pass < 2; pass++) {
-        bool tryHoriz = (pass == 0) == horizFirst;
-        if (tryHoriz && sx != 0 &&
-            CombatTileWalkable(m, ctx, actor, actor->tileX + sx, actor->tileY)) {
-            actor->tileX += sx;
-            return;
-        }
-        if (!tryHoriz && sy != 0 &&
-            CombatTileWalkable(m, ctx, actor, actor->tileX, actor->tileY + sy)) {
-            actor->tileY += sy;
-            return;
-        }
-    }
+    TilePos next = BFSNextStep(m, ctx, actor, target);
+    if (next.x == actor->tileX && next.y == actor->tileY) return;
+    actor->tileX = next.x;
+    actor->tileY = next.y;
 }
 
-static void AITakeTurn(BattleContext *ctx, const TileMap *m)
+// Pick the highest-power reachable move for `actor` against the currently
+// locked party target. Returns the slot index or -1 for "pass". Called after
+// the enemy finishes moving — reach is tested from the post-move tile.
+static int AIPickBestMove(const BattleContext *ctx, const TileMap *m,
+                          const Combatant *actor, int targetPartyIdx)
 {
-    int idx = CurrentActorIdx(ctx);
-    Combatant *actor = &ctx->enemies[idx];
-
-    int targetPartyIdx = ChoosePartyTarget(ctx);
-    ctx->targetEnemyIdx = targetPartyIdx;
-    TilePos target = (TilePos){ actor->tileX, actor->tileY };
-    if (targetPartyIdx >= 0) {
-        target = TileOf(&ctx->party->members[targetPartyIdx]);
-        ctx->targetTile = target;
-    }
-
-    // Walk toward target, budget steps per turn.
-    int budget = CombatantMoveBudget(actor, m);
-    for (int s = 0; s < budget; s++) {
-        if (actor->tileX == target.x && actor->tileY == target.y) break;
-        int before = actor->tileX * 10000 + actor->tileY;
-        AIStepToward(ctx, m, actor, target);
-        int after  = actor->tileX * 10000 + actor->tileY;
-        if (before == after) break; // fully blocked
-    }
-
-    // Pick the highest-power reachable move. If nothing can reach, pass the
-    // turn — ExecuteAction treats selectedMove < 0 as a pass and narrates it.
     int bestMove = -1;
     int bestPow  = -1;
     for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
@@ -223,7 +299,29 @@ static void AITakeTurn(BattleContext *ctx, const TileMap *m)
         }
         if (mv->power > bestPow) { bestPow = mv->power; bestMove = i; }
     }
-    ctx->selectedMove = bestMove;
+    return bestMove;
+}
+
+// Plan the enemy's turn: pick target, seed move-budget, stash goal. Actual
+// stepping happens in BS_ENEMY_MOVING so each step plays one tween before
+// the next is taken. selectedMove is chosen *after* movement finishes, since
+// reach depends on final position.
+static void AITakeTurn(BattleContext *ctx, const TileMap *m)
+{
+    int idx = CurrentActorIdx(ctx);
+    Combatant *actor = &ctx->enemies[idx];
+
+    int targetPartyIdx = ChoosePartyTarget(ctx, actor);
+    ctx->targetEnemyIdx = targetPartyIdx;
+    TilePos goal = (TilePos){ actor->tileX, actor->tileY };
+    if (targetPartyIdx >= 0) {
+        goal = TileOf(&ctx->party->members[targetPartyIdx]);
+        ctx->targetTile = goal;
+    }
+
+    ctx->enemyMoveGoal       = goal;
+    ctx->enemyStepsRemaining = CombatantMoveBudget(actor, m);
+    (void)m;
 }
 
 // ---------- Move select + target select ----------
@@ -459,13 +557,24 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
         if (dmg < 1) dmg = 1;
     }
     target->hp -= dmg;
+    // Aggro bookkeeping: a party member hitting an enemy contributes to that
+    // enemy's per-party-index threat tally. ChoosePartyTarget reads this on
+    // the enemy's next turn to pick whoever's been hurting it most.
+    if (!actorIsEn && targetIsEnemy && te->idx >= 0 && te->idx < PARTY_MAX) {
+        target->damageTakenFrom[te->idx] += dmg;
+    }
     ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
     bool enraged = TryEnrage(target);
 
     if (target->hp <= 0) {
         target->hp    = 0;
         target->alive = false;
-        BattleAnimPlay(&ctx->anim, BANIM_FAINT, targetIsEnemy, targetIdx);
+        // Play the attacker's swing / projectile / ring, then chain the faint
+        // slide so the killing blow gets the same visual as a non-lethal hit
+        // (previously the faint cut the attack overlay entirely).
+        PlayAttackAnimFor(ctx, mv, actor, actorIsEn, te->idx,
+                          target, targetIsEnemy, targetIdx);
+        BattleAnimQueueFaint(&ctx->anim, targetIsEnemy, targetIdx);
         if (friendly)
             snprintf(ctx->narration, NARRATION_LEN,
                      "%s used %s on %s?! %d dmg - %s fainted!",
@@ -534,6 +643,7 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                                    :  targetSideIsEnemyOfActor;
         bool hostileAoe = targetSideIsEnemyOfActor;
         int totalDmg = 0, hits = 0, misses = 0, lastIdx = -1;
+        bool lastKilled = false;
         Combatant *enragedTarget = NULL;
         if (targetOnEnemyGrid) {
             for (int i = 0; i < ctx->enemyCount; i++) {
@@ -542,7 +652,10 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 if (hostileAoe && !RollHit(actor, t)) { misses++; continue; }
                 int dmg = CalculateDamage(actor, t, mv);
                 t->hp -= dmg;
-                totalDmg += dmg; hits++; lastIdx = i;
+                if (!te->isEnemy && te->idx >= 0 && te->idx < PARTY_MAX) {
+                    t->damageTakenFrom[te->idx] += dmg;
+                }
+                totalDmg += dmg; hits++; lastIdx = i; lastKilled = (t->hp <= 0);
                 if (!enragedTarget && TryEnrage(t)) enragedTarget = t;
                 if (t->hp <= 0) { t->hp = 0; t->alive = false; }
             }
@@ -553,7 +666,7 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 if (hostileAoe && !RollHit(actor, t)) { misses++; continue; }
                 int dmg = CalculateDamage(actor, t, mv);
                 t->hp -= dmg;
-                totalDmg += dmg; hits++; lastIdx = i;
+                totalDmg += dmg; hits++; lastIdx = i; lastKilled = (t->hp <= 0);
                 if (!enragedTarget && TryEnrage(t)) enragedTarget = t;
                 if (t->hp <= 0) { t->hp = 0; t->alive = false; }
             }
@@ -564,6 +677,11 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 : &ctx->party->members[lastIdx];
             PlayAttackAnimFor(ctx, mv, actor, te->isEnemy, te->idx,
                               sample, targetOnEnemyGrid, lastIdx);
+            // Single-slot anim: if the last hit target died, chain a faint on
+            // that one so the AOE still visibly drops someone. Multi-kill
+            // AOEs sadly collapse to one visible faint — acceptable tradeoff.
+            if (lastKilled)
+                BattleAnimQueueFaint(&ctx->anim, targetOnEnemyGrid, lastIdx);
         } else if (misses > 0) {
             // Everyone dodged — still play the anim on any live target so the
             // whiff reads visually, with the miss flag set.
@@ -663,14 +781,23 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
             int dmg = CalculateDamage(jan, target, mv);
             dmg = ApplyRangeFalloff(dmg, jan, target, mv);
             target->hp -= dmg;
+            // Jan is party slot 0 by construction — the sneak opens the aggro
+            // ledger on the enemy that was ambushed.
+            target->damageTakenFrom[0] += dmg;
             // Consumable-weapon durability is spent on the sneak too, matching
             // how the regular FIGHT path treats weapon use.
             ConsumePlayerWeapon(jan, slot, &party->inventory);
             bool enraged = TryEnrage(target);
             const char *verb = (mv->range == RANGE_RANGED) ? "sniped" : "ambushed";
+            // Kick off the attack overlay so the sneak reads visually, not
+            // just as a wall of text on the preemptive narration panel.
+            // Party slot 0 (Jan) is always the sneak attacker.
+            PlayAttackAnimFor(ctx, mv, jan, false, 0,
+                              target, true, targetIdx);
             if (target->hp <= 0) {
                 target->hp    = 0;
                 target->alive = false;
+                BattleAnimQueueFaint(&ctx->anim, true, targetIdx);
                 snprintf(ctx->narration, NARRATION_LEN,
                          "Surprise %s! %s's %s dealt %d and took down %s!",
                          verb, jan->name, mv->name, dmg, target->name);
@@ -692,6 +819,15 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
     ctx->map = map;
 
     BattleAnimUpdate(&ctx->anim, dt);
+
+    // Advance per-combatant move tweens for everyone on the board. Keeping
+    // this before the state machine means BS_MOVE_PHASE / BS_ENEMY_MOVING see
+    // completed tweens this frame instead of next, so input doesn't eat one
+    // extra frame of latency.
+    for (int i = 0; i < ctx->party->count; i++)
+        CombatantUpdateMoveAnim(&ctx->party->members[i], dt);
+    for (int i = 0; i < ctx->enemyCount; i++)
+        CombatantUpdateMoveAnim(&ctx->enemies[i], dt);
 
     for (int i = 0; i < PARTY_MAX; i++) {
         if (ctx->levelUpFlashT[i] > 0.0f) {
@@ -726,7 +862,7 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
 
         if (te->isEnemy) {
             AITakeTurn(ctx, map);
-            ctx->state = BS_EXECUTE;
+            ctx->state = BS_ENEMY_MOVING;
         } else {
             // Player starts the turn in the action menu. If they want to
             // reposition, they pick MOVE (which spends a movement budget).
@@ -746,28 +882,84 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map, float dt)
         Combatant *actor = GetCurrentActor(ctx);
         if (!actor) { ctx->state = BS_ACTION_MENU; break; }
 
-        int dx = 0, dy = 0;
-        if (IsKeyPressed(KEY_UP)    || IsKeyPressed(KEY_W)) dy = -1;
-        else if (IsKeyPressed(KEY_DOWN)  || IsKeyPressed(KEY_S)) dy = 1;
-        else if (IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A)) dx = -1;
-        else if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) dx = 1;
+        // Block direction input while the current step is still tweening,
+        // so each slide plays to completion. Back-out keys still work so
+        // the player isn't locked mid-slide.
+        if (!actor->moveAnim.active) {
+            int dx = 0, dy = 0;
+            if (IsKeyPressed(KEY_UP)    || IsKeyPressed(KEY_W)) dy = -1;
+            else if (IsKeyPressed(KEY_DOWN)  || IsKeyPressed(KEY_S)) dy = 1;
+            else if (IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A)) dx = -1;
+            else if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) dx = 1;
 
-        if ((dx != 0 || dy != 0) && ctx->moveBudget > 0) {
-            int nx = actor->tileX + dx;
-            int ny = actor->tileY + dy;
-            if (CombatTileWalkable(map, ctx, actor, nx, ny)) {
-                actor->tileX = nx;
-                actor->tileY = ny;
-                ctx->moveBudget--;
+            if ((dx != 0 || dy != 0) && ctx->moveBudget > 0) {
+                int nx = actor->tileX + dx;
+                int ny = actor->tileY + dy;
+                if (CombatTileWalkable(map, ctx, actor, nx, ny)) {
+                    int prevX = actor->tileX;
+                    int prevY = actor->tileY;
+                    actor->tileX = nx;
+                    actor->tileY = ny;
+                    CombatantStartMoveAnim(actor, prevX, prevY,
+                                           TILE_SIZE * TILE_SCALE,
+                                           BATTLE_MOVE_ANIM_DUR);
+                    ctx->moveBudget--;
+                }
             }
         }
 
         if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_BACKSPACE) ||
             IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
-            ctx->moveBudget <= 0) {
-            ctx->movedThisTurn = true;
-            ctx->state         = BS_ACTION_MENU;
+            (ctx->moveBudget <= 0 && !actor->moveAnim.active)) {
+            // Don't exit mid-slide — let the last step finish first so the
+            // hand-off to the menu camera isn't a visual snap.
+            if (!actor->moveAnim.active) {
+                ctx->movedThisTurn = true;
+                ctx->state         = BS_ACTION_MENU;
+            }
         }
+        break;
+    }
+
+    case BS_ENEMY_MOVING: {
+        Combatant *actor = GetCurrentActor(ctx);
+        if (!actor) { ctx->state = BS_EXECUTE; break; }
+        // Wait for the previous step's slide to finish before taking the next.
+        if (actor->moveAnim.active) break;
+
+        // Reached the target or ran out of budget → stop moving and pick a
+        // move. Stop at Chebyshev ≤ 1 (cardinal or diagonal adjacency) so the
+        // enemy halts *next to* the target instead of walking onto it — the
+        // BFS treats the goal tile as passable so it can build a path there,
+        // which means a cardinally-adjacent actor's "first step toward goal"
+        // is the goal tile itself. Adjacency satisfies melee reach (Chebyshev
+        // 1) and still puts ranged attackers well within RANGED range.
+        int dxg = actor->tileX - ctx->enemyMoveGoal.x;
+        int dyg = actor->tileY - ctx->enemyMoveGoal.y;
+        if (dxg < 0) dxg = -dxg;
+        if (dyg < 0) dyg = -dyg;
+        int chebG = (dxg > dyg) ? dxg : dyg;
+        bool atGoal = (chebG <= 1);
+        if (atGoal || ctx->enemyStepsRemaining <= 0) {
+            ctx->selectedMove = AIPickBestMove(ctx, map, actor, ctx->targetEnemyIdx);
+            ctx->state = BS_EXECUTE;
+            break;
+        }
+
+        int prevX = actor->tileX;
+        int prevY = actor->tileY;
+        AIStepToward(ctx, map, actor, ctx->enemyMoveGoal);
+        if (actor->tileX == prevX && actor->tileY == prevY) {
+            // Fully blocked this turn — no path found. Bail out and act from
+            // the current tile (will likely "pass" since no move reaches).
+            ctx->selectedMove = AIPickBestMove(ctx, map, actor, ctx->targetEnemyIdx);
+            ctx->state = BS_EXECUTE;
+            break;
+        }
+        CombatantStartMoveAnim(actor, prevX, prevY,
+                               TILE_SIZE * TILE_SCALE,
+                               BATTLE_MOVE_ANIM_DUR);
+        ctx->enemyStepsRemaining--;
         break;
     }
 

@@ -48,6 +48,13 @@ typedef struct BattleAnim {
     // slash past the target / lets projectiles fly through / dims specials,
     // and skips the white impact flash.
     bool           missed;
+    // When set on an active BANIM_HIT, BattleAnimUpdate chains a BANIM_FAINT
+    // on completion. Lets the attack overlay finish playing before the
+    // target slides down on a killing blow, instead of cutting to the faint
+    // (current behavior: no attack anim is drawn at all when hp reaches 0).
+    bool           pendingFaint;
+    bool           pendingFaintIsEnemy;
+    int            pendingFaintIdx;
 
     // Attack overlay data — filled by BattleAnimPlayAttack. World tile coords
     // are snapshotted so a mid-anim move (shouldn't happen, but safe) can't
@@ -84,6 +91,10 @@ void BattleAnimMarkRopeCut(BattleAnim *a);
 // Flag the current hit as a miss. Caller invokes this after the attack-play
 // call. Cleared automatically on the next BattleAnimPlay.
 void BattleAnimMarkMiss(BattleAnim *a);
+// Queue a BANIM_FAINT to kick off when the current BANIM_HIT finishes.
+// Used on killing blows: the attacker's swing/projectile plays first, then
+// the target slides down + fades. Cleared automatically on BattleAnimPlay.
+void BattleAnimQueueFaint(BattleAnim *a, bool isEnemy, int idx);
 void BattleAnimUpdate(BattleAnim *a, float dt);
 bool BattleAnimDone(const BattleAnim *a);
 // Apply shake offset to a draw position

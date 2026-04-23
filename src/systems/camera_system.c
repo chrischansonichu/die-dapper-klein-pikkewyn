@@ -1,5 +1,7 @@
 #include "camera_system.h"
 
+#include <math.h>
+
 Camera2D CameraCreate(Vector2 target, int mapPixW, int mapPixH)
 {
     Camera2D cam = {0};
@@ -60,4 +62,25 @@ void CameraUpdate(Camera2D *cam, Vector2 target, int mapPixW, int mapPixH)
     }
     cam->target.x = (float)snapX;
     cam->target.y = (float)snapY;
+}
+
+void CameraUpdateSmoothed(Camera2D *cam, Vector2 target,
+                          int mapPixW, int mapPixH,
+                          float smoothness, float dt)
+{
+    // Exponential ease toward `target`. Framerate-independent: at any dt, the
+    // remaining distance shrinks by the same fraction per unit time.
+    if (smoothness <= 0.0f || dt <= 0.0f) {
+        CameraUpdate(cam, target, mapPixW, mapPixH);
+        return;
+    }
+    float alpha = 1.0f - expf(-dt / smoothness);
+    if (alpha < 0.0f) alpha = 0.0f;
+    if (alpha > 1.0f) alpha = 1.0f;
+
+    Vector2 eased = {
+        cam->target.x + (target.x - cam->target.x) * alpha,
+        cam->target.y + (target.y - cam->target.y) * alpha,
+    };
+    CameraUpdate(cam, eased, mapPixW, mapPixH);
 }

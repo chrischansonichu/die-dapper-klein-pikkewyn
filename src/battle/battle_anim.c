@@ -18,6 +18,9 @@ void BattleAnimPlay(BattleAnim *a, BattleAnimType type, bool isEnemy, int idx)
     a->actorSlideX   = 0.0f;
     a->ropeCut       = false;
     a->missed        = false;
+    a->pendingFaint  = false;
+    a->pendingFaintIsEnemy = false;
+    a->pendingFaintIdx     = -1;
     a->attackKind    = BATK_NONE;
     a->actorTileX    = 0;
     a->actorTileY    = 0;
@@ -54,6 +57,13 @@ void BattleAnimMarkRopeCut(BattleAnim *a)
 void BattleAnimMarkMiss(BattleAnim *a)
 {
     a->missed = true;
+}
+
+void BattleAnimQueueFaint(BattleAnim *a, bool isEnemy, int idx)
+{
+    a->pendingFaint        = true;
+    a->pendingFaintIsEnemy = isEnemy;
+    a->pendingFaintIdx     = idx;
 }
 
 void BattleAnimPlayAttack(BattleAnim *a,
@@ -105,8 +115,18 @@ void BattleAnimUpdate(BattleAnim *a, float dt)
     }
 
     if (a->timer >= a->duration) {
+        // Chain into a queued faint on a killing blow so the attack overlay
+        // gets to finish before the target slides down. pendingFaint is only
+        // respected when the finishing anim was the hit; for any other type
+        // we just end the anim as before.
+        bool chain = a->pendingFaint && a->type == BANIM_HIT;
+        bool faintIsEnemy = a->pendingFaintIsEnemy;
+        int  faintIdx     = a->pendingFaintIdx;
         a->active = false;
         a->shakeOffset = (Vector2){0, 0};
+        if (chain) {
+            BattleAnimPlay(a, BANIM_FAINT, faintIsEnemy, faintIdx);
+        }
     }
 }
 

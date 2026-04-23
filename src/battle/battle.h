@@ -18,10 +18,16 @@
 #define BATTLE_MAX_ENEMIES 4
 #define NARRATION_LEN      256
 
+// Duration of a single tile-step slide animation. Tuned so a 3-step move
+// reads as "watch the enemy advance" rather than "wait through a cutscene."
+// Drop if players tap through; raise if it feels like snapping.
+#define BATTLE_MOVE_ANIM_DUR 0.28f
+
 typedef enum BattleState {
     BS_PREEMPTIVE_NARRATION,
     BS_TURN_START,
     BS_MOVE_PHASE,     // actor steps 1 tile at a time, arrow keys, X commits
+    BS_ENEMY_MOVING,   // enemy consuming its movement budget one tile at a time, gated by moveAnim
     BS_ACTION_MENU,    // root menu: FIGHT / ITEM / MOVE / PASS
     BS_MOVE_SELECT,    // pick a move slot
     BS_ITEM_SELECT,    // pick an inventory consumable
@@ -92,6 +98,12 @@ typedef struct BattleContext {
     // bleed across actors when the turn order switches. Updated on every
     // successful TrySelectMove; restored when a player's turn begins.
     int   partyMoveCursor[PARTY_MAX];
+
+    // BS_ENEMY_MOVING scratch. The state machine consumes one tile per tween
+    // completion so the camera can follow the enemy step-by-step; these hold
+    // the per-turn budget + target.
+    int     enemyStepsRemaining;
+    TilePos enemyMoveGoal;
 } BattleContext;
 
 // Compute the per-turn movement budget from a combatant's effective speed
@@ -101,6 +113,11 @@ typedef struct BattleContext {
 // Jan at SPD 4 → 2. Seal with pinniped growth hits 3 at level 3. Put here so
 // future tuning lives in one place.
 int  CombatantMoveBudget(const Combatant *c, const struct TileMap *map);
+
+// Current actor on the turn order, or NULL if the battle is between rounds.
+// Used by field-camera code and by any external subsystem that needs to know
+// who is acting right now (e.g. to re-center the camera on an enemy's turn).
+Combatant *BattleGetCurrentActor(BattleContext *ctx);
 
 // Begin the fight — caller has already populated ctx->enemies[], ctx->enemyCount,
 // ctx->enemyFieldIdx[], and seeded tileX/tileY on every participating combatant.

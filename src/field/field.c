@@ -1109,7 +1109,22 @@ void FieldUpdate(FieldState *ow, float dt)
 
         int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;
         int mapPixH = ow->map.height * TILE_SIZE * TILE_SCALE;
-        CameraUpdate(&ow->camera, PlayerPixelPos(&ow->player), mapPixW, mapPixH);
+        // Follow whoever is currently acting so the player can see an enemy's
+        // turn unfold. Off-turn frames (between rounds, narration, etc.)
+        // anchor back on Jan so the camera doesn't hover on a dead enemy tile.
+        Combatant *actor = BattleGetCurrentActor(&ow->battle);
+        int tp = TILE_SIZE * TILE_SCALE;
+        Vector2 camTarget = (actor && actor->alive)
+            ? CombatantVisualPixelPos(actor, tp)
+            : PlayerPixelPos(&ow->player);
+        // Nudge the camera target to tile-center so rosters/panels frame the
+        // actor, not their top-left corner.
+        camTarget.x += tp * 0.5f;
+        camTarget.y += tp * 0.5f;
+        // Smoothed follow so the camera pans between actors on turn change
+        // instead of snapping; 0.18s time-constant feels responsive without
+        // getting whiplashy across a full enemy turn.
+        CameraUpdateSmoothed(&ow->camera, camTarget, mapPixW, mapPixH, 0.18f, dt);
 
         int result = BattleFinished(&ow->battle);
         if (result != 0) ResolveBattleEnd(ow, result);

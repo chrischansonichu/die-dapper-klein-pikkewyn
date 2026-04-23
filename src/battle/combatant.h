@@ -2,8 +2,17 @@
 #define COMBATANT_H
 
 #include <stdbool.h>
+#include "raylib.h"  // Vector2 (used by the move-tween visual-pos helper)
 #include "../data/creature_defs.h"
 #include "../data/move_defs.h"
+
+// Max party slots the aggro table has to hold. This mirrors PARTY_MAX in
+// party.h; redeclared here so combatant.h doesn't have to include party.h
+// (party.h already includes combatant.h, a static assert in combatant.c
+// keeps them in lockstep).
+#ifndef COMBATANT_PARTY_MAX
+#define COMBATANT_PARTY_MAX 4
+#endif
 
 //----------------------------------------------------------------------------------
 // Combatant - runtime instance of a creature (player or enemy)
@@ -55,6 +64,22 @@ typedef struct Combatant {
     // CreatureDef set this to true when HP first crosses 50%; once set, it
     // prevents retriggering.
     bool  enraged;
+    // Per-party-slot cumulative damage dealt to this combatant during the
+    // current battle. Enemy AI uses this to focus the party member who has
+    // hit hardest. Zeroed in CombatantInit so fresh battles start clean.
+    int   damageTakenFrom[COMBATANT_PARTY_MAX];
+    // Per-combatant tile-step tween. When a combatant moves one tile, tileX/Y
+    // snap to the new position *now* (game logic stays integer-grid), and the
+    // tween animates the visual offset from the previous tile back to zero.
+    // Draw code uses CombatantVisualPixelPos to read the interpolated world
+    // position; the state machine blocks the next step on `active`.
+    struct {
+        float dx, dy;        // current pixel offset from the snapped tile
+        float startDx, startDy; // initial offset at the start of this step
+        float timer;         // 0..duration, advanced by dt
+        float duration;      // seconds for the step to complete
+        bool  active;
+    } moveAnim;
 } Combatant;
 
 static inline bool CombatantHasStatus(const Combatant *c, CombatantStatus s) {
@@ -104,5 +129,22 @@ int  CombatantHeal(Combatant *c, int amount);
 // in which case the base spd is returned unchanged.
 struct TileMap;
 int  CombatantEffectiveSpeed(const Combatant *c, const struct TileMap *map);
+
+// Kick off a one-tile step tween. `prevTileX/Y` are the tile the combatant
+// *was* on before the caller snaps tileX/Y to the new tile — the tween's
+// starting offset is (prev - new) * tileSizePx so draw code can show the
+// combatant sliding from its previous cell into its new one. `durationSec`
+// is the per-step animation duration (see BATTLE_MOVE_ANIM_DUR).
+void CombatantStartMoveAnim(Combatant *c, int prevTileX, int prevTileY,
+                            int tileSizePx, float durationSec);
+
+// Advance a running move tween by dt. No-op when inactive. Applies ease-out
+// cubic so steps arrive decisively.
+void CombatantUpdateMoveAnim(Combatant *c, float dt);
+
+// World-space pixel position of the combatant accounting for the tween. Use
+// this in draw code and for camera targeting so the view follows the visible
+// slide, not the snapped tile.
+Vector2 CombatantVisualPixelPos(const Combatant *c, int tileSizePx);
 
 #endif // COMBATANT_H
