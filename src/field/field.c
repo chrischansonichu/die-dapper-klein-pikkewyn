@@ -1,4 +1,5 @@
 #include "field.h"
+#include "buildings.h"
 #include "enemy_sprites.h"
 #include "map_source.h"
 #include "village.h"
@@ -1528,6 +1529,47 @@ void FieldDraw(const FieldState *ow)
 
     BeginMode2D(ow->camera);
         DrawWarpMarkers(ow);
+
+        // Village: paint the row of Muizenberg-style beach huts over the
+        // building footprints (each is a 3x3 grass+SOLID block in the
+        // tilemap). Drawn before NPCs so penguins walking past sit in
+        // front of the doors. Each hut gets a distinct body / door / roof
+        // palette so the village reads as the postcard row.
+        if (ow->gs && ow->gs->currentMapId == MAP_OVERWORLD_HUB) {
+            const float tp = (float)(TILE_SIZE * TILE_SCALE);
+            // Sun-bleached Muizenberg palette — saturation dialled back so
+            // the huts sit in the same muted parchment/grass-green family
+            // as the rest of the world, then wobbled outlines via
+            // PHWobbleLine in DrawBeachHut finish the hand-drawn feel.
+            struct {
+                int tx, ty;          // top-left tile of 3x3 footprint
+                Color body, door, roof;
+                int seed;
+            } huts[] = {
+                // Keeper's House — faded terracotta + dusty cornflower door
+                { 2,  2, (Color){200, 110,  95, 255},
+                         (Color){110, 140, 175, 255},
+                         (Color){195, 105,  90, 255},  0x1301 },
+                // Salvager — pale mustard + muted brick door
+                {18,  4, (Color){220, 185, 115, 255},
+                         (Color){185, 110, 100, 255},
+                         (Color){215, 180, 110, 255},  0x1302 },
+                // Blacksmith — dusty teal + faded mustard door
+                { 3,  9, (Color){120, 155, 180, 255},
+                         (Color){215, 185, 110, 255},
+                         (Color){115, 150, 175, 255},  0x1303 },
+                // Food Bank — sage green + muted brick door
+                {15, 10, (Color){140, 175, 130, 255},
+                         (Color){185, 110, 100, 255},
+                         (Color){135, 170, 125, 255},  0x1304 },
+            };
+            for (size_t i = 0; i < sizeof(huts) / sizeof(huts[0]); i++) {
+                Rectangle r = { huts[i].tx * tp, huts[i].ty * tp,
+                                3 * tp, 3 * tp };
+                DrawBeachHut(r, huts[i].body, huts[i].door, huts[i].roof,
+                             huts[i].seed);
+            }
+        }
 
         for (int i = 0; i < ow->enemyCount; i++)
             EnemyDraw(&ow->enemies[i]);

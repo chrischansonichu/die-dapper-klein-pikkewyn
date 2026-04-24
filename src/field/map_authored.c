@@ -186,45 +186,47 @@ static void AddHubNpcs(MapBuildContext *ctx)
     // sets up here and takes broken gear off anyone passing through so the
     // scrap doesn't make its way back out into the water.
 
-    // Village elder on the plaza. Dialogue is baked (no gate logic) since the
-    // hub has no enemies for AllEnemiesDefeated-style triggers.
+    // Village elder on the plaza, near the south-gate path so visitors
+    // arriving from the harbor meet him first.
     Npc *elder = &ctx->npcs[(*ctx->npcCount)++];
     NpcInit(elder, 11, 9, 3, NPC_PENGUIN_ELDER);
     NpcAddDialogue(elder, "Welcome to the village, Jan.");
     NpcAddDialogue(elder, "The sailors have moved up the coast. The harbor is through the south gate.");
     NpcAddDialogue(elder, "Rest here whenever you need to. You'll always find your way back.");
 
-    // The Keeper — hub barter NPC. His dialogue is built on-the-fly in
-    // KeeperInteract based on the current quest + Jan's level, so we don't
-    // pre-populate any static pages here.
-    Npc *keeper = &ctx->npcs[(*ctx->npcCount)++];
-    NpcInit(keeper, 14, 11, 2, NPC_KEEPER);
+    // Each shopkeeper stands one tile in front of their hut door (the
+    // bottom-centre of the 3x3 footprint), facing up so the player walks
+    // to them along the sand path. Dir 3 = facing up (towards the door).
 
-    // Food bank — accepts food donations for village reputation.
+    // Keeper (quest-giver) — red hut, top-left. Dialogue built on-the-fly
+    // by KeeperInteract.
+    Npc *keeper = &ctx->npcs[(*ctx->npcCount)++];
+    NpcInit(keeper, 3, 5, 3, NPC_KEEPER);
+
+    // Food bank — green hut, east side.
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *bank = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(bank, 9, 11, 2, NPC_FOOD_BANK);
+        NpcInit(bank, 16, 13, 3, NPC_FOOD_BANK);
     }
 
-    // Scribe — writes the player's progress to disk on demand.
+    // Scribe — stays on the plaza for now (no hut; he's nomadic, writing
+    // from a small lectern under the central sand square).
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *scribe = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(scribe, 13, 6, 0, NPC_SCRIBE);
     }
 
-    // Salvager — stands near the pond with his sack. Same NPC type appears
-    // mid-dungeon; the UI handles dialogue + trade there.
+    // Salvager — yellow hut beside the pond.
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *salvager = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(salvager, 17, 3, 0, NPC_SALVAGER);
+        NpcInit(salvager, 19, 7, 3, NPC_SALVAGER);
     }
 
-    // Blacksmith — west of the plaza. Present from day one; dialogue is
-    // gated in BeginNpcInteraction off ctx->captainDefeated so the player
-    // sees a locked NPC until the harbor boss falls.
+    // Blacksmith — blue hut on the west side. Dialogue is gated off
+    // ctx->captainDefeated in BeginNpcInteraction.
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *smith = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(smith, 5, 11, 0, NPC_BLACKSMITH);
+        NpcInit(smith, 4, 12, 3, NPC_BLACKSMITH);
     }
 }
 
@@ -244,15 +246,24 @@ void BuildOverworldHub(MapBuildContext *ctx)
     for (int y = 0; y < m->height; y++) TileMapSetTile(m, 0,            y, TILE_ROCK);
     for (int y = 0; y < m->height; y++) TileMapSetTile(m, m->width - 1, y, TILE_ROCK);
 
-    // House (rocks) top-left — placeholder residence block.
-    for (int y = 2; y <= 4; y++)
-        for (int x = 2; x <= 4; x++)
-            TileMapSetTile(m, x, y, TILE_ROCK);
-
-    // Shop block (rocks) mid-right.
-    for (int y = 10; y <= 12; y++)
-        for (int x = 15; x <= 17; x++)
-            TileMapSetTile(m, x, y, TILE_ROCK);
+    // Building footprints — four 3x3 huts (Keeper, Salvager, Blacksmith,
+    // Food Bank). Tiles stay as TILE_GRASS so surrounding grass texture
+    // continues through the corners that the triangular roof leaves
+    // exposed; collision comes from the SOLID flag. The painted huts
+    // live in field.c::FieldDraw via DrawBeachHut. Footprint coords here
+    // must match the `huts[]` table over there.
+    static const struct { int x0, y0; } kHuts[] = {
+        { 2,  2}, // Keeper's House (top-left)
+        {18,  4}, // Salvager (under the pond, east side)
+        { 3,  9}, // Blacksmith (west)
+        {15, 10}, // Food Bank (east)
+    };
+    for (int h = 0; h < (int)(sizeof(kHuts) / sizeof(kHuts[0])); h++) {
+        for (int dy = 0; dy < 3; dy++)
+            for (int dx = 0; dx < 3; dx++)
+                TileMapAddFlag(m, kHuts[h].x0 + dx, kHuts[h].y0 + dy,
+                               TILE_FLAG_SOLID);
+    }
 
     // Decorative pond in the top-right corner — OCEAN tiles render as deep
     // water (animated) and are solid, so the player can't walk through.
@@ -265,9 +276,21 @@ void BuildOverworldHub(MapBuildContext *ctx)
         for (int x = 9; x <= 13; x++)
             TileMapSetTile(m, x, y, TILE_SAND);
 
-    // Sand paths: plaza → house door.
-    for (int x = 5; x <= 9; x++)  TileMapSetTile(m, x, 3, TILE_SAND);
-    TileMapSetTile(m, 9, 4, TILE_SAND);
+    // Sand paths to each hut door. Each path lands the NPC on a sand tile
+    // immediately south (or north) of the building so it reads as the
+    // approach to the front step. Door tile of every hut is the bottom-
+    // centre of its 3x3 footprint; the NPC stands one row further out.
+    //
+    //   Keeper   (3, 5)  ← plaza west edge along y=5
+    //   Salvager (19, 7) ← plaza east edge along y=7
+    //   Blacksmith (4, 12) ← plaza SW corner: south then west
+    //   Food Bank (16, 13) ← plaza SE corner: south then east
+    for (int x = 3; x <= 9;  x++) TileMapSetTile(m, x, 5,  TILE_SAND); // keeper
+    for (int x = 13; x <= 19; x++) TileMapSetTile(m, x, 7,  TILE_SAND); // salvager
+    for (int y = 8; y <= 12;  y++) TileMapSetTile(m, 4,  y, TILE_SAND); // blacksmith vert
+    for (int x = 4; x <= 9;   x++) TileMapSetTile(m, x, 8,  TILE_SAND); // blacksmith horiz
+    for (int y = 8; y <= 13;  y++) TileMapSetTile(m, 16, y, TILE_SAND); // food bank vert
+    for (int x = 13; x <= 16; x++) TileMapSetTile(m, x, 8,  TILE_SAND); // food bank horiz
 
     // Sand path: plaza → south gate.
     for (int y = 9; y <= 13; y++) TileMapSetTile(m, 11, y, TILE_SAND);

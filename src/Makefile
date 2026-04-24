@@ -56,6 +56,7 @@ PROJECT_SOURCE_FILES  ?= \
     data/room_templates.c \
     dev/style_preview.c \
     field/blacksmith_ui.c \
+    field/buildings.c \
     field/dev_warp_ui.c \
     field/discard_ui.c \
     field/donation_ui.c \
