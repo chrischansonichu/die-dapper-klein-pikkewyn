@@ -83,7 +83,10 @@ int main(void)
     // fine serifs blur into the parchment background. The DrawText /
     // MeasureText shims in screen_layout.h route every text call through
     // this font via DrawTextEx / MeasureTextEx.
-    font = LoadFontEx("resources/EBGaramond-Bold.ttf", 96, NULL, 0);
+    // Codepoints arg is 0/0 for "default ASCII set" — using a literal 0
+    // here instead of NULL because raylib_game.c doesn't pull in <stddef.h>
+    // and the Mac (clang) build complains about undeclared NULL.
+    font = LoadFontEx("resources/EBGaramond-Bold.ttf", 96, 0, 0);
     GenTextureMipmaps(&font.texture);
     SetTextureFilter(font.texture, TEXTURE_FILTER_TRILINEAR);
     //music = LoadMusicStream("resources/ambient.ogg"); // TODO: Load music
