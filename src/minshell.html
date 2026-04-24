@@ -35,11 +35,12 @@
 
     <!-- Web Style -->
     <!--
-      Full-canvas layout: the wasm build is portrait (450x800) and uses
-      in-canvas touch input (swipe to move, tap to interact, corner ⋮ menu for
-      stats / inventory / save). The HTML shell no longer paints a virtual
-      Gameboy pad — the only chrome is a small fullscreen toggle in the
-      top-left, out of the way of the in-canvas menu button (top-right).
+      Full-canvas layout: the wasm build is landscape (800x450), matching the
+      desktop build exactly. Phone players are expected to hold their device
+      landscape; the canvas letterboxes if held portrait. Input is in-canvas
+      (swipe to move, tap to interact, corner ⋮ menu for stats / inventory /
+      save). The only HTML chrome is a small fullscreen toggle in the top-
+      left, out of the way of the in-canvas menu button (top-right).
     -->
     <style>
         html, body {
@@ -81,20 +82,23 @@
           padding: 0;
           margin: 0;
           /* JS sets width/height per frame so the canvas fits the visible
-             viewport and preserves the 450x800 aspect. */
-          image-rendering: pixelated;            /* Chrome / Edge */
-          image-rendering: -moz-crisp-edges;     /* Firefox */
-          image-rendering: crisp-edges;          /* spec */
+             viewport and preserves the 800x450 aspect. */
+          /* Smooth bilinear scaling — the game renders procedural primitives
+             and a bitmap default font, neither of which want nearest-neighbor
+             upscaling. `pixelated` was making text look chunky on phones; the
+             auto value lets the browser smooth the canvas to whatever CSS
+             size we land on. */
+          image-rendering: auto;
           touch-action: none;
         }
 
-        /* Desktop — render at native portrait resolution. Fullscreen button
+        /* Desktop — render at native landscape resolution. Fullscreen button
            still sits in the top-left but is rarely needed; desktop users hit
            F11 instead. */
         @media (hover: hover) and (pointer: fine) {
           canvas.emscripten {
-            width: 450px;
-            height: 800px;
+            width: 800px;
+            height: 450px;
           }
         }
 
@@ -124,6 +128,46 @@
         #fs-btn:active {
           background: rgba(184, 159, 108, 0.95);
         }
+
+        /* iOS "Add to Home Screen" hint. Shown only on iOS Safari when the
+           page is not already running standalone. Bottom-centered so it
+           doesn't fight with the in-canvas controls; tapping the ✕ dismisses
+           it for the session (localStorage). The arrow points down at the
+           Safari share button on the iPhone tab bar. */
+        #ios-a2hs {
+          position: fixed;
+          left:  calc(8px + env(safe-area-inset-left, 0));
+          right: calc(8px + env(safe-area-inset-right, 0));
+          bottom: calc(8px + env(safe-area-inset-bottom, 0));
+          margin: 0 auto;
+          max-width: 360px;
+          background: rgba(247, 239, 217, 0.96);
+          color: #2b2b2b;
+          border: 1.5px solid #2b2b2b;
+          border-radius: 10px;
+          padding: 10px 36px 10px 12px;
+          font-size: 13px;
+          line-height: 1.35;
+          z-index: 11;
+          display: none;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        }
+        #ios-a2hs.show { display: block; }
+        #ios-a2hs b { font-weight: 600; }
+        #ios-a2hs-close {
+          position: absolute;
+          top: 4px;
+          right: 6px;
+          width: 24px;
+          height: 24px;
+          background: transparent;
+          color: #2b2b2b;
+          border: 0;
+          font-size: 18px;
+          line-height: 1;
+          cursor: pointer;
+          -webkit-tap-highlight-color: transparent;
+        }
     </style>
     <script type='text/javascript' src="https://cdn.jsdelivr.net/gh/eligrey/FileSaver.js/dist/FileSaver.min.js"> </script>
     <script type='text/javascript'>
@@ -148,6 +192,10 @@
     <body>
         <canvas class=emscripten id=canvas oncontextmenu=event.preventDefault() tabindex=-1></canvas>
         <button id="fs-btn" aria-label="Fullscreen">⛶</button>
+        <div id="ios-a2hs" role="note">
+            For the best experience, tap <b>Share</b> then <b>Add to Home Screen</b> ↓
+            <button id="ios-a2hs-close" aria-label="Dismiss">✕</button>
+        </div>
         <p id="output" style="display:none"></p>
         <script>
             var Module = {
@@ -209,6 +257,34 @@
             var fsBtn  = document.getElementById('fs-btn');
             var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
+            // iOS "Add to Home Screen" hint. Real fullscreen + landscape lock
+            // and a dock-icon launch are only available on iOS when the page
+            // is launched as a standalone PWA, so nudge Safari users toward
+            // it. Conditions:
+            //   - userAgent matches iPhone / iPad / iPod (or iPadOS, which
+            //     reports "MacIntel" + multi-touch)
+            //   - not already standalone (navigator.standalone or display-
+            //     mode media query)
+            //   - user hasn't dismissed the hint this device
+            // Other iOS browsers (Chrome/Firefox iOS) don't support adding
+            // PWAs from their share sheet, so we restrict to Safari only.
+            var ua = navigator.userAgent || '';
+            var isIOS = /iPad|iPhone|iPod/.test(ua) ||
+                        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            var isSafari = /^((?!CriOS|FxiOS|EdgiOS|OPiOS).)*Safari/.test(ua);
+            var isStandalone = window.navigator.standalone === true ||
+                               (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+            var dismissed = false;
+            try { dismissed = localStorage.getItem('a2hs-dismissed') === '1'; } catch (e) {}
+            if (isIOS && isSafari && !isStandalone && !dismissed) {
+                var banner = document.getElementById('ios-a2hs');
+                banner.classList.add('show');
+                document.getElementById('ios-a2hs-close').addEventListener('click', function () {
+                    banner.classList.remove('show');
+                    try { localStorage.setItem('a2hs-dismissed', '1'); } catch (e) {}
+                });
+            }
+
             // Fullscreen toggle — tries documentElement, then canvas, then
             // emscripten's Module.requestFullscreen. iOS Safari refuses all
             // three on non-video elements; surface that to the user so they
@@ -248,7 +324,7 @@
             });
 
             // Fit the canvas to the visible viewport while preserving the
-            // 450x800 logical aspect. The body is sized with 100dvh + safe-
+            // 800x450 logical aspect. The body is sized with 100dvh + safe-
             // area padding in CSS; read the padded content box directly so
             // the canvas is never placed under the notch or home indicator.
             //
@@ -259,7 +335,7 @@
             // there until the next resize event. Run layout() again after a
             // few animation frames + a short timeout to catch the final state.
             function layout() {
-                if (!isTouch) return;  // desktop uses CSS-native 450x800
+                if (!isTouch) return;  // desktop uses CSS-native 800x450
                 // Read the actual padded content box — computedStyle accounts
                 // for env(safe-area-inset-*) once CSS has resolved it.
                 var cs = getComputedStyle(document.body);
@@ -270,10 +346,10 @@
                 var vw = vv ? vv.width  : window.innerWidth;
                 var usableW = Math.max(0, vw - padX);
                 var usableH = Math.max(0, vh - padY);
-                var aspect = 450 / 800;
-                var h = usableH;
-                var w = h * aspect;
-                if (w > usableW) { w = usableW; h = w / aspect; }
+                var aspect = 800 / 450;
+                var w = usableW;
+                var h = w / aspect;
+                if (h > usableH) { h = usableH; w = h * aspect; }
                 canvas.style.width  = w + 'px';
                 canvas.style.height = h + 'px';
             }

@@ -1,6 +1,7 @@
 #include "npc.h"
 #include "enemy.h"
 #include "../render/paper_harbor.h"
+#include "../screen_layout.h"
 #include <string.h>
 #include <math.h>
 

@@ -3,6 +3,7 @@
 #include "field.h"
 #include "../data/creature_defs.h"
 #include "../render/paper_harbor.h"
+#include "../screen_layout.h"
 #include <stdlib.h>  // abs
 #include <math.h>
 

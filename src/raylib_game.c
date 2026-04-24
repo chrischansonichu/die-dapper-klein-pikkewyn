@@ -75,8 +75,17 @@ int main(void)
     // fail silently whenever the cwd isn't the binary's directory.
     ChangeDirectory(GetApplicationDirectory());
 
-    // Load global data (assets that must be available in all screens, i.e. font)
-    font = LoadFont("resources/mecha.png");
+    // Load global data (assets that must be available in all screens, i.e. font).
+    // EB Garamond loaded at a high baseline (96px) so the atlas glyphs stay
+    // crisp when DrawTextEx scales them down to UI sizes (~20–30px after
+    // UI_TEXT_SCALE). Mipmaps + trilinear filtering give a much cleaner
+    // downscale than bilinear alone — without them the strokes shimmer and
+    // fine serifs blur into the parchment background. The DrawText /
+    // MeasureText shims in screen_layout.h route every text call through
+    // this font via DrawTextEx / MeasureTextEx.
+    font = LoadFontEx("resources/EBGaramond-Bold.ttf", 96, NULL, 0);
+    GenTextureMipmaps(&font.texture);
+    SetTextureFilter(font.texture, TEXTURE_FILTER_TRILINEAR);
     //music = LoadMusicStream("resources/ambient.ogg"); // TODO: Load music
     fxCoin = LoadSound("resources/coin.wav");
 

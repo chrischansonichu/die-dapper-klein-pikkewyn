@@ -1656,15 +1656,19 @@ void FieldDraw(const FieldState *ow)
         int xpH   = 8;
         int xpTxtY = py + ph - xpF - 4;
 #else
-        int px = 8, py = 8, pw = 160, ph = 52;
-        int nameF = 14, xpF = 10, barPad = 6;
+        // Layout retuned for EB Garamond + UI_TEXT_SCALE=1.5x: nameF=11
+        // renders at ~16px so the J's descender no longer pokes into the
+        // HP bar. Panel is a touch taller (58) to keep the XP text fully
+        // inside the rounded rect.
+        int px = 8, py = 8, pw = 160, ph = 58;
+        int nameF = 11, xpF = 9, barPad = 6;
         int barW = pw - 2 * barPad;
-        int nameY = py + 4;
-        int hpY   = py + 20;
+        int nameY = py + 3;
+        int hpY   = py + 24;
         int hpH   = 8;
-        int xpY   = py + 34;
+        int xpY   = py + 38;
         int xpH   = 6;
-        int xpTxtY = py + ph - xpF - 2;
+        int xpTxtY = py + ph - 16;
 #endif
         DrawRectangle(px, py, pw, ph, (Color){10, 10, 30, 180});
         DrawRectangleLines(px, py, pw, ph, (Color){80, 80, 140, 255});

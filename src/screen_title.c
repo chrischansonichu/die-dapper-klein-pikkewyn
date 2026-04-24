@@ -108,21 +108,23 @@ bool DrawButton(const char *text, const int buttonNumber, const int finScreen, b
     if (buttonNumber > 0) {
         posX = posX + buttonNumber * (btnW + gap);
     }
-    // Start below the plate width, then shrink further if the label still
-    // won't fit with ~6px padding on each side. Portrait starts smaller since
-    // btnW=W/4 on a 450px canvas is tight.
-#if SCREEN_PORTRAIT
-    int thisFontSize = (int)(font.baseSize * 1.4f);
-#else
-    int thisFontSize = (int)(font.baseSize * 2.0f);
-#endif
+    // Pick a font size that fits both the button width AND the button height
+    // when rendered through the UI shim (which scales the requested size by
+    // UI_TEXT_SCALE). Cap by height first so big labels can't shoot past the
+    // top/bottom of the plate, then shrink further if the rendered width
+    // still overflows. Without the height cap the previous code happily
+    // requested 134pt (= 200px rendered) into a 45px-tall button.
+    const int maxRenderedH = btnH - 8;
+    int thisFontSize = (int)(maxRenderedH / UI_TEXT_SCALE);
     const int maxTextW = btnW - 12;
     while (thisFontSize > 8 && MeasureText(text, thisFontSize) > maxTextW) {
         thisFontSize -= 1;
     }
 
-    const int textWidth = MeasureText(text, thisFontSize);
-    const int textHeight = thisFontSize;
+    const int textWidth  = MeasureText(text, thisFontSize);
+    // Centering must use the actual rendered glyph height, not the requested
+    // size — the shim multiplies by UI_TEXT_SCALE before drawing.
+    const int textHeight = (int)(thisFontSize * UI_TEXT_SCALE);
 
     const int textX = posX + (btnW - textWidth) / 2;
     const int textY = bottomRow + (btnH - textHeight) / 2;

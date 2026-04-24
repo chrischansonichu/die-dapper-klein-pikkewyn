@@ -824,8 +824,11 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
 static Rectangle TargetBackRect(void)
 {
     int sw = GetScreenWidth();
-    int th = SCREEN_PORTRAIT ? 44 : 22;
-    int bw = SCREEN_PORTRAIT ? 90 : 64;
+    // Strip / button heights had to grow once the global UI_TEXT_SCALE
+    // (1.5×) made "Back" render at ~24px from a 16pt request. Landscape
+    // strip is now 32px tall and the button 26px so the label sits inside.
+    int th = SCREEN_PORTRAIT ? 44 : 32;
+    int bw = SCREEN_PORTRAIT ? 90 : 84;
     int bh = th - 6;
     return (Rectangle){ (float)(sw - bw - 6), 3.0f, (float)bw, (float)bh };
 }
@@ -1299,17 +1302,20 @@ static void DrawRosterPanel(const Combatant *roster, int count,
     // Portrait bumps every measurement — text was unreadable at 12pt/8px-bar
     // on phones; card now uses ~18pt names + 14px HP bar so it scales with
     // the rest of the mobile UI.
-    const int nameF   = SCREEN_PORTRAIT ? 18 : 12;
-    const int hpNumF  = SCREEN_PORTRAIT ? 14 : 10;
-    const int xpNumF  = SCREEN_PORTRAIT ? 12 :  9;
-    const int levelF  = SCREEN_PORTRAIT ? 14 : 10;
-    const int hpBarH  = SCREEN_PORTRAIT ? 14 :  8;
-    const int xpBarH  = SCREEN_PORTRAIT ?  6 :  4;
+    // Landscape sizes nudged up to give the EB Garamond Bold roster lines
+    // breathing room — the previous 12pt names rendered at ~18px ran into
+    // the HP bar with no gap. Row formula gets an extra 4px top/bottom.
+    const int nameF   = SCREEN_PORTRAIT ? 18 : 14;
+    const int hpNumF  = SCREEN_PORTRAIT ? 14 : 12;
+    const int xpNumF  = SCREEN_PORTRAIT ? 12 : 10;
+    const int levelF  = SCREEN_PORTRAIT ? 14 : 12;
+    const int hpBarH  = SCREEN_PORTRAIT ? 14 : 10;
+    const int xpBarH  = SCREEN_PORTRAIT ?  6 :  5;
     const int padX    = SCREEN_PORTRAIT ? 10 :  8;
-    const int padY    = SCREEN_PORTRAIT ?  8 :  6;
-    const int panelW  = SCREEN_PORTRAIT ? 217 : 210;
+    const int padY    = SCREEN_PORTRAIT ?  8 :  8;
+    const int panelW  = SCREEN_PORTRAIT ? 217 : 230;
     // Row height: name line + HP bar (+ xp bar if shown) + tight gaps.
-    const int rowH    = (nameF + 4) + hpBarH + 4 +
+    const int rowH    = (nameF + 8) + hpBarH + 6 +
                         (showXpBar ? (xpBarH + xpNumF + 4) : 0);
     const int panelH  = padY * 2 + count * rowH;
 
@@ -1403,7 +1409,11 @@ static void DrawRosters(const BattleContext *ctx)
         else             activeParty = te->idx;
     }
 
-    int rosterPanelW = SCREEN_PORTRAIT ? 217 : 210;
+    // Must match DrawRosterPanel's internal panelW — the outer value drives
+    // right-edge positioning (sw - rosterPanelW), the inner one drives the
+    // panel rect itself. Drift between them clips the HP bars and right-
+    // aligned HP numbers off the screen edge.
+    int rosterPanelW = SCREEN_PORTRAIT ? 217 : 230;
     DrawRosterPanel(ctx->enemies, ctx->enemyCount, SCREEN_W - rosterPanelW - 8, 8, activeEnemy,
                     false, NULL);
     if (ctx->party) {

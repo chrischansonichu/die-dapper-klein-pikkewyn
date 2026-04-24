@@ -165,13 +165,14 @@ void DonationUIDraw(const DonationUI *d, const Party *party, int rep)
     PHDrawPanel((Rectangle){px, py, pw, ph}, 0x401);
     ModalCloseButtonDraw((Rectangle){px, py, pw, ph});
 
-    // Per-screen font sizes — portrait gets a notch bigger across the board
-    // so phone-held players can actually read the banter.
-    int titleF = SCREEN_PORTRAIT ? 28 : 20;
-    int repF   = SCREEN_PORTRAIT ? 20 : 16;
-    int bodyF  = SCREEN_PORTRAIT ? 22 : 16;
-    int quoteF = SCREEN_PORTRAIT ? 20 : 16;
-    int promptF= SCREEN_PORTRAIT ? 20 : 14;
+    // Per-screen font sizes. Landscape sizes were bumped ~10% over the
+    // original 16/14 baseline because the food-bank panel is text-dense
+    // and its body copy reads small against the parchment.
+    int titleF = SCREEN_PORTRAIT ? 28 : 22;
+    int repF   = SCREEN_PORTRAIT ? 20 : 18;
+    int bodyF  = SCREEN_PORTRAIT ? 22 : 18;
+    int quoteF = SCREEN_PORTRAIT ? 20 : 18;
+    int promptF= SCREEN_PORTRAIT ? 20 : 16;
     int rowH   = bodyF + 10;
 
     DrawText("FOOD BANK", contentX, py + 12, titleF, gPH.ink);
@@ -179,7 +180,7 @@ void DonationUIDraw(const DonationUI *d, const Party *party, int rep)
     int repW = MeasureText(repLabel, repF);
     DrawText(repLabel, px + pw - repW - contentPad, py + 16, repF, gPH.ink);
 
-    int hintFont    = SCREEN_PORTRAIT ? 16 : 14;
+    int hintFont    = SCREEN_PORTRAIT ? 16 : 16;
     int bottomStart = H - margin - (SCREEN_PORTRAIT ? 80 : 100);
 
     if (d->phase == DON_PHASE_RESULT) {
@@ -191,23 +192,23 @@ void DonationUIDraw(const DonationUI *d, const Party *party, int rep)
                         contentX, &y, contentW, bodyF, 4, gPH.ink);
         y += 8;
         DrawTextWrapped("The young ones will eat tonight.",
-                        contentX, &y, contentW, quoteF, 4, gPH.inkLight);
+                        contentX, &y, contentW, quoteF, 4, gPH.ink);
         DrawText("Press any key to continue...",
-                 contentX, bottomStart, hintFont, gPH.inkLight);
+                 contentX, bottomStart, hintFont, gPH.ink);
         return;
     }
 
     const Inventory *inv = &party->inventory;
     int y = py + 50;
     DrawTextWrapped("\"The food bank feeds the young and the displaced.\"",
-                    contentX, &y, contentW, quoteF, 4, gPH.inkLight);
+                    contentX, &y, contentW, quoteF, 4, gPH.ink);
     DrawTextWrapped("\"Every item you give = +1 village reputation.\"",
-                    contentX, &y, contentW, quoteF, 4, gPH.inkLight);
+                    contentX, &y, contentW, quoteF, 4, gPH.ink);
     y += 8;
 
     if (d->entryCount == 0) {
         DrawTextWrapped("(You have no food to donate right now.)",
-                        contentX, &y, contentW, quoteF, 4, gPH.inkLight);
+                        contentX, &y, contentW, quoteF, 4, gPH.ink);
     } else {
         DrawText("Choose how many to give:", contentX, y, promptF, gPH.ink);
         y += promptF + 10;
@@ -230,13 +231,13 @@ void DonationUIDraw(const DonationUI *d, const Party *party, int rep)
              contentX, bottomStart - 30, bodyF, gPH.ink);
     if (SCREEN_PORTRAIT) {
         DrawText("UP/DOWN: select",
-                 contentX, bottomStart,                  hintFont, gPH.inkLight);
+                 contentX, bottomStart,                  hintFont, gPH.ink);
         DrawText("LEFT/RIGHT: adjust",
-                 contentX, bottomStart + hintFont + 4,   hintFont, gPH.inkLight);
+                 contentX, bottomStart + hintFont + 4,   hintFont, gPH.ink);
         DrawText("Z: confirm   X: cancel",
-                 contentX, bottomStart + 2*(hintFont+4), hintFont, gPH.inkLight);
+                 contentX, bottomStart + 2*(hintFont+4), hintFont, gPH.ink);
     } else {
         DrawText("UP/DOWN: select   LEFT/RIGHT: adjust   Z/Enter: confirm   X: cancel",
-                 contentX, bottomStart, hintFont, gPH.inkLight);
+                 contentX, bottomStart, hintFont, gPH.ink);
     }
 }

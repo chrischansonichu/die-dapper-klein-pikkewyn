@@ -20,7 +20,10 @@ const PHPalette gPH = {
     .roof      = {0xE5, 0x8F, 0x78, 255},
     .wall      = {0xE7, 0xD0, 0xA8, 255},
     .ink       = {0x58, 0x3E, 0x26, 255},
-    .inkLight  = {0x8C, 0x70, 0x54, 255},
+    // inkLight darkened from #8C7054 → #6A4E32 to keep hint / subtitle text
+    // legible against the #F6EBCA parchment with the EB Garamond serif
+    // (its thin strokes were washing out at the previous warmer tone).
+    .inkLight  = {0x6A, 0x4E, 0x32, 255},
     .inkDark   = {0x2E, 0x20, 0x14, 255},
     .panel     = {0xF6, 0xEB, 0xCA, 245},
     .dimmer    = {0x3C, 0x28, 0x14, 120},

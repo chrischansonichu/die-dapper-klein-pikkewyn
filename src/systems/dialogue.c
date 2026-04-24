@@ -9,9 +9,9 @@
     #define PANEL_PAD  16
     #define TEXT_SIZE  30
 #else
-    #define PANEL_H    100
+    #define PANEL_H    110
     #define PANEL_PAD  10
-    #define TEXT_SIZE  18
+    #define TEXT_SIZE  22
 #endif
 #define PANEL_X    20
 #define PANEL_W    (SCREEN_W - 40)

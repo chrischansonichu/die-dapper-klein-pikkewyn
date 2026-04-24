@@ -16,10 +16,13 @@
 #else
     #define FAB_SIZE      44
     #define FAB_MARGIN    10
-    #define MENU_W        170
-    #define MENU_ROW_H    38
-    #define MENU_FONT     16
-    #define TOAST_FONT    16
+    #define MENU_W        180
+    #define MENU_ROW_H    40
+    // 18 (rendered ~27 with UI_TEXT_SCALE) — at 16 the EB Garamond Bold
+    // strokes were thin enough that the menu read as "default font",
+    // visually mismatched against other UI panels at the same size.
+    #define MENU_FONT     18
+    #define TOAST_FONT    18
     #define DOT_R          3.0f
     #define DOT_STEP       9
 #endif
