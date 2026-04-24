@@ -27,6 +27,7 @@
 #include "screens.h"
 #include "state/save.h"
 #include "screen_layout.h"
+#include "version.h"
 #include <math.h>
 
 //----------------------------------------------------------------------------------
@@ -194,6 +195,15 @@ void DrawTitleScreen(void) {
     if (DrawButton("New",  0, 2, true))    GameplayRequestNewGame();
     if (DrawButton("Load", 1, 2, hasSave)) GameplayRequestLoadGame();
     DrawButton("Options", 2, 1, false);
+
+    // Build version, bottom-right corner. Small + dim so it doesn't fight
+    // with the cover art; bug reports can quote it verbatim.
+    const char *ver = "v" GAME_VERSION;
+    int verSize  = 12;
+    int verW     = MeasureText(ver, verSize);
+    int verX     = W - verW - 8;
+    int verY     = H - (int)(verSize * UI_TEXT_SCALE) - 6;
+    DrawText(ver, verX, verY, verSize, (Color){240, 225, 170, 200});
 }
 
 // Title Screen Unload logic
