@@ -24,6 +24,50 @@ static inline Rectangle InvPanelRect(void) {
     return (Rectangle){ InvPanelX(), InvPanelY(), InvPanelW(), InvPanelH() };
 }
 
+// Per-row stride for every scrolling list (items, weapons bag). Background
+// strip is 22px tall + 2px gap. Single source of truth so layout and draw
+// can't drift.
+#define INV_ROW_H        24
+#define INV_ITEM_VISIBLE 11   // items list visible-row count (landscape)
+#define INV_WBAG_VISIBLE 10   // weapons bag visible-row count
+// Portrait constant kept for completeness, used in the dead branches below.
+#define INV_WBAG_VISIBLE_PORTRAIT 6
+
+// Clamp ui->scrollPx into [0, max] for the active list. `total` is the row
+// count, `visible` is how many fit at once. When the list fits entirely,
+// scrollPx is forced to 0.
+static void ClampScroll(InventoryUI *ui, int total, int visible)
+{
+    float maxPx = (float)((total - visible) * INV_ROW_H);
+    if (maxPx < 0.0f) maxPx = 0.0f;
+    if (ui->scrollPx < 0.0f)   ui->scrollPx = 0.0f;
+    if (ui->scrollPx > maxPx)  ui->scrollPx = maxPx;
+}
+
+// Pull scrollPx so the keyboard cursor row is in view. Called after every
+// arrow-key cursor movement so the list follows the cursor like a desktop
+// listbox; unaffected by touch scrolling, which moves scrollPx independently.
+static void EnsureCursorVisible(InventoryUI *ui, int total, int visible)
+{
+    int scrollTop = (int)(ui->scrollPx / (float)INV_ROW_H);
+    if (ui->cursor < scrollTop) {
+        ui->scrollPx = (float)(ui->cursor * INV_ROW_H);
+    } else if (ui->cursor >= scrollTop + visible) {
+        ui->scrollPx = (float)((ui->cursor - visible + 1) * INV_ROW_H);
+    }
+    ClampScroll(ui, total, visible);
+}
+
+// Read a vertical-swipe delta inside the panel and accumulate into scrollPx.
+// Inverted so dragging finger down reveals rows above (iOS-style "list
+// follows finger"). Clamped per the active list's row total.
+static void ApplyTouchScroll(InventoryUI *ui, int total, int visible)
+{
+    float dy = TouchScrollDeltaY(InvPanelRect());
+    if (dy != 0.0f) ui->scrollPx -= dy;
+    ClampScroll(ui, total, visible);
+}
+
 // Shared layout between Update (tap hit-test) and Draw so the two can't drift.
 // RebuildLayout() runs at the top of each so rects always reflect current state.
 // Rectangles left as {0} mean "not visible this frame" and will never hit.
@@ -32,10 +76,15 @@ static struct InvLayout {
     Rectangle memberSwitcher;
     Rectangle itemRows[INVENTORY_MAX_ITEMS];
     int       itemRowCount;
+    int       itemListTop;     // y of first row pre-scroll; draw uses this + i*ROW - scrollPx
+    int       itemListBottom;  // y of viewport bottom (used for scissor clipping)
     Rectangle equippedMoveRows[CREATURE_MAX_MOVES];
     int       equippedMoveRowCount;
     Rectangle weaponBagRows[INVENTORY_MAX_WEAPONS];
     int       weaponBagFirst, weaponBagEnd;  // [first, end) visible inv indices
+    int       weaponBagListTop;
+    int       weaponBagListBottom;
+    int       weaponBagX, weaponBagW;
     Rectangle equippedArmorRow;
     Rectangle armorBagRows[INVENTORY_MAX_ARMORS];
     int       armorBagRowCount;
@@ -77,13 +126,21 @@ static void LayoutItems(const InventoryUI *ui, const Party *party)
     int y = 95;
 #endif
     y += 26;  // "Consumables" header
-    sL.itemRowCount = inv->itemCount;
+    sL.itemRowCount    = inv->itemCount;
+    sL.itemListTop     = y;
+    sL.itemListBottom  = y + INV_ITEM_VISIBLE * INV_ROW_H;
+
+    // Hit rects use the same smooth-y formula as the draw. A partially-
+    // visible row at the top/bottom of the viewport still hits its visible
+    // portion correctly. Rows entirely outside the viewport leave their
+    // rect zeroed (set by RebuildLayout's memset) so they never hit.
     for (int i = 0; i < inv->itemCount && i < INVENTORY_MAX_ITEMS; i++) {
-        sL.itemRows[i] = (Rectangle){ (float)(x - 6), (float)(y - 2),
+        float yf = (float)sL.itemListTop + (float)i * (float)INV_ROW_H - ui->scrollPx;
+        if (yf + INV_ROW_H < (float)sL.itemListTop) continue;
+        if (yf > (float)sL.itemListBottom)          break;
+        sL.itemRows[i] = (Rectangle){ (float)(x - 6), yf - 2.0f,
                                       (float)rowW, 22.0f };
-        y += 24;
     }
-    (void)ui;
 }
 
 static void LayoutWeapons(const InventoryUI *ui, const Party *party)
@@ -115,30 +172,33 @@ static void LayoutWeapons(const InventoryUI *ui, const Party *party)
     }
 
 #if SCREEN_PORTRAIT
-    const int BAG_VISIBLE = 6;
+    const int BAG_VISIBLE = INV_WBAG_VISIBLE_PORTRAIT;
     int bagX = colX, bagRowW = rowW;
     y += 6;
 #else
-    const int BAG_VISIBLE = 10;
+    const int BAG_VISIBLE = INV_WBAG_VISIBLE;
     int bagX = 420, bagRowW = 320;
     y = 95;
 #endif
     y += 26;  // "Weapon Bag" header
-    int scrollTop = 0;
-    if (!ui->equippedFocus && ui->cursor >= BAG_VISIBLE) {
-        scrollTop = ui->cursor - BAG_VISIBLE + 1;
-    }
-    int maxScroll = inv->weaponCount - BAG_VISIBLE;
-    if (maxScroll < 0) maxScroll = 0;
-    if (scrollTop > maxScroll) scrollTop = maxScroll;
-    int drawEnd = scrollTop + BAG_VISIBLE;
-    if (drawEnd > inv->weaponCount) drawEnd = inv->weaponCount;
-    sL.weaponBagFirst = scrollTop;
-    sL.weaponBagEnd   = drawEnd;
-    for (int i = scrollTop; i < drawEnd; i++) {
-        sL.weaponBagRows[i] = (Rectangle){ (float)(bagX - 6), (float)(y - 2),
+    sL.weaponBagListTop    = y;
+    sL.weaponBagListBottom = y + BAG_VISIBLE * INV_ROW_H;
+    sL.weaponBagX          = bagX;
+    sL.weaponBagW          = bagRowW;
+
+    // Touch scroll is the source of truth for the visible window. Keyboard
+    // cursor moves call EnsureCursorVisible() in Update() so the cursor row
+    // stays in view as the player navigates. Hit rects use the same
+    // smooth-y formula as the draw so taps line up with what's on screen
+    // mid-scroll.
+    sL.weaponBagFirst = 0;
+    sL.weaponBagEnd   = inv->weaponCount;
+    for (int i = 0; i < inv->weaponCount && i < INVENTORY_MAX_WEAPONS; i++) {
+        float yf = (float)sL.weaponBagListTop + (float)i * (float)INV_ROW_H - ui->scrollPx;
+        if (yf + INV_ROW_H < (float)sL.weaponBagListTop)    continue;
+        if (yf > (float)sL.weaponBagListBottom)             break;
+        sL.weaponBagRows[i] = (Rectangle){ (float)(bagX - 6), yf - 2.0f,
                                            (float)bagRowW, 22.0f };
-        y += 24;
     }
 }
 
@@ -192,6 +252,7 @@ void InventoryUIInit(InventoryUI *ui)
     ui->cursor        = 0;
     ui->equippedFocus = false;
     ui->memberCursor  = 0;
+    ui->scrollPx      = 0.0f;
     ui->status[0]     = '\0';
 }
 
@@ -204,6 +265,7 @@ void InventoryUIOpen(InventoryUI *ui)
     ui->cursor        = 0;
     ui->equippedFocus = false;
     ui->memberCursor  = 0;
+    ui->scrollPx      = 0.0f;
     ui->status[0]     = '\0';
 }
 
@@ -394,20 +456,25 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
         return false;
     }
 
-    // Claim any gesture that started inside the panel so a tap that lands on
-    // a row doesn't also move the player afterwards.
-    if (TouchGestureStartedIn(InvPanelRect())) TouchConsumeGesture();
+    // No TouchConsumeGesture(): a vertical swipe inside the panel needs to
+    // reach TouchScrollDeltaY for list scrolling, and consume() blocks the
+    // direction-lock that scrolling depends on. Field input is already gated
+    // by `if (invUi.active) return;` in field.c, so leaking the gesture
+    // outside this modal can't move the player.
 
-    // Tab switch — cycle ITEMS → WEAPONS → ARMOR → ITEMS.
+    // Tab switch — cycle ITEMS → WEAPONS → ARMOR → ITEMS. Each switch resets
+    // scroll because the per-tab list lengths and visible counts differ.
     if (IsKeyPressed(KEY_TAB) || IsKeyPressed(KEY_E)) {
         ui->tab           = (InventoryTab)((ui->tab + 1) % INV_TAB_COUNT);
         ui->cursor        = 0;
         ui->equippedFocus = false;
+        ui->scrollPx      = 0.0f;
         ui->status[0]     = '\0';
     } else if (IsKeyPressed(KEY_Q)) {
         ui->tab           = (InventoryTab)((ui->tab + INV_TAB_COUNT - 1) % INV_TAB_COUNT);
         ui->cursor        = 0;
         ui->equippedFocus = false;
+        ui->scrollPx      = 0.0f;
         ui->status[0]     = '\0';
     }
     for (int i = 0; i < INV_TAB_COUNT; i++) {
@@ -415,6 +482,7 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
             ui->tab           = (InventoryTab)i;
             ui->cursor        = 0;
             ui->equippedFocus = false;
+            ui->scrollPx      = 0.0f;
             ui->status[0]     = '\0';
             return true;
         }
@@ -439,10 +507,13 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
 
     if (ui->tab == INV_TAB_ITEMS) {
         int n = party->inventory.itemCount;
+        ApplyTouchScroll(ui, n, INV_ITEM_VISIBLE);
         if (n > 0) {
-            if (IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_W)) ui->cursor = (ui->cursor - 1 + n) % n;
-            if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) ui->cursor = (ui->cursor + 1) % n;
+            bool moved = false;
+            if (IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_W)) { ui->cursor = (ui->cursor - 1 + n) % n; moved = true; }
+            if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) { ui->cursor = (ui->cursor + 1) % n;     moved = true; }
             if (ui->cursor >= n) ui->cursor = n - 1;
+            if (moved) EnsureCursorVisible(ui, n, INV_ITEM_VISIBLE);
             if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) UseItemOnMember(ui, party);
             // Tap-to-use: a tap on a row moves the cursor and consumes in one
             // motion, mirroring the Z-press flow on desktop.
@@ -463,29 +534,37 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
         int equippedN = CREATURE_MAX_MOVES;
         int bagN      = party->inventory.weaponCount;
 
-        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) { ui->equippedFocus = true;  ui->cursor = 0; }
-        if (IsKeyPressed(KEY_RIGHT)|| IsKeyPressed(KEY_D)) { ui->equippedFocus = false; ui->cursor = 0; }
+        // Touch scroll only acts on the bag list. The equipped-side is a
+        // fixed-height grid that always fits.
+        ApplyTouchScroll(ui, bagN, INV_WBAG_VISIBLE);
+
+        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) { ui->equippedFocus = true;  ui->cursor = 0; ui->scrollPx = 0.0f; }
+        if (IsKeyPressed(KEY_RIGHT)|| IsKeyPressed(KEY_D)) { ui->equippedFocus = false; ui->cursor = 0; ui->scrollPx = 0.0f; }
 
         int n = ui->equippedFocus ? equippedN : bagN;
         if (n > 0) {
             bool upPressed   = IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_W);
             bool downPressed = IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S);
+            bool moved = false;
 #if SCREEN_PORTRAIT
             if (upPressed && ui->cursor == 0 && !ui->equippedFocus && equippedN > 0) {
                 ui->equippedFocus = true;
                 ui->cursor = equippedN - 1;
+                ui->scrollPx = 0.0f;
             } else if (downPressed && ui->cursor == n - 1 && ui->equippedFocus && bagN > 0) {
                 ui->equippedFocus = false;
                 ui->cursor = 0;
+                ui->scrollPx = 0.0f;
             } else {
-                if (upPressed)   ui->cursor = (ui->cursor - 1 + n) % n;
-                if (downPressed) ui->cursor = (ui->cursor + 1) % n;
+                if (upPressed)   { ui->cursor = (ui->cursor - 1 + n) % n; moved = true; }
+                if (downPressed) { ui->cursor = (ui->cursor + 1) % n;     moved = true; }
             }
 #else
-            if (upPressed)   ui->cursor = (ui->cursor - 1 + n) % n;
-            if (downPressed) ui->cursor = (ui->cursor + 1) % n;
+            if (upPressed)   { ui->cursor = (ui->cursor - 1 + n) % n; moved = true; }
+            if (downPressed) { ui->cursor = (ui->cursor + 1) % n;     moved = true; }
 #endif
             if (ui->cursor >= n) ui->cursor = n - 1;
+            if (moved && !ui->equippedFocus) EnsureCursorVisible(ui, bagN, INV_WBAG_VISIBLE);
         }
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
             if (ui->equippedFocus) UnequipMemberWeapon(ui, party, discard);
@@ -640,23 +719,54 @@ static void DrawItemsTab(const InventoryUI *ui, const Party *party)
     if (inv->itemCount == 0) {
         DrawText("(Empty)", x, y, FS(16), gPH.inkLight);
     }
-    for (int i = 0; i < inv->itemCount; i++) {
-        const ItemDef *it = GetItemDef(inv->items[i].itemId);
-        bool sel = (ui->cursor == i);
-        Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
-        DrawRectangle(x - 6, y - 2, rowW, 22, bg);
-        char buf[96];
+    // Scroll viewport: rows render at smooth-pixel offsets so finger drag
+    // tracks 1:1 with the list, and a scissor box clips anything that lands
+    // above or below the visible region. Hit-test rects in sL.itemRows[] are
+    // populated only for snap-aligned visible rows (see LayoutItems).
+    int listTop    = sL.itemListTop;
+    int listBottom = sL.itemListBottom;
+    if (listBottom > listTop && inv->itemCount > 0) {
+        BeginScissorMode(x - 6, listTop - 2, rowW, listBottom - listTop);
+        for (int i = 0; i < inv->itemCount; i++) {
+            float rowYf = (float)listTop + (float)i * (float)INV_ROW_H - ui->scrollPx;
+            // Skip rows that are entirely off-screen so we don't burn cycles
+            // on dozens of invisible draws when the list is long.
+            if (rowYf + INV_ROW_H < (float)listTop) continue;
+            if (rowYf > (float)listBottom)          break;
+            int rowY = (int)rowYf;
+            const ItemDef *it = GetItemDef(inv->items[i].itemId);
+            bool sel = (ui->cursor == i);
+            Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
+            DrawRectangle(x - 6, rowY - 2, rowW, 22, bg);
+            char buf[96];
 #if SCREEN_PORTRAIT
-        // Portrait: name + count on top line, desc on next, to avoid overflow.
-        snprintf(buf, sizeof(buf), "%-14s x%d", it->name, inv->items[i].count);
-        DrawText(buf, x, y, FS(14), WHITE);
-        DrawText(it->desc, x + 140, y + 2, 11, (Color){200, 200, 220, 220});
+            snprintf(buf, sizeof(buf), "%-14s x%d", it->name, inv->items[i].count);
+            DrawText(buf, x, rowY, FS(14), WHITE);
+            DrawText(it->desc, x + 140, rowY + 2, 11, (Color){200, 200, 220, 220});
 #else
-        snprintf(buf, sizeof(buf), "%-16s x%-3d %s", it->name, inv->items[i].count, it->desc);
-        DrawText(buf, x, y, FS(14), WHITE);
+            snprintf(buf, sizeof(buf), "%-16s x%-3d %s", it->name, inv->items[i].count, it->desc);
+            DrawText(buf, x, rowY, FS(14), WHITE);
 #endif
-        y += 24;
+        }
+        EndScissorMode();
+
+        // Scrollbar — only when overflow exists.
+        if (inv->itemCount > INV_ITEM_VISIBLE) {
+            int trackX = x + rowW - 4;
+            int trackY = listTop - 2;
+            int trackH = listBottom - listTop;
+            DrawRectangle(trackX, trackY, 4, trackH, (Color){30, 30, 60, 200});
+            float frac = (float)INV_ITEM_VISIBLE / (float)inv->itemCount;
+            int thumbH = (int)(trackH * frac);
+            if (thumbH < 8) thumbH = 8;
+            float maxScrollPx = (float)((inv->itemCount - INV_ITEM_VISIBLE) * INV_ROW_H);
+            float pos = (maxScrollPx > 0.0f) ? ui->scrollPx / maxScrollPx : 0.0f;
+            int thumbY = trackY + (int)((trackH - thumbH) * pos);
+            DrawRectangle(trackX, thumbY, 4, thumbH, (Color){140, 160, 220, 255});
+        }
     }
+    int y_after_list = listBottom;
+    (void)y_after_list;
 
 #if SCREEN_PORTRAIT
     int hintY = InvPanelY() + InvPanelH() - 28;
@@ -750,33 +860,34 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
 #endif
     DrawText(TextFormat("Weapon Bag  %d/%d", inv->weaponCount, INVENTORY_MAX_WEAPONS), bagX, y, FS(18), gPH.ink);
     y += 26;
-    int listTop = y;
+    int listTop    = y;
+    int listBottom = listTop + BAG_VISIBLE * INV_ROW_H;
     if (inv->weaponCount == 0) {
         DrawText("(Empty)", bagX, y, FS(16), gPH.inkLight);
     }
-    int scrollTop = 0;
-    if (!ui->equippedFocus && ui->cursor >= BAG_VISIBLE) {
-        scrollTop = ui->cursor - BAG_VISIBLE + 1;
-    }
-    int maxScroll = inv->weaponCount - BAG_VISIBLE;
-    if (maxScroll < 0) maxScroll = 0;
-    if (scrollTop > maxScroll) scrollTop = maxScroll;
-
-    int drawEnd = scrollTop + BAG_VISIBLE;
-    if (drawEnd > inv->weaponCount) drawEnd = inv->weaponCount;
-    for (int i = scrollTop; i < drawEnd; i++) {
-        const MoveDef *mv = GetMoveDef(inv->weapons[i].moveId);
-        bool sel = (!ui->equippedFocus && ui->cursor == i);
-        Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
-        DrawRectangle(bagX - 6, y - 2, bagRowW, 22, bg);
-        char buf[96];
-        const char *rs = (mv->range == RANGE_MELEE)  ? "MELEE" :
-                         (mv->range == RANGE_RANGED) ? "RANGED" :
-                         (mv->range == RANGE_AOE)    ? "AOE"    : "SELF";
-        snprintf(buf, sizeof(buf), "%-13s PWR %d %-6s dur %d",
-                 mv->name, mv->power, rs, inv->weapons[i].durability);
-        DrawText(buf, bagX, y, FS(14), WHITE);
-        y += 24;
+    // Smooth-scroll viewport. scrollPx is in pixels (touch-driven); rows
+    // render at listTop + i*ROW_H - scrollPx. Scissor clips overflow so the
+    // scrolled-off rows don't bleed past the panel.
+    if (inv->weaponCount > 0) {
+        BeginScissorMode(bagX - 6, listTop - 2, bagRowW, listBottom - listTop);
+        for (int i = 0; i < inv->weaponCount; i++) {
+            float rowYf = (float)listTop + (float)i * (float)INV_ROW_H - ui->scrollPx;
+            if (rowYf + INV_ROW_H < (float)listTop) continue;
+            if (rowYf > (float)listBottom)          break;
+            int rowY = (int)rowYf;
+            const MoveDef *mv = GetMoveDef(inv->weapons[i].moveId);
+            bool sel = (!ui->equippedFocus && ui->cursor == i);
+            Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
+            DrawRectangle(bagX - 6, rowY - 2, bagRowW, 22, bg);
+            char buf[96];
+            const char *rs = (mv->range == RANGE_MELEE)  ? "MELEE" :
+                             (mv->range == RANGE_RANGED) ? "RANGED" :
+                             (mv->range == RANGE_AOE)    ? "AOE"    : "SELF";
+            snprintf(buf, sizeof(buf), "%-13s PWR %d %-6s dur %d",
+                     mv->name, mv->power, rs, inv->weapons[i].durability);
+            DrawText(buf, bagX, rowY, FS(14), WHITE);
+        }
+        EndScissorMode();
     }
 
     // Scroll bar — gutter on the right of the bag column, thumb sized to the
@@ -784,12 +895,13 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
     if (inv->weaponCount > BAG_VISIBLE) {
         int trackX = bagX + bagRowW - 2;
         int trackY = listTop - 2;
-        int trackH = BAG_VISIBLE * 24;
+        int trackH = BAG_VISIBLE * INV_ROW_H;
         DrawRectangle(trackX, trackY, 4, trackH, (Color){30, 30, 60, 200});
         float frac = (float)BAG_VISIBLE / (float)inv->weaponCount;
         int thumbH = (int)(trackH * frac);
         if (thumbH < 8) thumbH = 8;
-        float pos = (maxScroll > 0) ? (float)scrollTop / (float)maxScroll : 0.0f;
+        float maxScrollPx = (float)((inv->weaponCount - BAG_VISIBLE) * INV_ROW_H);
+        float pos = (maxScrollPx > 0.0f) ? ui->scrollPx / maxScrollPx : 0.0f;
         int thumbY = trackY + (int)((trackH - thumbH) * pos);
         DrawRectangle(trackX, thumbY, 4, thumbH, (Color){140, 160, 220, 255});
     }

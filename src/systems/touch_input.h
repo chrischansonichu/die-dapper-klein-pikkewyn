@@ -44,4 +44,10 @@ bool    TouchTapInRect(Rectangle r);
 // letting a later consumer claim it. Returns false if no tap is pending.
 bool    TouchTapPeek(Vector2 *outPos);
 
+// Per-frame finger Y motion (positive = moved down) for a gesture that
+// started inside r AND has committed to a vertical swipe. Returns 0 if no
+// such gesture this frame. Touch-released-as-tap stays a tap (since direction
+// never locked), so list rows still receive their TouchTapInRect events.
+float   TouchScrollDeltaY(Rectangle r);
+
 #endif // TOUCH_INPUT_H

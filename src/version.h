@@ -3,6 +3,6 @@
 
 // Bump on every shipped build. Surfaced on the title screen so a player
 // reporting a bug can tell us exactly which build they're running.
-#define GAME_VERSION "0.1.8"
+#define GAME_VERSION "0.1.9"
 
 #endif // VERSION_H

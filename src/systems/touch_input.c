@@ -17,6 +17,7 @@ static struct {
     Vector2 prevPos;
     double  startTime;
     float   totalDist;
+    float   frameDx, frameDy;  // per-frame finger motion (since last update)
     int     lockedDir;
     bool    directionLocked;
     bool    consumed;
@@ -39,6 +40,8 @@ void TouchInputUpdate(void)
 {
     g.tapReady        = false;
     g.pressedDirReady = false;
+    g.frameDx         = 0.0f;
+    g.frameDy         = 0.0f;
 
     Vector2 p;
     bool down = GetPrimaryPoint(&p);
@@ -61,6 +64,8 @@ void TouchInputUpdate(void)
         float stepDx = p.x - g.prevPos.x;
         float stepDy = p.y - g.prevPos.y;
         g.totalDist += sqrtf(stepDx * stepDx + stepDy * stepDy);
+        g.frameDx    = stepDx;
+        g.frameDy    = stepDy;
         g.prevPos    = p;
         g.curPos     = p;
 
@@ -178,4 +183,16 @@ bool TouchTapInRect(Rectangle r)
         return true;
     }
     return false;
+}
+
+float TouchScrollDeltaY(Rectangle r)
+{
+    if (!g.active) return 0.0f;
+    if (!TouchGestureStartedIn(r)) return 0.0f;
+    // Only scroll once the gesture has committed vertically. 0=down, 3=up.
+    // Horizontal locks (1/2) and pre-deadzone unlocked are deliberately ignored
+    // so taps and L→R swipes don't accidentally scroll lists.
+    if (!g.directionLocked) return 0.0f;
+    if (g.lockedDir != 0 && g.lockedDir != 3) return 0.0f;
+    return g.frameDy;
 }

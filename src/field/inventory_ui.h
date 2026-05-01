@@ -28,6 +28,12 @@ typedef struct InventoryUI {
     // shared across the party, but consumables and weapons always land on one
     // specific combatant — cycled with [ / ] keys.
     int          memberCursor;
+    // Touch scroll position for the active tab's bag (in pixels). Decoupled
+    // from cursor so swiping doesn't trigger an action and so the user can
+    // browse rows past the visible window without committing. Reset whenever
+    // the tab/member changes; clamped during layout. Keyboard cursor moves
+    // pull this back so the cursor stays visible.
+    float        scrollPx;
     char         status[128];   // last action message, e.g. "Ate Fresh Fish +30 HP"
 } InventoryUI;
 
