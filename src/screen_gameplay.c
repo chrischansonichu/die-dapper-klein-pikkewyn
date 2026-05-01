@@ -121,6 +121,13 @@ static void ApplyPendingMapTransition(void)
     int mapPixH = gField.map.height * TILE_SIZE * TILE_SCALE;
     gField.camera = CameraCreate(PlayerPixelPos(&gField.player), mapPixW, mapPixH);
 
+    // Village is the safe-rest point: any arrival at the hub fully heals the
+    // party, whether the player walked back through a dungeon-exit warp or
+    // got rescued after a defeat.
+    if (gGameState.currentMapId == MAP_OVERWORLD_HUB) {
+        PartyHealAll(&gGameState.party);
+    }
+
     if (gGameState.rescueDialoguePending) {
         gGameState.rescueDialoguePending = false;
         // Combine the rescue flavor pages with an optional trailing "what you

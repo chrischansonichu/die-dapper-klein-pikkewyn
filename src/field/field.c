@@ -859,11 +859,12 @@ static void ResolveBattleEnd(FieldState *ow, int result)
     }
 
     if (result == 2 /* defeat */) {
-        // Village rescue — heal up, kick to the hub with pending dialogue.
-        // The dialogue is staged through GameState (rescueDialoguePending +
-        // rescueLossMsg) because this FieldState is about to be torn down by
-        // ApplyPendingMapTransition — calling DialogueBegin on it here would
-        // be wiped on the next frame.
+        // Village rescue — kick to the hub with pending dialogue. The party
+        // heal happens in ApplyPendingMapTransition, which heals on any hub
+        // arrival. The dialogue is staged through GameState
+        // (rescueDialoguePending + rescueLossMsg) because this FieldState is
+        // about to be torn down by ApplyPendingMapTransition — calling
+        // DialogueBegin on it here would be wiped on the next frame.
         int itemsLost = 0, weaponsDamaged = 0;
         int totalLost = DropInventoryOnRescue(&ow->gs->party.inventory,
                                               &itemsLost, &weaponsDamaged);
@@ -885,7 +886,6 @@ static void ResolveBattleEnd(FieldState *ow, int result)
             }
             ow->gs->rescueLossPending = true;
         }
-        PartyHealAll(&ow->gs->party);
         ow->gs->rescueDialoguePending = true;
         ow->gs->hasPendingMap    = true;
         ow->gs->pendingMapId     = MAP_OVERWORLD_HUB;
