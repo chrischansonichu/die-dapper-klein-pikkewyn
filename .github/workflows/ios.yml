@@ -1,0 +1,88 @@
+name: iOS Simulator
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/**'
+      - 'resources/**'
+      - '.github/workflows/ios.yml'
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    permissions:
+      contents: write       # upload-release-asset on tagged releases
+    runs-on: macos-latest
+
+    env:
+      BUILD_DIR: cmake-build-ios
+      APP_NAME:  ddkp_sdl3
+      BUNDLE_ID: com.dapperpenguin.ddkp
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v5
+
+    - name: Select Xcode (full toolchain, not CommandLineTools)
+      run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+    - name: Show toolchain
+      run: |
+        xcodebuild -version
+        cmake --version
+
+    # FetchContent_Declare clones SDL3, SDL3_ttf, SDL3_image. Cache them so
+    # subsequent runs skip the ~200MB shallow clones.
+    - name: Cache CMake FetchContent (SDL3 et al)
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.BUILD_DIR }}/_deps
+        key: ios-fetch-${{ hashFiles('src/sdl3_compat/CMakeLists.txt') }}
+        restore-keys: |
+          ios-fetch-
+
+    - name: Configure (iOS Simulator, arm64)
+      run: |
+        cmake -G Xcode \
+              -S src/sdl3_compat \
+              -B "$BUILD_DIR" \
+              -DCMAKE_SYSTEM_NAME=iOS \
+              -DCMAKE_OSX_SYSROOT=iphonesimulator \
+              -DCMAKE_OSX_ARCHITECTURES=arm64 \
+              -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
+
+    - name: Build
+      run: cmake --build "$BUILD_DIR" --config Debug
+
+    - name: Stage artifact
+      run: |
+        APP_BUNDLE="$BUILD_DIR/Debug-iphonesimulator/$APP_NAME.app"
+        if [ ! -d "$APP_BUNDLE" ]; then
+          echo "App bundle not produced at $APP_BUNDLE" >&2
+          ls -R "$BUILD_DIR/Debug-iphonesimulator" || true
+          exit 1
+        fi
+        STAGE_DIR=ddkp_ios_simulator
+        mkdir "$STAGE_DIR"
+        cp -R "$APP_BUNDLE" "$STAGE_DIR/"
+        cp README.md LICENSE "$STAGE_DIR/" 2>/dev/null || true
+        zip -r ddkp_ios_simulator.zip "$STAGE_DIR"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ddkp_ios_simulator
+        path: ddkp_ios_simulator.zip
+
+    - name: Attach to release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: ddkp_ios_simulator.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      if: github.event_name == 'release' && github.event.action == 'published'
