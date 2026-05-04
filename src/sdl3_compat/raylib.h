@@ -407,6 +407,7 @@ bool CheckCollisionPointRec(Vector2 p, Rectangle r);
 // ----------------------------------------------------------------------------
 
 Color Fade(Color c, float alpha);
+Color ColorAlpha(Color c, float alpha);
 
 #ifdef __cplusplus
 }

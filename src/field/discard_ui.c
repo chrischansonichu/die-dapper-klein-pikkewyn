@@ -5,20 +5,52 @@
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
 #include "../systems/modal_close.h"
+#include "../systems/touch_input.h"
+#include "../systems/ui_button.h"
 #include <string.h>
 #include <stdio.h>
+
+// ---------------------------------------------------------------------------
+// Layout — landscape, mobile-first. Player picks one of their existing
+// weapons to toss; the new weapon takes its slot. Each row is a tap target;
+// a single tap commits the swap. Bottom CTA shows the currently-selected
+// weapon's name and is the visible primary action.
+// ---------------------------------------------------------------------------
+
+#define DISC_ROW_H   46
+#define DISC_ROW_GAP 6
+#define DISC_CTA_H   56
 
 static inline Rectangle DiscPanelRect(void)
 {
     int W = GetScreenWidth(), H = GetScreenHeight();
     return (Rectangle){ 60.0f, 60.0f, (float)(W - 120), (float)(H - 120) };
 }
+static inline int DiscContentX(void)  { return (int)DiscPanelRect().x + 20; }
+static inline int DiscContentW(void)  { return (int)DiscPanelRect().width - 40; }
 
-void DiscardUIInit(DiscardUI *d)
+static inline Rectangle DiscRowRect(int i)
 {
-    memset(d, 0, sizeof(*d));
+    Rectangle p = DiscPanelRect();
+    int firstY = (int)p.y + 130;     // below header + intro
+    return (Rectangle){
+        (float)DiscContentX() - 6,
+        (float)(firstY + i * (DISC_ROW_H + DISC_ROW_GAP)),
+        (float)DiscContentW() + 12,
+        (float)DISC_ROW_H,
+    };
 }
 
+static inline Rectangle DiscCTARect(void)
+{
+    Rectangle p = DiscPanelRect();
+    float w = 280;
+    float x = p.x + p.width - w - 20;
+    float y = p.y + p.height - DISC_CTA_H - 16;
+    return (Rectangle){ x, y, w, (float)DISC_CTA_H };
+}
+
+void DiscardUIInit(DiscardUI *d) { memset(d, 0, sizeof(*d)); }
 bool DiscardUIIsOpen(const DiscardUI *d) { return d->active; }
 
 void DiscardUIOpen(DiscardUI *d, const Party *party,
@@ -35,6 +67,18 @@ void DiscardUIOpen(DiscardUI *d, const Party *party,
 
 void DiscardUIClose(DiscardUI *d) { d->active = false; }
 
+static void CommitSwap(DiscardUI *d, Party *party)
+{
+    Inventory *inv = &party->inventory;
+    if (d->cursor < 0 || d->cursor >= inv->weaponCount) return;
+    WeaponStack out;
+    if (!InventoryTakeWeapon(inv, d->cursor, &out)) return;
+    d->swappedOutMoveId = out.moveId;
+    InventoryAddWeapon(inv, d->pendingMoveId, d->pendingDurability);
+    d->cancelled = false;
+    d->phase     = DISC_PHASE_RESULT;
+}
+
 void DiscardUIUpdate(DiscardUI *d, Party *party)
 {
     if (!d->active) return;
@@ -43,37 +87,45 @@ void DiscardUIUpdate(DiscardUI *d, Party *party)
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
             IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE) ||
             IsKeyPressed(KEY_SPACE) ||
-            ModalCloseButtonTapped(DiscPanelRect())) {
+            TouchTapInRect(DiscCTARect())) {
             DiscardUIClose(d);
         }
         return;
     }
 
-    // Cancel → the incoming weapon is lost to the sea.
-    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)
-        || ModalCloseButtonTapped(DiscPanelRect())) {
+    // Cancel via keyboard → the incoming weapon is lost to the sea. No
+    // on-screen X icon — the only ways out from the pick phase are tapping
+    // a weapon (commits) or hitting the keyboard X/ESC.
+    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)) {
         d->cancelled = true;
         d->phase     = DISC_PHASE_RESULT;
         return;
     }
 
+    // Tap a weapon row → select that one as the cursor.
+    for (int i = 0; i < d->entryCount; i++) {
+        if (TouchTapInRect(DiscRowRect(i))) {
+            d->cursor = i;
+            return;
+        }
+    }
+
+    // Tap the CTA → commit the swap.
+    if (TouchTapInRect(DiscCTARect())) {
+        CommitSwap(d, party);
+        return;
+    }
+
+    // Keyboard parity for desktop iteration. Hint strings are no longer
+    // shown to the player.
     if (d->entryCount > 0) {
         if (IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_W))
             d->cursor = (d->cursor - 1 + d->entryCount) % d->entryCount;
         if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
             d->cursor = (d->cursor + 1) % d->entryCount;
     }
-
     if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
-        Inventory *inv = &party->inventory;
-        if (d->cursor < 0 || d->cursor >= inv->weaponCount) return;
-        WeaponStack out;
-        if (!InventoryTakeWeapon(inv, d->cursor, &out)) return;
-        d->swappedOutMoveId = out.moveId;
-        // There's now a free slot — the add cannot fail.
-        InventoryAddWeapon(inv, d->pendingMoveId, d->pendingDurability);
-        d->cancelled = false;
-        d->phase     = DISC_PHASE_RESULT;
+        CommitSwap(d, party);
     }
 }
 
@@ -81,81 +133,73 @@ void DiscardUIDraw(const DiscardUI *d, const Party *party)
 {
     if (!d->active) return;
 
+    Rectangle p = DiscPanelRect();
     int W = GetScreenWidth(), H = GetScreenHeight();
-    DrawRectangle(0, 0, W, H, gPH.dimmer);
-    PHDrawPanel(DiscPanelRect(), 0x701);
-    ModalCloseButtonDraw(DiscPanelRect());
+    int contentX = DiscContentX();
 
-    DrawText("WEAPON BAG FULL", 80, 72, FS(20), gPH.ink);
+    DrawRectangle(0, 0, W, H, gPH.dimmer);
+    PHDrawPanel(p, 0x701);
+
+    DrawText("WEAPON BAG FULL", contentX, (int)p.y + 14, 22, gPH.ink);
 
     const MoveDef *incoming = GetMoveDef(d->pendingMoveId);
 
     if (d->phase == DISC_PHASE_RESULT) {
         if (d->cancelled) {
-            DrawText(TextFormat("Refused the %s.", incoming->name), 80, 130, FS(18), gPH.ink);
-            DrawText("It slips back into the sea.", 80, 158, FS(16), gPH.inkLight);
+            DrawText(TextFormat("Refused the %s.", incoming->name),
+                     contentX, (int)p.y + 60, 18, gPH.ink);
+            DrawText("It slips back into the sea.",
+                     contentX, (int)p.y + 90, 16, gPH.inkLight);
         } else {
             const MoveDef *out = GetMoveDef(d->swappedOutMoveId);
-            DrawText(TextFormat("Tossed the %s into the surf.", out->name), 80, 130, FS(18), gPH.ink);
-            DrawText(TextFormat("Took the %s.", incoming->name), 80, 158, FS(18), gPH.ink);
+            DrawText(TextFormat("Tossed the %s into the surf.", out->name),
+                     contentX, (int)p.y + 60, 18, gPH.ink);
+            DrawText(TextFormat("Took the %s.", incoming->name),
+                     contentX, (int)p.y + 90, 18, gPH.ink);
         }
-        DrawText("Press any key to continue...", 80, H - 100, FS(14), gPH.inkLight);
+        DrawChunkyButton(DiscCTARect(), "CLOSE", 22, true, true);
         return;
     }
 
-    int x = 80, y = 110;
-    DrawText(TextFormat("Incoming: %s (dur %d)",
-                        incoming->name, d->pendingDurability), x, y, FS(18), gPH.ink);
-    y += 28;
-    DrawText("Choose one to toss into the surf, or press X to refuse the new weapon.",
-             x, y, 14, gPH.inkLight);
-    y += 28;
+    // Pick phase.
+    DrawText(TextFormat("Incoming: %s  (durability %d)",
+                        incoming->name, d->pendingDurability),
+             contentX, (int)p.y + 56, 18, gPH.ink);
+    DrawText("Tap a weapon to discard, or close to refuse the new one.",
+             contentX, (int)p.y + 84, 14, gPH.inkLight);
 
     const Inventory *inv = &party->inventory;
 
     if (d->entryCount == 0) {
-        DrawText("(Bag is somehow empty — press Z to take the new weapon.)", x, y, FS(16), gPH.inkLight);
-    } else {
-        // Matches SalvagerUI viewport geometry: 5 rows of 22px fit in the panel
-        // below the header + intro lines and above the footer help.
-        const int VISIBLE = 5;
-        const int ROW_H   = 22;
-        int scrollTop = 0;
-        if (d->cursor >= VISIBLE) scrollTop = d->cursor - VISIBLE + 1;
-        int maxScroll = d->entryCount - VISIBLE;
-        if (maxScroll < 0) maxScroll = 0;
-        if (scrollTop > maxScroll) scrollTop = maxScroll;
-        int drawEnd = scrollTop + VISIBLE;
-        if (drawEnd > d->entryCount) drawEnd = d->entryCount;
-
-        int listTop = y;
-        for (int i = scrollTop; i < drawEnd; i++) {
-            bool sel = (i == d->cursor);
-            Color bg = sel ? (Color){ 40,  60, 100, 255}
-                           : (Color){ 18,  22,  38, 220};
-            DrawRectangle(x - 6, y - 2, W - 200, 24, bg);
-            const MoveDef *mv = GetMoveDef(inv->weapons[i].moveId);
-            int dur = inv->weapons[i].durability;
-            char buf[96];
-            snprintf(buf, sizeof(buf), "  %-16s dur %-2d", mv->name, dur);
-            Color text = (dur == 0) ? (Color){180, 120, 120, 255} : WHITE;
-            DrawText(buf, x, y, FS(16), text);
-            y += ROW_H;
-        }
-
-        if (d->entryCount > VISIBLE) {
-            int trackX = W - 80;
-            int trackY = listTop - 2;
-            int trackH = VISIBLE * ROW_H;
-            DrawRectangle(trackX, trackY, 4, trackH, (Color){20, 25, 45, 220});
-            float frac = (float)VISIBLE / (float)d->entryCount;
-            int thumbH = (int)(trackH * frac);
-            if (thumbH < 8) thumbH = 8;
-            float pos = (maxScroll > 0) ? (float)scrollTop / (float)maxScroll : 0.0f;
-            int thumbY = trackY + (int)((trackH - thumbH) * pos);
-            DrawRectangle(trackX, thumbY, 4, thumbH, (Color){130, 170, 230, 255});
-        }
+        DrawText("(Bag is somehow empty — taking the new weapon...)",
+                 contentX, (int)p.y + 130, 16, gPH.inkLight);
+        DrawChunkyButton(DiscCTARect(), "TAKE NEW WEAPON", 22, true, true);
+        return;
     }
 
-    DrawText("UP/DOWN: select   Z/Enter: swap   X: refuse new weapon", x, H - 100, FS(14), gPH.inkLight);
+    for (int i = 0; i < d->entryCount; i++) {
+        Rectangle r = DiscRowRect(i);
+        bool sel = (i == d->cursor);
+        Color bg = sel ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 90}
+                        : (Color){0, 0, 0, 30};
+        DrawRectangleRounded(r, 0.18f, 6, bg);
+        const MoveDef *mv = GetMoveDef(inv->weapons[i].moveId);
+        int dur = inv->weapons[i].durability;
+        Color textCol = (dur == 0) ? gPH.inkLight : gPH.ink;
+        char buf[96];
+        snprintf(buf, sizeof(buf), "%-16s   dur %d%s",
+                 mv->name, dur, dur == 0 ? "  (broken)" : "");
+        DrawText(buf, (int)r.x + 14, (int)r.y + (DISC_ROW_H - 18) / 2 + 1,
+                 18, textCol);
+    }
+
+    // CTA shows the currently-targeted weapon to make the consequence explicit.
+    if (d->cursor >= 0 && d->cursor < d->entryCount) {
+        const MoveDef *target = GetMoveDef(inv->weapons[d->cursor].moveId);
+        char ctaLabel[40];
+        snprintf(ctaLabel, sizeof(ctaLabel), "TOSS %s", target->name);
+        DrawChunkyButton(DiscCTARect(), ctaLabel, 20, true, true);
+    } else {
+        DrawChunkyButton(DiscCTARect(), "TOSS WEAPON", 20, true, false);
+    }
 }

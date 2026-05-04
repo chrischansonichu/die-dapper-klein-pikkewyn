@@ -743,6 +743,14 @@ Color Fade(Color c, float alpha) {
     return out;
 }
 
+Color ColorAlpha(Color c, float alpha) {
+    if (alpha < 0.0f) alpha = 0.0f;
+    if (alpha > 1.0f) alpha = 1.0f;
+    Color out = c;
+    out.a = (unsigned char)(255.0f * alpha);
+    return out;
+}
+
 // ---------------------------------------------------------------------------
 // Extended drawing primitives — added in the broad-coverage pass.
 // ---------------------------------------------------------------------------

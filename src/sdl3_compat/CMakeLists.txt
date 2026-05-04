@@ -130,6 +130,7 @@ set(GAME_SOURCES
     ../systems/fab_menu.c
     ../systems/modal_close.c
     ../systems/touch_input.c
+    ../systems/ui_button.c
 )
 
 add_executable(ddkp_sdl3

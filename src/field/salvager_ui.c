@@ -7,6 +7,7 @@
 #include "../screen_layout.h"
 #include "../systems/modal_close.h"
 #include "../systems/touch_input.h"
+#include "../systems/ui_button.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -109,15 +110,13 @@ void SalvagerUIUpdate(SalvagerUI *s, Party *party)
     if (s->phase == SAL_PHASE_RESULT) {
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
             IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE) ||
-            ModalCloseButtonTapped(SalPanelRect()) ||
-            TouchTapInRect(SalPanelRect())) {
+            TouchTapInRect(sL.confirmBtn)) {
             SalvagerUIClose(s);
         }
         return;
     }
 
-    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)
-        || ModalCloseButtonTapped(SalPanelRect())) {
+    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)) {
         SalvagerUIClose(s);
         return;
     }
@@ -223,9 +222,9 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
 
     DrawRectangle(0, 0, W, H, gPH.dimmer);
     PHDrawPanel((Rectangle){margin, margin, panelW, panelH}, 0x201);
-    ModalCloseButtonDraw((Rectangle){margin, margin, panelW, panelH});
 
-    DrawText("SALVAGER", x, margin + 12, titleF, gPH.ink);
+    DrawText("SALVAGER", x, margin + 14, titleF, gPH.ink);
+    (void)bodyF;
 
     if (s->phase == SAL_PHASE_RESULT) {
         int y = margin + 60;
@@ -237,7 +236,11 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
         y += 8;
         DrawTextWrapped("\"Better in my sack than on the seabed. Safe travels.\"",
                         x, &y, contentW, quoteF, 4, gPH.inkLight);
-        DrawText("Press any key to continue...", x, H - margin - 40, hintF, gPH.inkLight);
+        Rectangle ctaR = { (float)(W * 0.5f - 100), (float)(H - margin - 76),
+                           200.0f, 56.0f };
+        sL.confirmBtn      = ctaR;
+        sL.confirmIsCommit = false;
+        DrawChunkyButton(ctaR, "CLOSE", 22, true, true);
         return;
     }
 
@@ -272,28 +275,33 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
         int rowW = contentW - 10;
         int vi = 0;
         for (int i = scrollTop; i < drawEnd; i++) {
-            bool sel = (i == s->cursor);
+            bool sel       = (i == s->cursor);
+            bool selected  = s->give[i];
+            // Selected rows pick up a soft warm-orange wash; the cursor row
+            // gets a slightly darker ink tint for "current focus". Rounded
+            // corners + chunky border keeps the visual language consistent
+            // with the chunky CTAs below.
             Color bg;
-            if (sel)             bg = (Color){ 90,  60,  30, 255};
-            else if (s->give[i]) bg = (Color){ 55,  40,  20, 255};
-            else                 bg = (Color){ 25,  20,  12, 220};
-            DrawRectangle(x - 6, y - 2, rowW, ROW_H - 2, bg);
+            if (selected) bg = (Color){ gPH.roof.r,  gPH.roof.g,  gPH.roof.b,  90};
+            else if (sel) bg = (Color){ gPH.ink.r,   gPH.ink.g,   gPH.ink.b,    50};
+            else          bg = (Color){ 0, 0, 0, 30 };
+            DrawRectangleRounded((Rectangle){(float)(x - 6), (float)(y - 2),
+                                              (float)rowW, (float)(ROW_H - 2)},
+                                 0.18f, 6, bg);
             const MoveDef *mv = GetMoveDef(inv->weapons[s->weaponIdx[i]].moveId);
             int dur = inv->weapons[s->weaponIdx[i]].durability;
             char buf[96];
-            const char *mark = s->give[i] ? "[x]" : "[ ]";
-            // Portrait has less horizontal room — drop the "(broken)" /
-            // "(still usable)" trailer and rely on the row tint instead.
+            const char *mark = selected ? "✓" : "○";
             if (SCREEN_PORTRAIT) {
-                snprintf(buf, sizeof(buf), "%s %-14s dur %-2d",
+                snprintf(buf, sizeof(buf), "%s  %-14s dur %-2d",
                          mark, mv->name, dur);
             } else {
-                snprintf(buf, sizeof(buf), "%s  %-16s dur %-2d  %s",
+                snprintf(buf, sizeof(buf), "%s   %-16s   dur %-2d   %s",
                          mark, mv->name, dur,
                          s->broken[i] ? "(broken)" : "(still usable)");
             }
-            Color text = s->broken[i] ? WHITE : (Color){200, 200, 200, 255};
-            DrawText(buf, x, y, rowF, text);
+            Color text = s->broken[i] ? gPH.ink : gPH.inkLight;
+            DrawText(buf, x, y + 2, rowF, text);
             // Record the tap rect for this visible row.
             sL.rowEntry[vi] = i;
             sL.rowRect[vi] = (Rectangle){ (float)(x - 6), (float)(y - 2),
@@ -307,48 +315,34 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
             int trackX = x + rowW - 8;
             int trackY = listTop - 2;
             int trackH = VISIBLE * ROW_H;
-            DrawRectangle(trackX, trackY, 4, trackH, (Color){40, 30, 15, 220});
+            DrawRectangleRounded((Rectangle){(float)trackX, (float)trackY, 4, (float)trackH},
+                                 0.5f, 4, (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 60});
             float frac = (float)VISIBLE / (float)s->entryCount;
             int thumbH = (int)(trackH * frac);
             if (thumbH < 8) thumbH = 8;
             float pos = (maxScroll > 0) ? (float)scrollTop / (float)maxScroll : 0.0f;
             int thumbY = trackY + (int)((trackH - thumbH) * pos);
-            DrawRectangle(trackX, thumbY, 4, thumbH, (Color){190, 140,  70, 255});
+            DrawRectangleRounded((Rectangle){(float)trackX, (float)thumbY, 4, (float)thumbH},
+                                 0.5f, 4, gPH.ink);
         }
     }
 
     int total = SalvagerSelectedTotal(s);
-    int totalY  = H - margin - (SCREEN_PORTRAIT ? 80 : 70);
+    int totalY  = H - margin - (SCREEN_PORTRAIT ? 80 : 86);
     DrawText(TextFormat("Hand over: %d   Fish received: %d", total, total),
-             x, totalY, rowF, gPH.ink);
+             x, totalY, rowF, gPH.inkLight);
 
-    // Confirm / Close button — mobile's only way to commit the selection.
-    int btnW = SCREEN_PORTRAIT ? 160 : 140;
-    int btnH = SCREEN_PORTRAIT ? 44  : 32;
+    // Bottom-right primary CTA — chunky illustrated button.
+    int btnW = 220;
+    int btnH = 56;
     int btnX = W - margin - 20 - btnW;
-    int btnY = H - margin - (SCREEN_PORTRAIT ? 84 : 64);
-    sL.confirmBtn = (Rectangle){ (float)btnX, (float)btnY,
-                                 (float)btnW, (float)btnH };
+    int btnY = H - margin - btnH - 16;
+    sL.confirmBtn      = (Rectangle){ (float)btnX, (float)btnY,
+                                       (float)btnW, (float)btnH };
     sL.confirmIsCommit = (total > 0);
-    const char *btnLabel = sL.confirmIsCommit ? "Hand Over" : "Close";
-    Color btnBg   = sL.confirmIsCommit ? (Color){ 90, 130,  70, 255}
-                                       : (Color){ 70,  70, 100, 255};
-    Color btnEdge = sL.confirmIsCommit ? (Color){160, 210, 120, 255}
-                                       : (Color){150, 150, 200, 255};
-    DrawRectangle(btnX, btnY, btnW, btnH, btnBg);
-    DrawRectangleLines(btnX, btnY, btnW, btnH, btnEdge);
-    int lblW = MeasureText(btnLabel, rowF);
-    DrawText(btnLabel, btnX + (btnW - lblW) / 2,
-             btnY + (btnH - rowF) / 2, rowF, WHITE);
-
-    if (SCREEN_PORTRAIT) {
-        int hy = H - margin - 50;
-        DrawText("Tap row: toggle   Tap button: confirm",
-                 x, hy,                hintF, gPH.inkLight);
-        DrawText("UP/DOWN: select   SPACE: toggle   Z: confirm   X: cancel",
-                 x, hy + hintF + 4,    hintF, gPH.inkLight);
-    } else {
-        DrawText("UP/DOWN: select   SPACE: toggle   Z/Enter: confirm   X: cancel",
-                 x, H - margin - 30, hintF, gPH.inkLight);
-    }
+    char btnLabel[32];
+    if (sL.confirmIsCommit) snprintf(btnLabel, sizeof(btnLabel), "HAND OVER  (%d)", total);
+    else                    snprintf(btnLabel, sizeof(btnLabel), "CLOSE");
+    DrawChunkyButton(sL.confirmBtn, btnLabel, 22, sL.confirmIsCommit, true);
+    (void)hintF;  // hint strings have been removed for the mobile-first redesign
 }

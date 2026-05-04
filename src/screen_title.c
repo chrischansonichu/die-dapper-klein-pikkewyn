@@ -27,6 +27,8 @@
 #include "screens.h"
 #include "state/save.h"
 #include "screen_layout.h"
+#include "systems/ui_button.h"
+#include "render/paper_harbor.h"
 #include "version.h"
 #include <math.h>
 
@@ -101,7 +103,10 @@ bool DrawButton(const char *text, const int buttonNumber, const int finScreen, b
 #else
     const int btnW = W / 6;
     const int btnH = H / 10;
-    const int bottomRow = (int) (H * 0.82f);
+    // Pushed from 0.82 → 0.88 so the buttons sit clear of the title art's
+    // lower text band on iOS/landscape; previously the New/Load/Options
+    // plates stamped on top of the subtitle copy baked into title.png.
+    const int bottomRow = (int) (H * 0.88f);
 #endif
     const int gap = (W - 3 * btnW) / 4;
 
@@ -109,52 +114,18 @@ bool DrawButton(const char *text, const int buttonNumber, const int finScreen, b
     if (buttonNumber > 0) {
         posX = posX + buttonNumber * (btnW + gap);
     }
-    // Pick a font size that fits both the button width AND the button height
-    // when rendered through the UI shim (which scales the requested size by
-    // UI_TEXT_SCALE). Cap by height first so big labels can't shoot past the
-    // top/bottom of the plate, then shrink further if the rendered width
-    // still overflows. Without the height cap the previous code happily
-    // requested 134pt (= 200px rendered) into a 45px-tall button.
-    const int maxRenderedH = btnH - 8;
-    int thisFontSize = (int)(maxRenderedH / UI_TEXT_SCALE);
-    const int maxTextW = btnW - 12;
-    while (thisFontSize > 8 && MeasureText(text, thisFontSize) > maxTextW) {
-        thisFontSize -= 1;
-    }
+    // Title-screen buttons reuse the global chunky-button visual language so
+    // they read as solid parchment plates against the busy cover art instead
+    // of disappearing into it (translucent dark plates were getting visually
+    // chewed up by the rocks/sand at the bottom of the illustration).
+    int fontSize = btnH > 50 ? 28 : 22;
+    while (fontSize > 12 && MeasureText(text, fontSize) > btnW - 16) fontSize--;
 
-    const int textWidth  = MeasureText(text, thisFontSize);
-    // Centering must use the actual rendered glyph height, not the requested
-    // size — the shim multiplies by UI_TEXT_SCALE before drawing.
-    const int textHeight = (int)(thisFontSize * UI_TEXT_SCALE);
+    Rectangle rect = {(float)posX, (float)bottomRow, (float)btnW, (float)btnH};
+    bool selected = enabled && (gSelected == buttonNumber);
 
-    const int textX = posX + (btnW - textWidth) / 2;
-    const int textY = bottomRow + (btnH - textHeight) / 2;
-    const Vector2 mouse = GetMousePosition();
-    const Rectangle rect = {(float) posX, (float) bottomRow, (float) btnW, (float) btnH};
-    const bool hovered  = enabled && CheckCollisionPointRec(mouse, rect);
-    const bool selected = enabled && (gSelected == buttonNumber);
-
-    // Semi-transparent plate so the button reads over the illustration.
-    // Disabled buttons keep their footprint but render washed out and eat no clicks.
-    Color plate, border, label;
-    if (!enabled) {
-        plate  = (Color){  0,   0,   0, 120 };
-        border = (Color){120, 110,  80, 200 };
-        label  = (Color){160, 150, 120, 200 };
-    } else if (hovered || selected) {
-        plate  = (Color){ 20,  20,  25, 210 };
-        border = RAYWHITE;
-        label  = RAYWHITE;
-    } else {
-        plate  = (Color){  0,   0,   0, 170 };
-        border = (Color){230, 210, 140, 255};
-        label  = (Color){240, 225, 170, 255};
-    }
-
-    DrawRectangleRec(rect, plate);
-    DrawRectangleLinesEx(rect, 3, border);
-    DrawText(text, textX, textY, thisFontSize, label);
-    if (hovered && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+    bool tapped = DrawChunkyButton(rect, text, fontSize, selected, enabled);
+    if (tapped) {
         finishScreen = finScreen;
         return true;
     }

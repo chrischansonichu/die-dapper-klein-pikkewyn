@@ -979,10 +979,10 @@ void FieldInit(FieldState *ow, GameState *gs)
 
 void FieldUpdate(FieldState *ow, float dt)
 {
-    // Touch/mouse state is tracked once per frame and read by whichever UI
-    // layer owns input this frame. Desktop keyboard paths still work in
-    // parallel; this only emits events when a pointer is actually active.
-    TouchInputUpdate();
+    // Touch/mouse gesture state is now ticked once per frame from the SDL3
+    // main loop (sdl3_compat/main.c) so the title / battle / options screens
+    // also receive taps. Calling it again here would clear the tapReady
+    // flag mid-frame and silently eat field taps.
 
     // In battle: BattleUpdate owns input. Once it finishes, resolve drops and
     // return to FIELD_FREE.

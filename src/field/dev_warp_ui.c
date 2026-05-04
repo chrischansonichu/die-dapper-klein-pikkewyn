@@ -4,6 +4,9 @@
 #include "../state/game_state.h"
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
+#include "../systems/modal_close.h"
+#include "../systems/touch_input.h"
+#include "../systems/ui_button.h"
 #include <stdio.h>
 
 // Destination table. Spawn coordinates match the default FieldInit spawns for
@@ -30,6 +33,29 @@ static const DevWarpDest gDests[] = {
 };
 static const int gDestCount = (int)(sizeof(gDests) / sizeof(gDests[0]));
 
+#define DEV_PANEL_W 380
+#define DEV_PANEL_H 380
+#define DEV_ROW_H    34
+#define DEV_ROW_GAP   2
+
+static inline Rectangle DevPanelRect(void)
+{
+    int sw = GetScreenWidth(), sh = GetScreenHeight();
+    return (Rectangle){ (float)((sw - DEV_PANEL_W) / 2),
+                        (float)((sh - DEV_PANEL_H) / 2),
+                        (float)DEV_PANEL_W, (float)DEV_PANEL_H };
+}
+static inline Rectangle DevRowRect(int i)
+{
+    Rectangle p = DevPanelRect();
+    return (Rectangle){
+        p.x + 14,
+        p.y + 50 + i * (DEV_ROW_H + DEV_ROW_GAP),
+        p.width - 28,
+        (float)DEV_ROW_H,
+    };
+}
+
 void DevWarpUIInit(DevWarpUI *d) { d->active = false; d->cursor = 0; }
 bool DevWarpUIIsOpen(const DevWarpUI *d) { return d->active; }
 void DevWarpUIOpen(DevWarpUI *d) { d->active = true; d->cursor = 0; }
@@ -38,10 +64,28 @@ void DevWarpUIClose(DevWarpUI *d) { d->active = false; }
 bool DevWarpUIUpdate(DevWarpUI *d, struct GameState *gs)
 {
     if (!d->active) return false;
+
     if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_F9)) {
         DevWarpUIClose(d);
         return false;
     }
+
+    // Tap a destination row → warp immediately.
+    for (int i = 0; i < gDestCount; i++) {
+        if (TouchTapInRect(DevRowRect(i))) {
+            const DevWarpDest *dd = &gDests[i];
+            gs->hasPendingMap   = true;
+            gs->pendingMapId    = dd->mapId;
+            gs->pendingFloor    = dd->floor;
+            gs->pendingMapSeed  = (dd->floor > 0) ? (unsigned)GetRandomValue(1, 0x7FFFFFFF) : 0;
+            gs->pendingSpawnX   = dd->spawnX;
+            gs->pendingSpawnY   = dd->spawnY;
+            gs->pendingSpawnDir = dd->spawnDir;
+            DevWarpUIClose(d);
+            return true;
+        }
+    }
+
     if (IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_W))
         d->cursor = (d->cursor - 1 + gDestCount) % gDestCount;
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
@@ -66,30 +110,22 @@ void DevWarpUIDraw(const DevWarpUI *d)
 {
     if (!d->active) return;
 
-    const int W = 320, H = 300;
     int sw = GetScreenWidth(), sh = GetScreenHeight();
-    int x = (sw - W) / 2, y = (sh - H) / 2;
+    Rectangle p = DevPanelRect();
 
     DrawRectangle(0, 0, sw, sh, gPH.dimmer);
-    PHDrawPanel((Rectangle){x, y, W, H}, 0x801);
+    PHDrawPanel(p, 0x801);
 
-    DrawText("DEV WARP", x + 12, y + 10, FS(18), gPH.ink);
-    DrawText("UP/DOWN select  Z warp  X close", x + 12, y + 32, FS(12), gPH.inkLight);
+    DrawText("DEV WARP", (int)p.x + 14, (int)p.y + 12, 20, gPH.ink);
 
-    const int ROW_H  = 22;
-    const int VISIBLE = 9;
-    int listTop = y + 56;
-    int scrollTop = 0;
-    if (d->cursor >= VISIBLE) scrollTop = d->cursor - VISIBLE + 1;
-    int drawEnd = scrollTop + VISIBLE;
-    if (drawEnd > gDestCount) drawEnd = gDestCount;
-
-    for (int i = scrollTop; i < drawEnd; i++) {
-        int rowY = listTop + (i - scrollTop) * ROW_H;
+    for (int i = 0; i < gDestCount; i++) {
+        Rectangle r = DevRowRect(i);
         bool sel = (i == d->cursor);
-        Color bg = sel ? (Color){80, 70, 30, 255} : (Color){25, 25, 45, 220};
-        DrawRectangle(x + 8, rowY - 2, W - 16, ROW_H - 2, bg);
-        DrawText(gDests[i].label, x + 16, rowY, FS(14), WHITE);
+        Color bg = sel ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 90}
+                        : (Color){0, 0, 0, 30};
+        DrawRectangleRounded(r, 0.18f, 6, bg);
+        DrawText(gDests[i].label, (int)r.x + 12,
+                 (int)r.y + (DEV_ROW_H - 16) / 2, 16, gPH.ink);
     }
 
     // "DEV" watermark top-right so this build is obviously cheat-enabled.

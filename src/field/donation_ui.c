@@ -6,8 +6,25 @@
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
 #include "../systems/modal_close.h"
+#include "../systems/touch_input.h"
+#include "../systems/ui_button.h"
 #include <string.h>
 #include <stdio.h>
+
+// ---------------------------------------------------------------------------
+// Layout — landscape, mobile-first. Row layout per food item:
+//   [icon? + name + "have N"]                    [−] [count] [+]
+// Bottom of modal carries a full-width chunky DONATE button (or CLOSE when
+// nothing is selected). All keyboard hint strings have been removed; the
+// keyboard handlers stay in place for desktop iteration but are not advertised
+// to the player.
+// ---------------------------------------------------------------------------
+
+#define ROW_H        46
+#define ROW_GAP      8
+#define BTN_SIZE     44   // ≥44 honours Apple HIG touch-target minimum
+#define COUNT_W      48
+#define CTA_H        56
 
 static inline Rectangle DonPanelRect(void)
 {
@@ -17,35 +34,41 @@ static inline Rectangle DonPanelRect(void)
                         (float)(W - 2 * margin), (float)(H - 2 * margin) };
 }
 
-// Word-wrap `text` at `maxPx`, draw each line left-anchored at (x, *y). Updates
-// *y to the baseline below the last line drawn. Breaks on spaces; words longer
-// than maxPx overflow rather than split mid-word.
-static void DrawTextWrapped(const char *text, int x, int *y, int maxPx,
-                            int fontSize, int lineGap, Color color)
+static inline int DonContentX(void)    { return (int)DonPanelRect().x + 20; }
+static inline int DonContentW(void)    { return (int)DonPanelRect().width - 40; }
+static inline int DonRowTopY(int i)
 {
-    char line[256];
-    int lineLen = 0;
-    int lastSpace = -1;
-    for (int i = 0; text[i] != '\0'; i++) {
-        if (lineLen >= (int)sizeof(line) - 2) break;
-        line[lineLen++] = text[i];
-        line[lineLen]   = '\0';
-        if (text[i] == ' ') lastSpace = lineLen - 1;
-        if (MeasureText(line, fontSize) > maxPx && lastSpace > 0) {
-            line[lastSpace] = '\0';
-            DrawText(line, x, *y, fontSize, color);
-            *y += fontSize + lineGap;
-            int rem = lineLen - lastSpace - 1;
-            memmove(line, line + lastSpace + 1, rem);
-            lineLen = rem;
-            line[lineLen] = '\0';
-            lastSpace = -1;
-        }
-    }
-    if (lineLen > 0) {
-        DrawText(line, x, *y, fontSize, color);
-        *y += fontSize + lineGap;
-    }
+    Rectangle p = DonPanelRect();
+    int firstY = (int)p.y + 90;     // below header + quotes
+    return firstY + i * (ROW_H + ROW_GAP);
+}
+
+// Right-anchored group: [−][count][+] sits at the right edge of the row.
+static inline Rectangle DonMinusRect(int i)
+{
+    Rectangle p = DonPanelRect();
+    float x = p.x + p.width - 20 - BTN_SIZE - COUNT_W - BTN_SIZE;
+    return (Rectangle){ x, (float)DonRowTopY(i) + (ROW_H - BTN_SIZE) * 0.5f,
+                        BTN_SIZE, BTN_SIZE };
+}
+static inline Rectangle DonCountRect(int i)
+{
+    Rectangle m = DonMinusRect(i);
+    return (Rectangle){ m.x + BTN_SIZE, m.y, COUNT_W, BTN_SIZE };
+}
+static inline Rectangle DonPlusRect(int i)
+{
+    Rectangle c = DonCountRect(i);
+    return (Rectangle){ c.x + COUNT_W, c.y, BTN_SIZE, BTN_SIZE };
+}
+
+static inline Rectangle DonCTARect(void)
+{
+    Rectangle p = DonPanelRect();
+    float w = (p.width - 40) * 0.5f;
+    float x = p.x + p.width * 0.5f - w * 0.5f;
+    float y = p.y + p.height - CTA_H - 20;
+    return (Rectangle){ x, y, w, (float)CTA_H };
 }
 
 void DonationUIInit(DonationUI *d)
@@ -79,33 +102,86 @@ static int DonationTotal(const DonationUI *d)
     return t;
 }
 
+// Consume the donate counts from the live inventory + bump rep + transition
+// to the result page. Pulled out of Update so the keyboard and tap paths
+// share one commit point.
+static void CommitDonation(DonationUI *d, Party *party, int *rep)
+{
+    int total = DonationTotal(d);
+    if (total == 0) { DonationUIClose(d); return; }
+    int order[DONATION_MAX_ENTRIES];
+    for (int i = 0; i < d->entryCount; i++) order[i] = i;
+    for (int i = 1; i < d->entryCount; i++) {
+        int key = order[i];
+        int j = i - 1;
+        while (j >= 0 && d->itemIdx[order[j]] < d->itemIdx[key]) {
+            order[j + 1] = order[j];
+            j--;
+        }
+        order[j + 1] = key;
+    }
+    Inventory *inv = &party->inventory;
+    for (int i = 0; i < d->entryCount; i++) {
+        int k    = order[i];
+        int slot = d->itemIdx[k];
+        for (int c = 0; c < d->donate[k]; c++)
+            InventoryConsumeItem(inv, slot);
+    }
+    *rep += total;
+    d->donatedTotal = total;
+    d->repAfter     = *rep;
+    d->phase        = DON_PHASE_RESULT;
+}
+
 void DonationUIUpdate(DonationUI *d, Party *party, int *rep)
 {
     if (!d->active) return;
 
     if (d->phase == DON_PHASE_RESULT) {
-        // Any confirm/cancel key closes the result page.
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
             IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE) ||
-            ModalCloseButtonTapped(DonPanelRect())) {
+            TouchTapInRect(DonCTARect())) {
             DonationUIClose(d);
         }
         return;
     }
 
-    // Pick phase.
-    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)
-        || ModalCloseButtonTapped(DonPanelRect())) {
+    // Pick phase. Keyboard ESC/X still dismisses for desktop iteration; the
+    // on-screen close lives in the bottom CTA (which switches to "CLOSE"
+    // when nothing is selected) — no separate X icon.
+    if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_ESCAPE)) {
         DonationUIClose(d);
         return;
     }
 
+    // Per-row +/− tap targets. Test these BEFORE the keyboard input for the
+    // current cursor row so a tap on row N also moves the cursor there.
+    for (int i = 0; i < d->entryCount; i++) {
+        if (TouchTapInRect(DonMinusRect(i))) {
+            d->cursor = i;
+            if (d->donate[i] > 0) d->donate[i]--;
+        }
+        if (TouchTapInRect(DonPlusRect(i))) {
+            d->cursor = i;
+            if (d->donate[i] < d->maxCount[i]) d->donate[i]++;
+        }
+    }
+
+    // Bottom CTA — DONATE when there's something to give, otherwise the
+    // button shows CLOSE and dismisses the modal.
+    if (TouchTapInRect(DonCTARect())) {
+        if (DonationTotal(d) > 0) CommitDonation(d, party, rep);
+        else                      DonationUIClose(d);
+        return;
+    }
+
+    // Keyboard path retained for desktop iteration. Hint text is no longer
+    // shown to the player; controls are touch-first.
     if (d->entryCount > 0) {
         if (IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_W))
             d->cursor = (d->cursor - 1 + d->entryCount) % d->entryCount;
         if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
             d->cursor = (d->cursor + 1) % d->entryCount;
-
         if (IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A)) {
             if (d->donate[d->cursor] > 0) d->donate[d->cursor]--;
         }
@@ -115,37 +191,37 @@ void DonationUIUpdate(DonationUI *d, Party *party, int *rep)
     }
 
     if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) {
-        int total = DonationTotal(d);
-        if (total == 0) {
-            DonationUIClose(d);
-            return;
+        CommitDonation(d, party, rep);
+    }
+}
+
+// Word-wrap helper kept around for the result/empty pages where it still pays
+// off. Unchanged from the previous implementation.
+static void DrawTextWrapped(const char *text, int x, int *y, int maxPx,
+                            int fontSize, int lineGap, Color color)
+{
+    char line[256];
+    int lineLen = 0;
+    int lastSpace = -1;
+    for (int i = 0; text[i] != '\0'; i++) {
+        if (lineLen >= (int)sizeof(line) - 2) break;
+        line[lineLen++] = text[i];
+        line[lineLen]   = '\0';
+        if (text[i] == ' ') lastSpace = lineLen - 1;
+        if (MeasureText(line, fontSize) > maxPx && lastSpace > 0) {
+            line[lastSpace] = '\0';
+            DrawText(line, x, *y, fontSize, color);
+            *y += fontSize + lineGap;
+            int rem = lineLen - lastSpace - 1;
+            memmove(line, line + lastSpace + 1, rem);
+            lineLen = rem;
+            line[lineLen] = '\0';
+            lastSpace = -1;
         }
-        // Consume donate[i] copies of inv->items[itemIdx[i]]. Walk the
-        // entries in descending inventory-slot order — InventoryConsumeItem
-        // shifts later slots down when a stack empties, so processing the
-        // highest slot first keeps the remaining itemIdx entries valid.
-        int order[DONATION_MAX_ENTRIES];
-        for (int i = 0; i < d->entryCount; i++) order[i] = i;
-        for (int i = 1; i < d->entryCount; i++) {
-            int key = order[i];
-            int j = i - 1;
-            while (j >= 0 && d->itemIdx[order[j]] < d->itemIdx[key]) {
-                order[j + 1] = order[j];
-                j--;
-            }
-            order[j + 1] = key;
-        }
-        Inventory *inv = &party->inventory;
-        for (int i = 0; i < d->entryCount; i++) {
-            int k    = order[i];
-            int slot = d->itemIdx[k];
-            for (int c = 0; c < d->donate[k]; c++)
-                InventoryConsumeItem(inv, slot);
-        }
-        *rep += total;
-        d->donatedTotal = total;
-        d->repAfter     = *rep;
-        d->phase        = DON_PHASE_RESULT;
+    }
+    if (lineLen > 0) {
+        DrawText(line, x, *y, fontSize, color);
+        *y += fontSize + lineGap;
     }
 }
 
@@ -153,38 +229,29 @@ void DonationUIDraw(const DonationUI *d, const Party *party, int rep)
 {
     if (!d->active) return;
 
+    Rectangle p = DonPanelRect();
     int W = GetScreenWidth(), H = GetScreenHeight();
-    int margin = SCREEN_PORTRAIT ? 20 : 60;
-    int px = margin, py = margin;
-    int pw = W - 2 * margin, ph = H - 2 * margin;
-    int contentX = px + 20;
-    int contentPad = 20;
-    int contentW = pw - 2 * contentPad;
+    int contentX = DonContentX();
+    int contentW = DonContentW();
 
     DrawRectangle(0, 0, W, H, gPH.dimmer);
-    PHDrawPanel((Rectangle){px, py, pw, ph}, 0x401);
-    ModalCloseButtonDraw((Rectangle){px, py, pw, ph});
+    PHDrawPanel(p, 0x401);
 
-    // Per-screen font sizes. Landscape sizes were bumped ~10% over the
-    // original 16/14 baseline because the food-bank panel is text-dense
-    // and its body copy reads small against the parchment.
-    int titleF = SCREEN_PORTRAIT ? 28 : 22;
-    int repF   = SCREEN_PORTRAIT ? 20 : 18;
-    int bodyF  = SCREEN_PORTRAIT ? 22 : 18;
-    int quoteF = SCREEN_PORTRAIT ? 20 : 18;
-    int promptF= SCREEN_PORTRAIT ? 20 : 16;
-    int rowH   = bodyF + 10;
+    int titleF = 22;
+    int repF   = 18;
+    int bodyF  = 18;
+    int quoteF = 16;
+    int rowNameF = 18;
+    int countF   = 22;
+    int ctaF     = 22;
 
-    DrawText("FOOD BANK", contentX, py + 12, titleF, gPH.ink);
+    DrawText("FOOD BANK", contentX, (int)p.y + 14, titleF, gPH.ink);
     const char *repLabel = TextFormat("Rep: %d", rep);
     int repW = MeasureText(repLabel, repF);
-    DrawText(repLabel, px + pw - repW - contentPad, py + 16, repF, gPH.ink);
-
-    int hintFont    = SCREEN_PORTRAIT ? 16 : 16;
-    int bottomStart = H - margin - (SCREEN_PORTRAIT ? 80 : 100);
+    DrawText(repLabel, (int)p.x + (int)p.width - repW - 50, (int)p.y + 18, repF, gPH.ink);
 
     if (d->phase == DON_PHASE_RESULT) {
-        int y = py + 60;
+        int y = (int)p.y + 60;
         DrawTextWrapped(TextFormat("You donated %d item%s. Thank you, Jan.",
                                    d->donatedTotal, d->donatedTotal == 1 ? "" : "s"),
                         contentX, &y, contentW, bodyF, 4, gPH.ink);
@@ -193,51 +260,79 @@ void DonationUIDraw(const DonationUI *d, const Party *party, int rep)
         y += 8;
         DrawTextWrapped("The young ones will eat tonight.",
                         contentX, &y, contentW, quoteF, 4, gPH.ink);
-        DrawText("Press any key to continue...",
-                 contentX, bottomStart, hintFont, gPH.ink);
+        DrawChunkyButton(DonCTARect(), "CLOSE", ctaF, true, true);
         return;
     }
 
-    const Inventory *inv = &party->inventory;
-    int y = py + 50;
+    // Pick-phase header copy.
+    int y = (int)p.y + 50;
     DrawTextWrapped("\"The food bank feeds the young and the displaced.\"",
-                    contentX, &y, contentW, quoteF, 4, gPH.ink);
-    DrawTextWrapped("\"Every item you give = +1 village reputation.\"",
-                    contentX, &y, contentW, quoteF, 4, gPH.ink);
-    y += 8;
+                    contentX, &y, contentW, quoteF, 3, gPH.inkLight);
 
     if (d->entryCount == 0) {
         DrawTextWrapped("(You have no food to donate right now.)",
                         contentX, &y, contentW, quoteF, 4, gPH.ink);
-    } else {
-        DrawText("Choose how many to give:", contentX, y, promptF, gPH.ink);
-        y += promptF + 10;
-        int rowW = contentW;
-        for (int i = 0; i < d->entryCount; i++) {
-            bool sel = (i == d->cursor);
-            Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
-            DrawRectangle(contentX - 6, y - 2, rowW, rowH - 2, bg);
-            const ItemDef *it = GetItemDef(inv->items[d->itemIdx[i]].itemId);
-            char buf[96];
-            snprintf(buf, sizeof(buf), "%-16s have %-2d    give: %d",
-                     it->name, d->maxCount[i], d->donate[i]);
-            DrawText(buf, contentX, y, bodyF, WHITE);
-            y += rowH;
+        DrawChunkyButton(DonCTARect(), "CLOSE", ctaF, true, true);
+        return;
+    }
+
+    const Inventory *inv = &party->inventory;
+
+    for (int i = 0; i < d->entryCount; i++) {
+        int rowY = DonRowTopY(i);
+        bool selected = (i == d->cursor);
+
+        // Row plate — selection highlight only on the row, not under the
+        // header copy. Subtle so the +/− buttons remain the visual anchor.
+        Color rowBg = selected ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 60}
+                                : (Color){0, 0, 0, 30};
+        DrawRectangleRounded((Rectangle){(float)contentX - 6, (float)rowY,
+                                          (float)contentW + 12, (float)ROW_H},
+                             0.20f, 6, rowBg);
+
+        const ItemDef *it = GetItemDef(inv->items[d->itemIdx[i]].itemId);
+        DrawText(it->name, contentX + 6, rowY + (ROW_H - rowNameF) / 2 - 1,
+                 rowNameF, gPH.ink);
+
+        char have[32];
+        snprintf(have, sizeof(have), "have %d", d->maxCount[i]);
+        int hw = MeasureText(have, 14);
+        // Sit "have N" to the right of the name, well clear of the −/count/+ group.
+        DrawText(have, (int)DonMinusRect(i).x - hw - 12,
+                 rowY + (ROW_H - 14) / 2, 14, gPH.inkLight);
+
+        bool canDec = d->donate[i] > 0;
+        bool canInc = d->donate[i] < d->maxCount[i];
+
+        if (DrawChunkyButton(DonMinusRect(i), "−", countF, false, canDec)) {
+            // Tap handled in Update via the same hit-test; this draw-side call
+            // only paints. The redundant tap test is harmless because
+            // TouchTapInRect consumes the tap in Update before we get here.
         }
+
+        // Count display — large and centered, framed lightly.
+        Rectangle cr = DonCountRect(i);
+        char cnt[16];
+        snprintf(cnt, sizeof(cnt), "%d", d->donate[i]);
+        int cw = MeasureText(cnt, countF);
+        DrawText(cnt, (int)cr.x + ((int)cr.width - cw) / 2,
+                 (int)cr.y + ((int)cr.height - countF) / 2,
+                 countF, gPH.ink);
+
+        DrawChunkyButton(DonPlusRect(i), "+", countF, false, canInc);
     }
 
     int total = DonationTotal(d);
+    Rectangle ctaR = DonCTARect();
+    // "Total donated: N (rep gain: +N)" sits just above the CTA.
     DrawText(TextFormat("Total donated: %d  (rep gain: +%d)", total, total),
-             contentX, bottomStart - 30, bodyF, gPH.ink);
-    if (SCREEN_PORTRAIT) {
-        DrawText("UP/DOWN: select",
-                 contentX, bottomStart,                  hintFont, gPH.ink);
-        DrawText("LEFT/RIGHT: adjust",
-                 contentX, bottomStart + hintFont + 4,   hintFont, gPH.ink);
-        DrawText("Z: confirm   X: cancel",
-                 contentX, bottomStart + 2*(hintFont+4), hintFont, gPH.ink);
+             contentX, (int)ctaR.y - bodyF - 8, bodyF, gPH.inkLight);
+
+    if (total > 0) {
+        char ctaLabel[32];
+        snprintf(ctaLabel, sizeof(ctaLabel), "DONATE  (%d)", total);
+        DrawChunkyButton(ctaR, ctaLabel, ctaF, true, true);
     } else {
-        DrawText("UP/DOWN: select   LEFT/RIGHT: adjust   Z/Enter: confirm   X: cancel",
-                 contentX, bottomStart, hintFont, gPH.ink);
+        DrawChunkyButton(ctaR, "CLOSE", ctaF, false, true);
     }
 }

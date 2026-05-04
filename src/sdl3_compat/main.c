@@ -16,6 +16,7 @@
 #include "../screens.h"
 #include "../screen_layout.h"
 #include "../render/paper_harbor.h"
+#include "../systems/touch_input.h"
 
 #include <stdio.h>
 
@@ -156,6 +157,13 @@ int main(int argc, char *argv[]) {
 
     bool quitRequested = false;
     while (!WindowShouldClose() && !quitRequested) {
+        // Touch gesture state must tick exactly once per frame, BEFORE any
+        // screen tries to consume taps via TouchTapInRect / TouchPressedDir.
+        // Previously this was tucked inside FieldUpdate, which left the
+        // title/battle/options screens with a frozen gesture state — taps
+        // on chunky buttons there did nothing.
+        TouchInputUpdate();
+
         if (!onTransition) {
             UpdateScreen(currentScreen);
             const int finish = FinishScreen(currentScreen);
