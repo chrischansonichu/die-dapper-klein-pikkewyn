@@ -77,9 +77,11 @@ compile_commands.json
 cmake-build-*/
 ddkp_sdl3
 
-# Android files
-*apk*
-android.*
+# Android build outputs (the in-tree android/ project + .github/workflows
+# need to be tracked, so don't use a bare `android.*` glob — it caught
+# .github/workflows/android.yml).
+*.apk
+*.aab
 
 # WebAssembly release files
 *.data
