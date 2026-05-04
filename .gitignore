@@ -71,6 +71,8 @@ compile_commands.json
 
 # Build folder
 [Bb]uild
+cmake-build-*/
+ddkp_sdl3
 
 # Android files
 *apk*

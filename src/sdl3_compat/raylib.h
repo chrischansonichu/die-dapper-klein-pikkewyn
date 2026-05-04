@@ -288,6 +288,13 @@ void    DrawTextEx(Font font, const char *text, Vector2 position,
                    float fontSize, float spacing, Color tint);
 Vector2 MeasureTextEx(Font font, const char *text, float fontSize, float spacing);
 
+// Default-font wrappers — route through the global `font` (defined in main.c).
+// Some screens (e.g. screen_logo.c) call these directly; screen_layout.h's
+// macros redirect them to DrawTextEx for screens that include that header.
+void DrawText(const char *text, int posX, int posY, int fontSize, Color color);
+int  MeasureText(const char *text, int fontSize);
+const char *TextSubtext(const char *text, int position, int length);
+
 // ----------------------------------------------------------------------------
 // Audio (stub for now — real impl arrives with mixer wiring)
 // ----------------------------------------------------------------------------

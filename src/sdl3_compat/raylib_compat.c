@@ -488,6 +488,37 @@ Vector2 MeasureTextEx(Font font, const char *text, float fontSize, float spacing
     return v;
 }
 
+// Default-font helpers. These route through the game's global `font`, which
+// is defined in main.c and loaded via LoadFontEx — there is no separate
+// "raylib default font" in our build.
+extern Font font;
+
+void DrawText(const char *text, int posX, int posY, int fontSize, Color color) {
+    Vector2 pos = { (float)posX, (float)posY };
+    DrawTextEx(font, text, pos, (float)fontSize, 0.0f, color);
+}
+
+int MeasureText(const char *text, int fontSize) {
+    Vector2 v = MeasureTextEx(font, text, (float)fontSize, 0.0f);
+    return (int)v.x;
+}
+
+// Returns a substring view into a static buffer. Mirrors raylib's
+// TextSubtext semantics — caller must use the result before the next call.
+const char *TextSubtext(const char *text, int position, int length) {
+    static char buf[1024];
+    if (!text) { buf[0] = '\0'; return buf; }
+    int total = (int)strlen(text);
+    if (position < 0) position = 0;
+    if (position >= total) { buf[0] = '\0'; return buf; }
+    if (length < 0) length = 0;
+    if (position + length > total) length = total - position;
+    if (length >= (int)sizeof(buf)) length = (int)sizeof(buf) - 1;
+    memcpy(buf, text + position, length);
+    buf[length] = '\0';
+    return buf;
+}
+
 // ---------------------------------------------------------------------------
 // Audio (stub)
 // ---------------------------------------------------------------------------

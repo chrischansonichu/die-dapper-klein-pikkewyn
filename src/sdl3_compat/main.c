@@ -1,8 +1,10 @@
-// SDL3 build entry point. Mirrors raylib_game.c's responsibilities: create the
-// window, load globals (font, audio stubs, paper-harbor palette), and drive
-// the main loop. For the title-screen-first milestone the loop only runs the
-// TITLE screen — selecting New/Load/Options prints the chosen action and
-// exits. The other screens get linked in as we widen shim coverage.
+// SDL3 build entry point. Mirrors raylib_game.c's responsibilities: create
+// the window, load globals (font, audio stubs, paper-harbor palette), and
+// drive the main loop with fade transitions between screens.
+//
+// Current coverage: LOGO + TITLE. Screens beyond TITLE are stubbed out to
+// no-ops; selecting New/Load on the title prints a milestone marker and
+// exits cleanly. Stubs disappear screen-by-screen as we widen shim coverage.
 
 #include "raylib.h"
 #include "../screens.h"
@@ -20,25 +22,15 @@ Music music = {0};
 Sound fxCoin = {0};
 
 // ---------------------------------------------------------------------------
-// Stubs for game-state-dependent functions called from screen_title.c. The
-// real implementations live in state/save.c and screen_gameplay.c — both
-// pull in the full party/inventory/data graph, which we'll wire in once
-// the shim covers more of the API. For now the title screen sees "no save
-// file" (Load button disabled) and the New/Load actions just exit.
+// Stubs for game-state-dependent functions called from screen_title.c.
+// Real implementations land when state/save.c + game_state.c get linked in.
 // ---------------------------------------------------------------------------
 bool SaveGameExists(void) { return false; }
 void GameplayRequestNewGame(void)  { puts("[stub] GameplayRequestNewGame"); }
 void GameplayRequestLoadGame(void) { puts("[stub] GameplayRequestLoadGame"); }
 
-// Stubs for the other screens' lifecycle functions. screens.h declares them
-// as extern; screen_title.c never calls them, but linking would fail without
-// definitions if anything else (e.g. a future include) referenced them.
-// Kept minimal — flesh out as each screen is ported.
-void InitLogoScreen(void)     {}
-void UpdateLogoScreen(void)   {}
-void DrawLogoScreen(void)     {}
-void UnloadLogoScreen(void)   {}
-int  FinishLogoScreen(void)   { return 0; }
+// Stubs for screens not yet ported. Kept minimal — flesh out as each screen
+// joins the build.
 void InitOptionsScreen(void)  {}
 void UpdateOptionsScreen(void){}
 void DrawOptionsScreen(void)  {}
@@ -64,6 +56,111 @@ void BattleSetPreemptive(bool p) { (void)p; }
 BattleResult GetLastBattleResult(void) { return BATTLE_ONGOING; }
 
 // ---------------------------------------------------------------------------
+// Per-screen lifecycle dispatchers — same pattern as raylib_game.c so each
+// transition stage routes through one place. Adding a screen here is the
+// only edit needed once it's ported.
+// ---------------------------------------------------------------------------
+static void InitScreen(GameScreen s) {
+    switch (s) {
+        case LOGO:     InitLogoScreen();     break;
+        case TITLE:    InitTitleScreen();    break;
+        case OPTIONS:  InitOptionsScreen();  break;
+        case GAMEPLAY: InitGameplayScreen(); break;
+        case BATTLE:   InitBattleScreen();   break;
+        case ENDING:   InitEndingScreen();   break;
+        default: break;
+    }
+}
+static void UpdateScreen(GameScreen s) {
+    switch (s) {
+        case LOGO:     UpdateLogoScreen();     break;
+        case TITLE:    UpdateTitleScreen();    break;
+        case OPTIONS:  UpdateOptionsScreen();  break;
+        case GAMEPLAY: UpdateGameplayScreen(); break;
+        case BATTLE:   UpdateBattleScreen();   break;
+        case ENDING:   UpdateEndingScreen();   break;
+        default: break;
+    }
+}
+static void DrawScreen(GameScreen s) {
+    switch (s) {
+        case LOGO:     DrawLogoScreen();     break;
+        case TITLE:    DrawTitleScreen();    break;
+        case OPTIONS:  DrawOptionsScreen();  break;
+        case GAMEPLAY: DrawGameplayScreen(); break;
+        case BATTLE:   DrawBattleScreen();   break;
+        case ENDING:   DrawEndingScreen();   break;
+        default: break;
+    }
+}
+static void UnloadScreen(GameScreen s) {
+    switch (s) {
+        case LOGO:     UnloadLogoScreen();     break;
+        case TITLE:    UnloadTitleScreen();    break;
+        case OPTIONS:  UnloadOptionsScreen();  break;
+        case GAMEPLAY: UnloadGameplayScreen(); break;
+        case BATTLE:   UnloadBattleScreen();   break;
+        case ENDING:   UnloadEndingScreen();   break;
+        default: break;
+    }
+}
+static int FinishScreen(GameScreen s) {
+    switch (s) {
+        case LOGO:     return FinishLogoScreen();
+        case TITLE:    return FinishTitleScreen();
+        case OPTIONS:  return FinishOptionsScreen();
+        case GAMEPLAY: return FinishGameplayScreen();
+        case BATTLE:   return FinishBattleScreen();
+        case ENDING:   return FinishEndingScreen();
+        default: return 0;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Transition state — fade-out current → swap → fade-in next. Identical
+// shape to raylib_game.c's transAlpha/onTransition machinery.
+// ---------------------------------------------------------------------------
+static float       transAlpha      = 0.0f;
+static bool        onTransition    = false;
+static bool        transFadeOut    = false;
+static GameScreen  transFromScreen = UNKNOWN;
+static GameScreen  transToScreen   = UNKNOWN;
+
+static void TransitionToScreen(GameScreen next) {
+    onTransition    = true;
+    transFadeOut    = false;
+    transFromScreen = currentScreen;
+    transToScreen   = next;
+    transAlpha      = 0.0f;
+}
+
+static void UpdateTransition(void) {
+    if (!transFadeOut) {
+        transAlpha += 0.05f;
+        if (transAlpha > 1.01f) {
+            transAlpha = 1.0f;
+            UnloadScreen(transFromScreen);
+            InitScreen(transToScreen);
+            currentScreen = transToScreen;
+            transFadeOut = true;
+        }
+    } else {
+        transAlpha -= 0.02f;
+        if (transAlpha < -0.01f) {
+            transAlpha = 0.0f;
+            transFadeOut = false;
+            onTransition = false;
+            transFromScreen = UNKNOWN;
+            transToScreen   = UNKNOWN;
+        }
+    }
+}
+
+static void DrawTransition(void) {
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, transAlpha));
+}
+
+// ---------------------------------------------------------------------------
 // Entry
 // ---------------------------------------------------------------------------
 
@@ -79,24 +176,43 @@ int main(void) {
     fxCoin = LoadSound("resources/coin.wav");
     PHInit(SCREEN_W, SCREEN_H);
 
-    currentScreen = TITLE;
-    InitTitleScreen();
+    currentScreen = LOGO;
+    InitScreen(currentScreen);
     SetTargetFPS(60);
 
-    while (!WindowShouldClose()) {
-        UpdateTitleScreen();
-
-        const int finish = FinishTitleScreen();
-        if (finish == 1) { puts("[milestone] Options selected — exiting"); break; }
-        if (finish == 2) { puts("[milestone] Start/Load selected — exiting"); break; }
+    bool quitRequested = false;
+    while (!WindowShouldClose() && !quitRequested) {
+        if (!onTransition) {
+            UpdateScreen(currentScreen);
+            const int finish = FinishScreen(currentScreen);
+            if (finish != 0) {
+                switch (currentScreen) {
+                    case LOGO:
+                        TransitionToScreen(TITLE);
+                        break;
+                    case TITLE:
+                        // Title returns 1 = Options, 2 = Start/Load. Both
+                        // exit cleanly until those screens are ported.
+                        printf("[milestone] Title finished with code %d — exiting\n", finish);
+                        quitRequested = true;
+                        break;
+                    default:
+                        // Other screens not yet wired up; ignore.
+                        break;
+                }
+            }
+        } else {
+            UpdateTransition();
+        }
 
         BeginDrawing();
         ClearBackground(gPH.bg);
-        DrawTitleScreen();
+        DrawScreen(currentScreen);
+        if (onTransition) DrawTransition();
         EndDrawing();
     }
 
-    UnloadTitleScreen();
+    UnloadScreen(currentScreen);
     UnloadFont(font);
     UnloadSound(fxCoin);
     PHUnload();

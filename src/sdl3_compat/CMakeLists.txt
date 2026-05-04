@@ -13,6 +13,7 @@ add_executable(ddkp_sdl3
     main.c
     raylib_compat.c
     paper_harbor_stub.c
+    ../screen_logo.c
     ../screen_title.c
 )
 
