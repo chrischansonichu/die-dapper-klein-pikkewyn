@@ -15,7 +15,11 @@
 // (Combatant.tileX/tileY) for the duration of the fight.
 //----------------------------------------------------------------------------------
 
-#define BATTLE_MAX_ENEMIES 4
+// Bumped from 4 to 6 (2026-05-04). The captive-rescue cluster force-includes
+// captors of the rescued NPC; with cap=4 there was little room left for
+// nearby idle enemies (patrol, dock sailors) to join even after sorting by
+// distance. 6 leaves headroom without making fights brutal.
+#define BATTLE_MAX_ENEMIES 6
 #define NARRATION_LEN      256
 
 // Duration of a single tile-step slide animation. Tuned so a 3-step move

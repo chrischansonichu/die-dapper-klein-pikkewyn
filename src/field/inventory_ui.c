@@ -489,6 +489,14 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
 
     RebuildLayout(ui, party);
 
+    // Tick the member-switch slide animation. Decoupled from input so the
+    // transition keeps animating even when the player hasn't touched the
+    // screen this frame.
+    if (ui->memberTransitionT > 0.0f) {
+        ui->memberTransitionT -= GetFrameTime();
+        if (ui->memberTransitionT < 0.0f) ui->memberTransitionT = 0.0f;
+    }
+
     // Close — keyboard paths kept for desktop iteration; the on-screen close
     // is the bottom CLOSE button, hit-tested via the layout-shared rect.
     Rectangle closeR = {
@@ -510,7 +518,40 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
             ui->cursor        = 0;
             ui->equippedFocus = false;
             ui->scrollPx      = 0.0f;
+            ui->bagScrollX    = 0.0f;
             ui->status[0]     = '\0';
+            return false;
+        }
+    }
+
+    // Weapons-tab bag horizontal scroll. Keep this BEFORE the member-strip
+    // swipe handler so a horizontal gesture in the bag area scrolls the
+    // strip instead of cycling members. Bag rect math mirrors the draw side.
+    if (ui->tab == INV_TAB_WEAPONS) {
+        // Reconstruct bag rect from layout state.
+        Rectangle ms_b = MemberStripRect();
+        int gridTop_b  = (int)(ms_b.y + ms_b.height) + 14;
+        int contentW_b = InvContentW();
+        int eqGap_b   = 8;
+        int eqCols_b  = 6;
+        int eqTile_b  = (contentW_b - (eqCols_b - 1) * eqGap_b) / eqCols_b;
+        if (eqTile_b > 90) eqTile_b = 90;
+        int dividerY_b = gridTop_b + eqTile_b + 14;
+        int bagTop_b   = dividerY_b + 26;
+        Rectangle bagViewport = { (float)InvContentX(), (float)bagTop_b,
+                                   (float)InvContentW(), (float)eqTile_b };
+        if (TouchGestureStartedIn(bagViewport)) {
+            float dx = TouchScrollDeltaX(bagViewport);
+            ui->bagScrollX -= dx;
+            // Clamp to [0, max]
+            int tileSz_b = eqTile_b, tileGap_b = 10;
+            int stripW_b = party->inventory.weaponCount * (tileSz_b + tileGap_b) - tileGap_b;
+            float maxScroll = (float)(stripW_b > InvContentW()
+                                          ? stripW_b - InvContentW() : 0);
+            if (ui->bagScrollX < 0.0f)        ui->bagScrollX = 0.0f;
+            if (ui->bagScrollX > maxScroll)   ui->bagScrollX = maxScroll;
+            // Don't fall through to MemberStripUpdate — that'd also consume
+            // the horizontal direction-lock and cycle members.
             return false;
         }
     }
@@ -520,6 +561,7 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
         ui->cursor        = 0;
         ui->equippedFocus = false;
         ui->scrollPx      = 0.0f;
+        ui->bagScrollX    = 0.0f;
         return false;
     }
 
@@ -644,17 +686,45 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
             if (ui->equippedFocus) DiscardEquippedWeapon(ui, party);
             else                   DiscardBagWeapon(ui, party);
         }
-        // Tap-to-act: equipped slot → unequip, bag slot → equip.
-        for (int i = 0; i < equippedN; i++) {
-            if (TouchTapInRect(sL.equippedMoveRows[i])) {
+        // Tap-to-act using the SAME rect math as DrawWeaponsTab (the layout
+        // helpers run for the legacy text path which we no longer use). The
+        // equipped row is 6 tiles, the bag is a horizontally-scrolled strip.
+        Rectangle ms_w = MemberStripRect();
+        int gridTop_w  = (int)(ms_w.y + ms_w.height) + 14;
+        int contentW_w = InvContentW();
+        int eqGap_w   = 8;
+        int eqCols_w  = 6;
+        int eqTile_w  = (contentW_w - (eqCols_w - 1) * eqGap_w) / eqCols_w;
+        if (eqTile_w > 90) eqTile_w = 90;
+        int eqRowW_w  = eqTile_w * eqCols_w + eqGap_w * (eqCols_w - 1);
+        int eqStartX_w = InvContentX() + (contentW_w - eqRowW_w) / 2;
+
+        for (int s = 0; s < 6; s++) {
+            Rectangle r = { (float)(eqStartX_w + s * (eqTile_w + eqGap_w)),
+                            (float)gridTop_w, (float)eqTile_w, (float)eqTile_w };
+            if (TouchTapInRect(r)) {
                 ui->equippedFocus = true;
-                ui->cursor        = i;
+                ui->cursor        = s;
                 UnequipMemberWeapon(ui, party, discard);
                 break;
             }
         }
-        for (int i = sL.weaponBagFirst; i < sL.weaponBagEnd; i++) {
-            if (TouchTapInRect(sL.weaponBagRows[i])) {
+        // Bag — taps must match the scrolled strip math. Skip tiles that
+        // are off-screen (clipped by the viewport).
+        int dividerY_w = gridTop_w + eqTile_w + 14;
+        int bagTop_w   = dividerY_w + 26;
+        int tileSz_w   = eqTile_w;
+        int tileGap_w  = 10;
+        int bagAreaX_w = InvContentX();
+        int bagW_w     = InvContentW();
+        for (int i = 0; i < party->inventory.weaponCount; i++) {
+            Rectangle r = {
+                (float)(bagAreaX_w + i * (tileSz_w + tileGap_w)) - ui->bagScrollX,
+                (float)bagTop_w, (float)tileSz_w, (float)tileSz_w
+            };
+            if (r.x + r.width  < (float)bagAreaX_w)        continue;
+            if (r.x            > (float)(bagAreaX_w + bagW_w)) break;
+            if (TouchTapInRect(r)) {
                 ui->equippedFocus = false;
                 ui->cursor        = i;
                 EquipBagWeapon(ui, party);
@@ -787,12 +857,20 @@ static bool MemberStripUpdate(InventoryUI *ui, const Party *party)
     Rectangle prevR = { (float)(rightX - chipW - gap), (float)chipY,
                         (float)chipW, (float)chipH };
 
+    // Helper: trigger a slide transition with the given direction.
+    // dirSign = +1 → new member slides in from the right (tapped NEXT)
+    // dirSign = -1 → new member slides in from the left (tapped PREV)
+    #define SLIDE_SECS 0.18f
     if (TouchTapInRect(prevR)) {
         ui->memberCursor = (ui->memberCursor - 1 + party->count) % party->count;
+        ui->memberTransitionT   = SLIDE_SECS;
+        ui->memberTransitionDir = -1;
         return true;
     }
     if (TouchTapInRect(nextR)) {
         ui->memberCursor = (ui->memberCursor + 1) % party->count;
+        ui->memberTransitionT   = SLIDE_SECS;
+        ui->memberTransitionDir = +1;
         return true;
     }
 
@@ -800,15 +878,20 @@ static bool MemberStripUpdate(InventoryUI *ui, const Party *party)
     // one-shot fired the moment direction locks; vertical swipes (used for
     // list scrolling) won't trigger this.
     int dir = TouchPressedDir();
-    if (dir == 1) {  // swipe LEFT → next member (the world moves left, finger drags right→left)
+    if (dir == 1) {  // swipe LEFT → next member
         ui->memberCursor = (ui->memberCursor + 1) % party->count;
+        ui->memberTransitionT   = SLIDE_SECS;
+        ui->memberTransitionDir = +1;
         return true;
     }
     if (dir == 2) {  // swipe RIGHT → previous member
         ui->memberCursor = (ui->memberCursor - 1 + party->count) % party->count;
+        ui->memberTransitionT   = SLIDE_SECS;
+        ui->memberTransitionDir = -1;
         return true;
     }
     return false;
+    #undef SLIDE_SECS
 }
 
 // Tile geometry for the icon grid (Items / Weapons / Armor share these). On
@@ -972,8 +1055,9 @@ static void DrawItemsTab(const InventoryUI *ui, const Party *party)
         const ItemDef *it = GetItemDef(inv->items[i].itemId);
         char qty[8];
         snprintf(qty, sizeof(qty), "x%d", inv->items[i].count);
-        bool sel = (ui->cursor == i);
-        DrawIconTile(r, it->name, qty, RAYWHITE, sel,
+        // No persistent "last used" highlight on items — tap-to-use is the
+        // affordance; the cursor wash from prior selection is just noise.
+        DrawIconTile(r, it->name, qty, RAYWHITE, false,
                      DrawItemIcon, inv->items[i].itemId);
         if (TouchHeldInRect(r, 0.45f)) popupAnchorIdx = i;
     }
@@ -1034,13 +1118,22 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
             const MoveDef *mv = GetMoveDef(moveId);
             char overlay[16] = "";
             Color ovCol = RAYWHITE;
+            int dur = led->moveDurability[s];
             if (mv->isWeapon) {
-                int dur = led->moveDurability[s];
                 snprintf(overlay, sizeof(overlay), "d%d", dur);
                 if (dur == 0) ovCol = (Color){240, 100, 100, 255};
             }
-            DrawIconTile(r, mv->name, overlay, ovCol, selected,
+            if (mv->isWeapon && dur == 1) {
+                Rectangle glow = { r.x - 3, r.y - 3, r.width + 6, r.height + 6 };
+                DrawRectangleRounded(glow, 0.18f, 6,
+                                     (Color){230, 80, 80, 200});
+            }
+            // Drop the orange "currently selected" wash — there's no keyboard
+            // cursor on mobile, only direct tap-to-act. The ARMOR_MAX_TILES
+            // and weapon equipped slots all draw with a neutral parchment.
+            DrawIconTile(r, mv->name, overlay, ovCol, false,
                          DrawMoveIcon, moveId);
+            (void)selected;
         }
         if (TouchHeldInRect(r, 0.45f)) popupEqIdx = s;
     }
@@ -1070,29 +1163,91 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
         }
     }
 
-    // Bag grid below the equipped row.
-    int bagTop = gridTop + eqTile + 16;
-    DrawText(TextFormat("Weapon Bag  %d/%d", inv->weaponCount, INVENTORY_MAX_WEAPONS),
-             InvContentX(), bagTop - 22, 14, gPH.inkLight);
+    // ------- Visual divider between equipped row and the bag strip -------
+    int dividerY = gridTop + eqTile + 14;
+    DrawLineEx((Vector2){(float)InvContentX(),                   (float)dividerY},
+               (Vector2){(float)(InvContentX() + InvContentW()), (float)dividerY},
+               1.5f, (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 80});
+
+    // Bag header — just "N/MAX". The "Weapon Bag" prefix was redundant
+    // (the tab already says WEAPONS).
+    char bagLabel[24];
+    snprintf(bagLabel, sizeof(bagLabel), "%d/%d", inv->weaponCount, INVENTORY_MAX_WEAPONS);
+    DrawText(bagLabel, InvContentX(), dividerY + 6, 14, gPH.inkLight);
+
+    // ------- Single-row scrollable bag viewport -------
+    int bagTop  = dividerY + 26;
+    int bagH    = eqTile;                      // same tile size as equipped row
+    int bagW    = InvContentW();
+    int bagAreaX = InvContentX();
+    Rectangle bagViewport = { (float)bagAreaX, (float)bagTop,
+                              (float)bagW, (float)bagH };
 
     if (inv->weaponCount == 0) {
-        DrawText("(empty)", InvContentX(), bagTop, 14, gPH.inkLight);
+        DrawText("(empty)", bagAreaX, bagTop + bagH / 2 - 7, 14, gPH.inkLight);
         return;
     }
 
+    int tileSz   = eqTile;                     // square tiles, same as equipped
+    int tileGap  = 10;
+    int stripW   = inv->weaponCount * (tileSz + tileGap) - tileGap;
+    float maxScrollX = (float)(stripW > bagW ? stripW - bagW : 0);
+
+    // Clip the strip to the viewport so off-screen tiles don't bleed.
+    BeginScissorMode(bagAreaX, bagTop - 2, bagW, bagH + 4);
+
     int popupBagIdx = -1;
     for (int i = 0; i < inv->weaponCount; i++) {
-        Rectangle r = InvTileRect(bagTop, i);
+        Rectangle r = {
+            (float)(bagAreaX + i * (tileSz + tileGap)) - ui->bagScrollX,
+            (float)bagTop, (float)tileSz, (float)tileSz
+        };
+        // Skip tiles fully outside the viewport.
+        if (r.x + r.width  < (float)bagAreaX)              continue;
+        if (r.x            > (float)(bagAreaX + bagW))     break;
+
         const MoveDef *mv = GetMoveDef(inv->weapons[i].moveId);
+        int dur = inv->weapons[i].durability;
         char overlay[16];
-        snprintf(overlay, sizeof(overlay), "d%d", inv->weapons[i].durability);
-        Color ovCol = inv->weapons[i].durability == 0
-                          ? (Color){240, 100, 100, 255} : RAYWHITE;
-        bool sel = (!ui->equippedFocus && ui->cursor == i);
-        DrawIconTile(r, mv->name, overlay, ovCol, sel,
+        snprintf(overlay, sizeof(overlay), "d%d", dur);
+        Color ovCol = dur == 0 ? (Color){240, 100, 100, 255} : RAYWHITE;
+        if (dur == 1) {
+            Rectangle glow = { r.x - 3, r.y - 3, r.width + 6, r.height + 6 };
+            DrawRectangleRounded(glow, 0.18f, 6,
+                                 (Color){230, 80, 80, 200});
+        }
+        // No "currently selected" wash on bag tiles — tap-to-equip is direct.
+        DrawIconTile(r, mv->name, overlay, ovCol, false,
                      DrawMoveIcon, inv->weapons[i].moveId);
         if (TouchHeldInRect(r, 0.45f)) popupBagIdx = i;
     }
+
+    EndScissorMode();
+
+    // ------- Scroll affordance: gradient fades on the edges where there's
+    // more content to scroll into. Uses thin 18px-wide rounded plates so the
+    // hint is visually consistent with the parchment theme.
+    if (ui->bagScrollX > 1.0f) {
+        Color edge = (Color){gPH.bg.r, gPH.bg.g, gPH.bg.b, 200};
+        DrawRectangleRounded((Rectangle){(float)bagAreaX, (float)bagTop, 18.0f, (float)bagH},
+                             0.30f, 6, edge);
+        // Small left-pointing chevron
+        Vector2 a = {(float)(bagAreaX + 10), (float)(bagTop + bagH * 0.5f)};
+        Vector2 b = {(float)(bagAreaX + 4),  (float)(bagTop + bagH * 0.5f - 6)};
+        Vector2 c = {(float)(bagAreaX + 4),  (float)(bagTop + bagH * 0.5f + 6)};
+        DrawTriangle(b, a, c, gPH.ink);
+    }
+    if (ui->bagScrollX < maxScrollX - 1.0f) {
+        Color edge = (Color){gPH.bg.r, gPH.bg.g, gPH.bg.b, 200};
+        DrawRectangleRounded((Rectangle){(float)(bagAreaX + bagW - 18),
+                                          (float)bagTop, 18.0f, (float)bagH},
+                             0.30f, 6, edge);
+        Vector2 a = {(float)(bagAreaX + bagW - 10), (float)(bagTop + bagH * 0.5f)};
+        Vector2 b = {(float)(bagAreaX + bagW - 4),  (float)(bagTop + bagH * 0.5f - 6)};
+        Vector2 c = {(float)(bagAreaX + bagW - 4),  (float)(bagTop + bagH * 0.5f + 6)};
+        DrawTriangle(a, b, c, gPH.ink);
+    }
+
     if (popupBagIdx >= 0) {
         const MoveDef *mv = GetMoveDef(inv->weapons[popupBagIdx].moveId);
         const char *rs = (mv->range == RANGE_MELEE)  ? "melee" :
@@ -1102,7 +1257,11 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
         snprintf(body, sizeof(body), "%s\nPWR %d  %s\nDur %d/%d",
                  mv->desc, mv->power, rs,
                  inv->weapons[popupBagIdx].durability, mv->defaultDurability);
-        DrawInfoPopup(InvTileRect(bagTop, popupBagIdx), mv->name, body);
+        Rectangle anchorR = {
+            (float)(bagAreaX + popupBagIdx * (tileSz + tileGap)) - ui->bagScrollX,
+            (float)bagTop, (float)tileSz, (float)tileSz
+        };
+        DrawInfoPopup(anchorR, mv->name, body);
     }
     return;
 
@@ -1245,11 +1404,9 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
         (float)(InvContentX() + (InvContentW() - eqTile) / 2),
         (float)gridTop, (float)eqTile, (float)eqTile
     };
-    bool eqSel = ui->equippedFocus;
     if (led->armorItemId < 0) {
-        Color plate = eqSel ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 90}
-                             : (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 24};
-        DrawRectangleRounded(eqR, 0.16f, 6, plate);
+        DrawRectangleRounded(eqR, 0.16f, 6,
+                             (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 24});
         DrawRectangleRoundedLinesEx(eqR, 0.16f, 6, 1.5f, gPH.inkLight);
         int dashF = 18;
         int tw = MeasureText("(no armor)", dashF);
@@ -1262,7 +1419,7 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
         char overlay[16];
         snprintf(overlay, sizeof(overlay), "+%d", ad ? ad->defBonus : 0);
         DrawIconTile(eqR, ad ? ad->name : "(unknown)", overlay, RAYWHITE,
-                     eqSel, DrawArmorIcon, led->armorItemId);
+                     false, DrawArmorIcon, led->armorItemId);
         if (TouchHeldInRect(eqR, 0.45f) && ad) {
             char body[160];
             snprintf(body, sizeof(body), "%s\n+%d DEF", ad->desc, ad->defBonus);
@@ -1285,9 +1442,8 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
         const ArmorDef *ad = GetArmorDef(inv->armors[i].armorId);
         char overlay[16];
         snprintf(overlay, sizeof(overlay), "+%d", ad ? ad->defBonus : 0);
-        bool sel = (!ui->equippedFocus && ui->cursor == i);
         DrawIconTile(r, ad ? ad->name : "(unknown)", overlay, RAYWHITE,
-                     sel, DrawArmorIcon, inv->armors[i].armorId);
+                     false, DrawArmorIcon, inv->armors[i].armorId);
         if (TouchHeldInRect(r, 0.45f)) popupBag = i;
     }
     if (popupBag >= 0) {
@@ -1377,12 +1533,52 @@ void InventoryUIDraw(const InventoryUI *ui, const Party *party, int villageReput
     DrawTabHeader(ui->tab);
     DrawMemberStrip(ui, party);
 
+    // Slide the body content during a member transition. Tabs + strip stay
+    // anchored; only the body slides. Camera2D offset translates every
+    // primitive drawn while it's active (our shim's XformPoint applies it
+    // to coordinates passed into Draw* helpers). Quadratic ease-out so the
+    // motion settles cleanly at the end.
+    bool inTransition = (ui->memberTransitionT > 0.0f);
+    if (inTransition) {
+        float total     = 0.18f;
+        float remaining = ui->memberTransitionT;
+        float t         = (total - remaining) / total;  // 0 → 1 over animation
+        if (t < 0.0f) t = 0.0f;
+        if (t > 1.0f) t = 1.0f;
+        float eased     = 1.0f - (1.0f - t) * (1.0f - t);
+        float offsetX   = (1.0f - eased) * (float)InvPanelW()
+                          * (float)ui->memberTransitionDir;
+        Camera2D cam = { .offset = {offsetX, 0.0f},
+                         .target = {0.0f, 0.0f},
+                         .zoom   = 1.0f };
+        BeginMode2D(cam);
+    }
+
     if      (ui->tab == INV_TAB_ITEMS)   DrawItemsTab(ui, party);
     else if (ui->tab == INV_TAB_WEAPONS) DrawWeaponsTab(ui, party);
     else                                 DrawArmorTab(ui, party);
 
-    if (ui->status[0] != '\0')
-        DrawText(ui->status, InvContentX(), InvPanelY() + InvPanelH() - 90, 14, gPH.ink);
+    if (inTransition) EndMode2D();
+
+    // Status toast — chunky parchment plate just above the CLOSE button so
+    // messages like "Seal needs Lv 7 to equip…" don't float in the middle
+    // of the page on top of bag tiles.
+    if (ui->status[0] != '\0') {
+        int fontSize = 14;
+        int padX = 12, padY = 8;
+        int tw = MeasureText(ui->status, fontSize);
+        int toastW = tw + padX * 2;
+        int toastH = fontSize + padY * 2;
+        // Sit it left of the CLOSE button (which is at panel right edge).
+        Rectangle r = {
+            (float)(InvPanelX() + 24),
+            (float)(InvPanelY() + InvPanelH() - 52),
+            (float)toastW, (float)toastH
+        };
+        DrawRectangleRounded(r, 0.30f, 6,
+                             (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 220});
+        DrawText(ui->status, (int)r.x + padX, (int)r.y + padY, fontSize, gPH.bg);
+    }
 
     // Bottom CTA — a single CLOSE button sits where the keyboard-hint band
     // used to live. Action buttons (Equip / Discard / Use) for the active

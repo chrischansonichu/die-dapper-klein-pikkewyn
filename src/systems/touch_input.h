@@ -50,6 +50,12 @@ bool    TouchTapPeek(Vector2 *outPos);
 // never locked), so list rows still receive their TouchTapInRect events.
 float   TouchScrollDeltaY(Rectangle r);
 
+// Horizontal mirror of TouchScrollDeltaY — per-frame finger X motion
+// (positive = moved right) for a gesture started inside r that has locked
+// to a horizontal swipe. Used for single-row scrollable strips like the
+// weapons bag viewport.
+float   TouchScrollDeltaX(Rectangle r);
+
 // Returns true while the active gesture has been held inside `r` for at
 // least `secs` without significant motion (≤ TAP_MAX_DIST_PX of drift).
 // Use for press-and-hold affordances (long-press tooltips). Lifting the

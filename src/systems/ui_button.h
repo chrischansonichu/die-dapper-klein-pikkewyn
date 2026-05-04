@@ -21,4 +21,8 @@
 bool DrawChunkyButton(Rectangle r, const char *label, int fontSize,
                       bool primary, bool enabled);
 
+// Round red icon button — used for back/cancel chips. Draws a red plate
+// with a left-pointing chevron centered. Returns true on tap.
+bool DrawBackIconButton(Rectangle r);
+
 #endif // UI_BUTTON_H

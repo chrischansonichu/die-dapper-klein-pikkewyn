@@ -8,6 +8,7 @@
 #include "../systems/modal_close.h"
 #include "../systems/touch_input.h"
 #include "../systems/ui_button.h"
+#include "icons.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -102,6 +103,27 @@ static int SalvagerSelectedTotal(const SalvagerUI *s)
 void SalvagerUIUpdate(SalvagerUI *s, Party *party)
 {
     if (!s->active) return;
+
+    // Apply horizontal scroll on the bag strip BEFORE consuming the gesture
+    // so finger-drag actually moves the strip. The strip's rect is computed
+    // here to match the draw side; precise pixel match isn't required since
+    // TouchGestureStartedIn just needs the gesture to start somewhere in the
+    // strip's vertical band.
+    {
+        Rectangle p = SalPanelRect();
+        int x = (int)p.x + 20;
+        int contentW_s = (int)p.width - 40;
+        // Approximate strip y — the salvager's preamble height varies with
+        // wrap, but the strip always sits well below the title. Using a
+        // generous band keeps horizontal swipes in the lower half of the
+        // panel routed to scroll.
+        Rectangle stripBand = { (float)x, p.y + 120,
+                                (float)(contentW_s - 10), 100.0f };
+        if (TouchGestureStartedIn(stripBand)) {
+            float dx = TouchScrollDeltaX(stripBand);
+            s->scrollX -= dx;
+        }
+    }
 
     // Claim any gesture that started inside the panel so a tap doesn't leak
     // into the field walker after the dialog closes.
@@ -256,76 +278,117 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
         DrawTextWrapped("(Your weapon bag is empty - nothing to salvage today.)",
                         x, &y, contentW, quoteF, 4, gPH.inkLight);
     } else {
-        DrawText("Pick the pieces to hand over:", x, y, promptF, gPH.ink);
-        y += promptF + 8;
+        DrawText("Tap to mark for salvage:", x, y, promptF, gPH.ink);
+        y += promptF + 14;
 
-        // Visible-row budget changes per build — portrait panel is taller so
-        // more rows fit, but the bigger font also consumes more height.
-        const int VISIBLE  = SCREEN_PORTRAIT ? 8 : 5;
-        const int ROW_H    = rowF + 10;
-        int scrollTop = 0;
-        if (s->cursor >= VISIBLE) scrollTop = s->cursor - VISIBLE + 1;
-        int maxScroll = s->entryCount - VISIBLE;
-        if (maxScroll < 0) maxScroll = 0;
-        if (scrollTop > maxScroll) scrollTop = maxScroll;
-        int drawEnd = scrollTop + VISIBLE;
-        if (drawEnd > s->entryCount) drawEnd = s->entryCount;
+        // Single horizontal strip of icon tiles — same visual language as
+        // the inventory's weapon-bag strip. Selected (give=true) tiles wear
+        // a warm-orange wash; dur=1 weapons get a red glow underneath.
+        int tileSz   = 88;
+        int tileGap  = 10;
+        int stripW   = contentW - 10;
+        int stripX   = x;
+        int stripY   = y;
+        Rectangle viewport = { (float)stripX, (float)stripY,
+                               (float)stripW, (float)tileSz };
+        int totalW   = s->entryCount * (tileSz + tileGap) - tileGap;
+        float maxScroll = (float)(totalW > stripW ? totalW - stripW : 0);
+        if (((SalvagerUI *)s)->scrollX < 0.0f) ((SalvagerUI *)s)->scrollX = 0.0f;
+        if (((SalvagerUI *)s)->scrollX > maxScroll) ((SalvagerUI *)s)->scrollX = maxScroll;
 
-        int listTop = y;
-        int rowW = contentW - 10;
-        int vi = 0;
-        for (int i = scrollTop; i < drawEnd; i++) {
-            bool sel       = (i == s->cursor);
-            bool selected  = s->give[i];
-            // Selected rows pick up a soft warm-orange wash; the cursor row
-            // gets a slightly darker ink tint for "current focus". Rounded
-            // corners + chunky border keeps the visual language consistent
-            // with the chunky CTAs below.
-            Color bg;
-            if (selected) bg = (Color){ gPH.roof.r,  gPH.roof.g,  gPH.roof.b,  90};
-            else if (sel) bg = (Color){ gPH.ink.r,   gPH.ink.g,   gPH.ink.b,    50};
-            else          bg = (Color){ 0, 0, 0, 30 };
-            DrawRectangleRounded((Rectangle){(float)(x - 6), (float)(y - 2),
-                                              (float)rowW, (float)(ROW_H - 2)},
-                                 0.18f, 6, bg);
+        BeginScissorMode(stripX, stripY - 2, stripW, tileSz + 4);
+        sL.visibleCount = 0;
+        for (int i = 0; i < s->entryCount; i++) {
+            Rectangle r = {
+                (float)(stripX + i * (tileSz + tileGap)) - s->scrollX,
+                (float)stripY, (float)tileSz, (float)tileSz
+            };
+            if (r.x + r.width  < (float)stripX)               continue;
+            if (r.x            > (float)(stripX + stripW))    break;
+
             const MoveDef *mv = GetMoveDef(inv->weapons[s->weaponIdx[i]].moveId);
             int dur = inv->weapons[s->weaponIdx[i]].durability;
-            char buf[96];
-            const char *mark = selected ? "✓" : "○";
-            if (SCREEN_PORTRAIT) {
-                snprintf(buf, sizeof(buf), "%s  %-14s dur %-2d",
-                         mark, mv->name, dur);
-            } else {
-                snprintf(buf, sizeof(buf), "%s   %-16s   dur %-2d   %s",
-                         mark, mv->name, dur,
-                         s->broken[i] ? "(broken)" : "(still usable)");
-            }
-            Color text = s->broken[i] ? gPH.ink : gPH.inkLight;
-            DrawText(buf, x, y + 2, rowF, text);
-            // Record the tap rect for this visible row.
-            sL.rowEntry[vi] = i;
-            sL.rowRect[vi] = (Rectangle){ (float)(x - 6), (float)(y - 2),
-                                          (float)rowW, (float)(ROW_H - 2) };
-            vi++;
-            y += ROW_H;
-        }
-        sL.visibleCount = vi;
+            bool selected = s->give[i];
 
-        if (s->entryCount > VISIBLE) {
-            int trackX = x + rowW - 8;
-            int trackY = listTop - 2;
-            int trackH = VISIBLE * ROW_H;
-            DrawRectangleRounded((Rectangle){(float)trackX, (float)trackY, 4, (float)trackH},
-                                 0.5f, 4, (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 60});
-            float frac = (float)VISIBLE / (float)s->entryCount;
-            int thumbH = (int)(trackH * frac);
-            if (thumbH < 8) thumbH = 8;
-            float pos = (maxScroll > 0) ? (float)scrollTop / (float)maxScroll : 0.0f;
-            int thumbY = trackY + (int)((trackH - thumbH) * pos);
-            DrawRectangleRounded((Rectangle){(float)trackX, (float)thumbY, 4, (float)thumbH},
-                                 0.5f, 4, gPH.ink);
+            // Red-glow when about to break.
+            if (dur == 1) {
+                Rectangle glow = { r.x - 3, r.y - 3, r.width + 6, r.height + 6 };
+                DrawRectangleRounded(glow, 0.16f, 6,
+                                     (Color){230, 80, 80, 200});
+            }
+            // Plate
+            Color plate = selected
+                ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 130}
+                : gPH.panel;
+            DrawRectangleRounded(r, 0.16f, 6, plate);
+            DrawRectangleRoundedLinesEx(r, 0.16f, 6, 2.0f, gPH.ink);
+
+            // Icon
+            Rectangle iconR = { r.x + 6, r.y + 6,
+                                r.width - 12, r.height - 26 };
+            DrawMoveIcon(iconR, inv->weapons[s->weaponIdx[i]].moveId);
+
+            // Name centred bottom
+            int fontSize = 12;
+            char nameBuf[24];
+            snprintf(nameBuf, sizeof(nameBuf), "%s", mv->name);
+            while ((int)strlen(nameBuf) > 4 &&
+                   MeasureText(nameBuf, fontSize) > (int)r.width - 6) {
+                nameBuf[strlen(nameBuf) - 1] = '\0';
+            }
+            int tw = MeasureText(nameBuf, fontSize);
+            DrawText(nameBuf,
+                     (int)(r.x + (r.width - tw) * 0.5f),
+                     (int)(r.y + r.height - 16),
+                     fontSize, gPH.ink);
+
+            // Durability badge bottom-right of icon area.
+            char durBuf[8];
+            snprintf(durBuf, sizeof(durBuf), "d%d", dur);
+            int badgeF = 12;
+            int btw = MeasureText(durBuf, badgeF);
+            int padX = 4, padY = 1;
+            Rectangle badge = {
+                r.x + r.width - btw - padX * 2 - 4,
+                r.y + r.height - 24 - badgeF - padY * 2,
+                (float)(btw + padX * 2), (float)(badgeF + padY * 2)
+            };
+            DrawRectangleRounded(badge, 0.45f, 4,
+                                 (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 200});
+            Color durCol = (dur == 0) ? (Color){240, 100, 100, 255} : RAYWHITE;
+            DrawText(durBuf, (int)(badge.x + padX),
+                     (int)(badge.y + padY - 1), badgeF, durCol);
+
+            // Selected check mark in top-right.
+            if (selected) {
+                DrawText("✓", (int)(r.x + r.width - 16),
+                         (int)(r.y + 4), 18, gPH.ink);
+            }
+
+            // Hit-test rect for tap toggle.
+            if (sL.visibleCount < SALVAGER_MAX_ENTRIES) {
+                sL.rowEntry[sL.visibleCount] = i;
+                sL.rowRect[sL.visibleCount]  = r;
+                sL.visibleCount++;
+            }
+        }
+        EndScissorMode();
+
+        // Edge fade chevrons when more content is off-screen.
+        if (s->scrollX > 1.0f) {
+            Vector2 a = {(float)(stripX + 10), (float)(stripY + tileSz * 0.5f)};
+            Vector2 b = {(float)(stripX + 4),  (float)(stripY + tileSz * 0.5f - 6)};
+            Vector2 c = {(float)(stripX + 4),  (float)(stripY + tileSz * 0.5f + 6)};
+            DrawTriangle(b, a, c, gPH.ink);
+        }
+        if (s->scrollX < maxScroll - 1.0f) {
+            Vector2 a = {(float)(stripX + stripW - 10), (float)(stripY + tileSz * 0.5f)};
+            Vector2 b = {(float)(stripX + stripW - 4),  (float)(stripY + tileSz * 0.5f - 6)};
+            Vector2 c = {(float)(stripX + stripW - 4),  (float)(stripY + tileSz * 0.5f + 6)};
+            DrawTriangle(a, b, c, gPH.ink);
         }
     }
+    (void)rowF;
 
     int total = SalvagerSelectedTotal(s);
     int totalY  = H - margin - (SCREEN_PORTRAIT ? 80 : 86);

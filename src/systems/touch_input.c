@@ -185,6 +185,15 @@ bool TouchTapInRect(Rectangle r)
     return false;
 }
 
+float TouchScrollDeltaX(Rectangle r)
+{
+    if (!g.active) return 0.0f;
+    if (!TouchGestureStartedIn(r)) return 0.0f;
+    if (!g.directionLocked) return 0.0f;
+    if (g.lockedDir != 1 && g.lockedDir != 2) return 0.0f;
+    return g.frameDx;
+}
+
 bool TouchHeldInRect(Rectangle r, float secs)
 {
     if (!g.active) return false;

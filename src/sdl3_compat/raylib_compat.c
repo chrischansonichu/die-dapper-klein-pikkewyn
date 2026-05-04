@@ -60,6 +60,37 @@ static const char *RewriteAssetPath(const char *p) {
     return p;
 }
 
+// On iOS the .app bundle is read-only — saves dropped at the binary's cwd
+// silently fail and "Load" finds nothing on relaunch. SDL_GetPrefPath
+// returns a per-app writable directory inside the user's sandbox; redirect
+// save-file IO there. Asset reads stay under the bundle (RewriteAssetPath).
+static const char *RewriteSavePath(const char *p) {
+#if defined(__APPLE__) && TARGET_OS_IOS
+    static char buf[1024];
+    static char prefBuf[1024];
+    static bool prefInit = false;
+    if (!p) return p;
+    // Asset paths (translated to "Assets/...") stay under the bundle.
+    if (strncmp(p, "Assets/", 7) == 0)    return p;
+    if (strncmp(p, "resources/", 10) == 0) return p;
+    if (!prefInit) {
+        const char *pref = SDL_GetPrefPath("dapperpenguin", "ddkp");
+        if (pref) {
+            SDL_strlcpy(prefBuf, pref, sizeof(prefBuf));
+            // SDL_GetPrefPath returns a malloc'd string; we copy and free.
+            SDL_free((void*)pref);
+        } else {
+            prefBuf[0] = '\0';
+        }
+        prefInit = true;
+    }
+    snprintf(buf, sizeof(buf), "%s%s", prefBuf, p);
+    return buf;
+#else
+    return p;
+#endif
+}
+
 // ---------------------------------------------------------------------------
 // Module state
 // ---------------------------------------------------------------------------
@@ -1035,7 +1066,11 @@ void  StopMusicStream(Music m)   { (void)m; }
 
 unsigned char *LoadFileData(const char *fileName, int *bytesRead) {
     if (bytesRead) *bytesRead = 0;
+    // Asset paths (resources/) get rewritten to Assets/ for iOS bundle layout;
+    // everything else (savegame.dat, etc.) gets routed to the writable
+    // pref dir on iOS so saves persist across launches.
     fileName = RewriteAssetPath(fileName);
+    fileName = RewriteSavePath(fileName);
     FILE *f = fopen(fileName, "rb");
     if (!f) return NULL;
     fseek(f, 0, SEEK_END);
@@ -1055,6 +1090,7 @@ void UnloadFileData(unsigned char *data) {
 }
 
 bool SaveFileData(const char *fileName, void *data, int bytesToWrite) {
+    fileName = RewriteSavePath(fileName);
     FILE *f = fopen(fileName, "wb");
     if (!f) return false;
     size_t wrote = fwrite(data, 1, (size_t)bytesToWrite, f);
@@ -1064,6 +1100,7 @@ bool SaveFileData(const char *fileName, void *data, int bytesToWrite) {
 
 bool FileExists(const char *fileName) {
     if (!fileName) return false;
+    fileName = RewriteSavePath(fileName);
     FILE *f = fopen(fileName, "rb");
     if (!f) return false;
     fclose(f);

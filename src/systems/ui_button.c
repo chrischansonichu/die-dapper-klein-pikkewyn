@@ -35,3 +35,32 @@ bool DrawChunkyButton(Rectangle r, const char *label, int fontSize,
 
     return enabled && TouchTapInRect(r);
 }
+
+bool DrawBackIconButton(Rectangle r)
+{
+    bool held = CheckCollisionPointRec(GetMousePosition(), r) &&
+                IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+
+    Color plate = (Color){200, 70, 60, 255};   // red
+    Color glyph = RAYWHITE;
+
+    // Drop shadow + sink-on-press (matches DrawChunkyButton).
+    if (!held) {
+        DrawRectangleRounded((Rectangle){r.x + 2, r.y + 3, r.width, r.height},
+                             0.5f, 8, (Color){0, 0, 0, 70});
+    }
+    Rectangle pr = held ? (Rectangle){r.x + 1, r.y + 2, r.width, r.height} : r;
+    DrawRectangleRounded(pr, 0.5f, 8, plate);
+    DrawRectangleRoundedLinesEx(pr, 0.5f, 8, 2.0f, gPH.ink);
+
+    // Centered left-chevron glyph.
+    float cx = pr.x + pr.width  * 0.5f;
+    float cy = pr.y + pr.height * 0.5f;
+    float reach = pr.width * 0.20f;
+    DrawTriangle((Vector2){cx - reach,  cy},
+                 (Vector2){cx + reach * 0.4f, cy - reach * 0.8f},
+                 (Vector2){cx + reach * 0.4f, cy + reach * 0.8f},
+                 glyph);
+
+    return TouchTapInRect(r);
+}
