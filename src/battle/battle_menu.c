@@ -105,14 +105,34 @@ static Rectangle MoveCellRect(int col, int row)
     return MoveSlotRect(GridSlotToFlat(col, row));
 }
 
-static Rectangle ItemRowRect(int i)
+// Items in battle: square-ish icon tiles (icon + count badge only — no name
+// label, since the icons are recognisable enough on their own). Up to 4
+// tiles in a row, centered, leaving room on the right for the BACK chip.
+static Rectangle ItemSlotRect(int slot)
 {
-    int startX = 20;
+#if SCREEN_PORTRAIT
+    int gap = 10;
+    int tileH = PANEL_H - 30;
+    int tileW = tileH;                              // square tiles
+    int slots = 4;
+    int stripW = slots * tileW + (slots - 1) * gap;
+    int startX = (PANEL_W - stripW) / 2;
+    int startY = PANEL_Y + 12;
+    return (Rectangle){ (float)(startX + slot * (tileW + gap)),
+                        (float)startY, (float)tileW, (float)tileH };
+#else
+    int gap = 10, margin = 16;
+    int tileH = PANEL_H - 24;
+    int tileW = tileH;                              // square tiles
+    int slots = 4;
+    int stripW = slots * tileW + (slots - 1) * gap;
+    int areaW = PANEL_W - 2 * margin - 80;          // reserve room for BACK chip
+    int startX = margin + (areaW - stripW) / 2;
+    if (startX < margin) startX = margin;
     int startY = PANEL_Y + 10;
-    int rowW   = PANEL_W - 2 * startX;
-    int rowH   = SCREEN_PORTRAIT ? 34 : 22;
-    return (Rectangle){ (float)(startX - 2), (float)(startY + i * rowH - 2),
-                        (float)rowW, (float)rowH };
+    return (Rectangle){ (float)(startX + slot * (tileW + gap)),
+                        (float)startY, (float)tileW, (float)tileH };
+#endif
 }
 
 // Full menu panel — taps that miss every button still get consumed so they
@@ -289,7 +309,7 @@ int BattleMenuUpdateItemSelect(BattleMenuState *m, int itemCount)
     if (TouchTapInRect(BackButtonRect())) return -2;
     int shown = itemCount < 4 ? itemCount : 4;
     for (int i = 0; i < shown; i++) {
-        if (TouchTapInRect(ItemRowRect(i))) {
+        if (TouchTapInRect(ItemSlotRect(i))) {
             m->itemCursor = i;
             return i;
         }
@@ -351,12 +371,14 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
             snprintf(overlay, sizeof(overlay), "d%d", dur);
         }
 
-        // Low-durability warning glow drawn UNDERNEATH the tile so dur=1
-        // weapons read as "about to break" at a glance.
+        // Low-durability warning halo drawn UNDERNEATH the tile so dur=1
+        // weapons unmistakably read as "about to break." A thin 3px outset
+        // was easy to miss next to the rest of the chrome — pump it to a
+        // 7px solid red halo so the whole tile glows.
         if (mv->isWeapon && dur == 1) {
-            Rectangle glow = { r.x - 3, r.y - 3, r.width + 6, r.height + 6 };
-            DrawRectangleRounded(glow, 0.16f, 6,
-                                 (Color){230, 80, 80, 200});
+            Rectangle halo = { r.x - 7, r.y - 7, r.width + 14, r.height + 14 };
+            DrawRectangleRounded(halo, 0.20f, 8,
+                                 (Color){220, 60, 60, 235});
         }
 
         // Tile body — neutral parchment when enabled, darker ink-tone when
@@ -364,8 +386,14 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
         Color plate = enabled ? gPH.panel
                               : (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 30};
         DrawRectangleRounded(r, 0.16f, 6, plate);
-        DrawRectangleRoundedLinesEx(r, 0.16f, 6, 2.0f,
-                                    enabled ? gPH.ink : gPH.inkLight);
+        // Border: thick red when about to break, otherwise the standard ink
+        // outline. The colour swap reinforces the halo so colour-blind /
+        // low-light readers still get the cue.
+        Color borderCol = (mv->isWeapon && dur == 1)
+                          ? (Color){200, 30, 30, 255}
+                          : (enabled ? gPH.ink : gPH.inkLight);
+        float borderW = (mv->isWeapon && dur == 1) ? 4.0f : 2.0f;
+        DrawRectangleRoundedLinesEx(r, 0.16f, 6, borderW, borderCol);
 
         // Icon area (top portion).
         Rectangle iconR = { r.x + 6, r.y + 6,
@@ -413,36 +441,47 @@ void BattleMenuDrawItemSelect(const BattleMenuState *m, const Inventory *inv)
 {
     PHDrawPanel((Rectangle){PANEL_X, PANEL_Y, PANEL_W, PANEL_H}, 0xA03);
 
-    int startX = 20;
-    int startY = PANEL_Y + 10;
-    int rowW   = PANEL_W - 2 * startX;
-    int descX  = startX + (SCREEN_PORTRAIT ? (rowW - 120) : 300);
-
     if (inv->itemCount == 0) {
         DrawText("No items.", PANEL_X + PANEL_PAD + 10, PANEL_Y + PANEL_PAD + 15, 18, gPH.inkLight);
         DrawBackIconButton(BackButtonRect());
         return;
     }
 
-    int nameSize = SCREEN_PORTRAIT ? 24 : 16;
-    int descSize = SCREEN_PORTRAIT ? 18 : 12;
-    int rowH = SCREEN_PORTRAIT ? 34 : 22;
-    for (int i = 0; i < inv->itemCount && i < 4; i++) {
-        const ItemDef *it = GetItemDef(inv->items[i].itemId);
-        // Item-row plate — neutral parchment with thin ink border. The
-        // "currently selected" cursor wash is gone (no keyboard nav on
-        // mobile); tap commits directly.
-        Rectangle r = {(float)(startX - 2),
-                       (float)(startY + i * rowH - 2),
-                       (float)rowW, (float)rowH};
-        DrawRectangleRounded(r, 0.18f, 6, gPH.panel);
-        DrawRectangleRoundedLinesEx(r, 0.18f, 6, 1.0f, gPH.ink);
-        char buf[64];
-        snprintf(buf, sizeof(buf), "%-14s x%d", it->name, inv->items[i].count);
-        DrawText(buf, startX + 4, startY + i * rowH + 2, nameSize, gPH.ink);
-        DrawText(it->desc, descX, startY + i * rowH + 4, descSize, gPH.inkLight);
+    // Icon-tile strip — same visual language as the move-select row and the
+    // inventory bag. Just icon + xN count badge (no name label, since the
+    // procedural icons are recognisable enough that "Krill Snack" /
+    // "Fresh Fish" labels were just visual noise on a small tile).
+    int shown = inv->itemCount < 4 ? inv->itemCount : 4;
+    for (int i = 0; i < shown; i++) {
+        Rectangle r = ItemSlotRect(i);
+
+        DrawRectangleRounded(r, 0.16f, 6, gPH.panel);
+        DrawRectangleRoundedLinesEx(r, 0.16f, 6, 2.0f, gPH.ink);
+
+        // Icon fills the tile (small inset for breathing room).
+        Rectangle iconR = { r.x + 8, r.y + 8,
+                            r.width - 16, r.height - 16 };
+        DrawItemIcon(iconR, inv->items[i].itemId);
+
+        // Count badge bottom-right.
+        char qty[8];
+        snprintf(qty, sizeof(qty), "x%d", inv->items[i].count);
+        int badgeF = 14;
+        int btw = MeasureText(qty, badgeF);
+        int padX = 5, padY = 2;
+        Rectangle badge = {
+            r.x + r.width - btw - padX * 2 - 4,
+            r.y + r.height - badgeF - padY * 2 - 4,
+            (float)(btw + padX * 2), (float)(badgeF + padY * 2)
+        };
+        DrawRectangleRounded(badge, 0.45f, 4,
+                             (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 220});
+        DrawText(qty, (int)(badge.x + padX),
+                 (int)(badge.y + padY - 1), badgeF, RAYWHITE);
     }
+
     DrawBackIconButton(BackButtonRect());
+    (void)m;
 }
 
 // Flush one pending buffered line, applying word-wrap. Returns the y after

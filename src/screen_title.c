@@ -44,6 +44,11 @@ static Texture2D titleArt = {0};
 static int  gSelected    = 0;
 static bool gKbAction    = false;  // set by Update, consumed by Draw
 
+// True while the difficulty picker overlay is up. Tapping New flips this on
+// instead of immediately starting the game; Easy/Hard buttons in the overlay
+// commit the run with the chosen difficulty (no default).
+static bool gPickingDifficulty = false;
+
 //----------------------------------------------------------------------------------
 // Title Screen Functions Definition
 //----------------------------------------------------------------------------------
@@ -54,6 +59,7 @@ void InitTitleScreen(void) {
     finishScreen = 0;
     gSelected = SaveGameExists() ? 1 : 0;  // default to Load when available
     gKbAction = false;
+    gPickingDifficulty = false;
     // Full illustration (logo + subtitle + art) — buttons overlay the bottom.
     // Portrait build gets its own asset so the composition reads correctly in
     // 9:16 without cover-crop chewing off the sides.
@@ -163,9 +169,51 @@ void DrawTitleScreen(void) {
     // Load is disabled when no savegame.dat exists. Options is stubbed (leads
     // to a blank page with no way out), so it's rendered disabled too.
     const bool hasSave = SaveGameExists();
-    if (DrawButton("New",  0, 2, true))    GameplayRequestNewGame();
+    // "New" pops the difficulty picker overlay instead of starting the run
+    // immediately. The picker draws below; until the user picks Easy or
+    // Hard the title screen stays put.
+    if (DrawButton("New",  0, 2, true)) {
+        gPickingDifficulty = true;
+        finishScreen = 0;          // suppress immediate transition
+    }
     if (DrawButton("Load", 1, 2, hasSave)) GameplayRequestLoadGame();
     DrawButton("Options", 2, 1, false);
+
+    if (gPickingDifficulty) {
+        // Centred modal: title + Easy / Hard chunky buttons.
+        int sw = W, sh = H;
+        DrawRectangle(0, 0, sw, sh, (Color){0, 0, 0, 160});
+        int boxW = 520, boxH = 220;
+        int bx = (sw - boxW) / 2;
+        int by = (sh - boxH) / 2;
+        DrawRectangleRounded((Rectangle){(float)bx, (float)by,
+                                          (float)boxW, (float)boxH},
+                             0.10f, 8, gPH.panel);
+        DrawRectangleRoundedLinesEx((Rectangle){(float)bx, (float)by,
+                                                 (float)boxW, (float)boxH},
+                                    0.10f, 8, 3.0f, gPH.ink);
+        const char *prompt = "Choose difficulty";
+        int pf = 26;
+        int pw = MeasureText(prompt, pf);
+        DrawText(prompt, bx + (boxW - pw) / 2, by + 26, pf, gPH.ink);
+
+        int btnW = 200, btnH = 80;
+        int gap = 24;
+        int btnY = by + boxH - btnH - 24;
+        Rectangle easyR = {(float)(bx + boxW / 2 - btnW - gap / 2),
+                           (float)btnY, (float)btnW, (float)btnH};
+        Rectangle hardR = {(float)(bx + boxW / 2 + gap / 2),
+                           (float)btnY, (float)btnW, (float)btnH};
+        if (DrawChunkyButton(easyR, "EASY", 28, true,  true)) {
+            GameplayRequestNewGame(0);
+            finishScreen = 2;
+            gPickingDifficulty = false;
+        } else if (DrawChunkyButton(hardR, "HARD", 28, false, true)) {
+            GameplayRequestNewGame(1);
+            finishScreen = 2;
+            gPickingDifficulty = false;
+        }
+    }
 
     // Build version, bottom-right corner. Small + dim so it doesn't fight
     // with the cover art; bug reports can quote it verbatim.

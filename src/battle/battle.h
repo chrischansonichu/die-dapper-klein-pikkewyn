@@ -84,6 +84,12 @@ typedef struct BattleContext {
     int tempAllyPartyIdx;
 
     char  narration[NARRATION_LEN];
+    // Queued follow-up narration page. ConsumeMoveUse stashes a "Weapon broke!"
+    // message here when a weapon hits 0 dur; the BS_NARRATION advance handler
+    // promotes it into `narration` and stays on BS_NARRATION, so the break
+    // notice always gets its own dialog page instead of being squashed onto
+    // the damage line where players miss it.
+    char  pendingBreakMsg[NARRATION_LEN];
     bool  xpNarrationShown;
     bool  preemptiveAttack;  // consumed by Begin
     // Which move slot on Jan the sneak attack uses, and which enemy it lands
@@ -108,6 +114,10 @@ typedef struct BattleContext {
     // the per-turn budget + target.
     int     enemyStepsRemaining;
     TilePos enemyMoveGoal;
+
+    // Mirrored from GameState->difficulty when the battle starts. 0 = easy
+    // (enemy attacks deal half damage), 1 = hard (full).
+    int     difficulty;
 } BattleContext;
 
 // Compute the per-turn movement budget from a combatant's effective speed

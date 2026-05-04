@@ -342,6 +342,14 @@ static void EquipBagWeapon(InventoryUI *ui, Party *party)
     if (ui->cursor < 0 || ui->cursor >= party->inventory.weaponCount) return;
     if (ui->memberCursor < 0 || ui->memberCursor >= party->count) return;
     Combatant *target = &party->members[ui->memberCursor];
+    // Don't even take the broken weapon out of the bag — peek first so the
+    // status message can name it without juggling put-back paths.
+    if (party->inventory.weapons[ui->cursor].durability == 0) {
+        const MoveDef *bm = GetMoveDef(party->inventory.weapons[ui->cursor].moveId);
+        snprintf(ui->status, sizeof(ui->status),
+                 "%s is broken — can't equip.", bm ? bm->name : "It");
+        return;
+    }
     WeaponStack w;
     if (!InventoryTakeWeapon(&party->inventory, ui->cursor, &w)) return;
     const MoveDef *mv = GetMoveDef(w.moveId);
@@ -1208,17 +1216,51 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
 
         const MoveDef *mv = GetMoveDef(inv->weapons[i].moveId);
         int dur = inv->weapons[i].durability;
+        bool broken = (dur == 0);
         char overlay[16];
-        snprintf(overlay, sizeof(overlay), "d%d", dur);
-        Color ovCol = dur == 0 ? (Color){240, 100, 100, 255} : RAYWHITE;
+        if (broken) snprintf(overlay, sizeof(overlay), "BRK");
+        else        snprintf(overlay, sizeof(overlay), "d%d", dur);
+        Color ovCol = broken ? (Color){240, 100, 100, 255} : RAYWHITE;
+
+        // dur=1: thick red halo around the whole tile. Same treatment as the
+        // battle move-select strip so "about to break" reads identically in
+        // both UIs.
         if (dur == 1) {
-            Rectangle glow = { r.x - 3, r.y - 3, r.width + 6, r.height + 6 };
-            DrawRectangleRounded(glow, 0.18f, 6,
-                                 (Color){230, 80, 80, 200});
+            Rectangle halo = { r.x - 7, r.y - 7, r.width + 14, r.height + 14 };
+            DrawRectangleRounded(halo, 0.20f, 8,
+                                 (Color){220, 60, 60, 235});
         }
+
         // No "currently selected" wash on bag tiles — tap-to-equip is direct.
         DrawIconTile(r, mv->name, overlay, ovCol, false,
                      DrawMoveIcon, inv->weapons[i].moveId);
+
+        // Broken-weapon affordance: red wash + red X across the whole tile,
+        // and a thick red border. The icon stays visible so the player can
+        // still recognise what it was, but the tile reads as "do not equip."
+        if (broken) {
+            DrawRectangleRounded(r, 0.16f, 6, (Color){180, 40, 40, 110});
+            DrawRectangleRoundedLinesEx(r, 0.16f, 6, 4.0f,
+                                        (Color){200, 30, 30, 255});
+            // X mark — two thick diagonal strokes with a soft outline so the
+            // shape reads against any tile colour.
+            float pad = 8.0f;
+            Color xCol  = (Color){235, 70, 70, 240};
+            Color xEdge = (Color){90, 0, 0, 200};
+            DrawLineEx((Vector2){r.x + pad, r.y + pad},
+                       (Vector2){r.x + r.width - pad, r.y + r.height - pad},
+                       7.0f, xEdge);
+            DrawLineEx((Vector2){r.x + r.width - pad, r.y + pad},
+                       (Vector2){r.x + pad, r.y + r.height - pad},
+                       7.0f, xEdge);
+            DrawLineEx((Vector2){r.x + pad, r.y + pad},
+                       (Vector2){r.x + r.width - pad, r.y + r.height - pad},
+                       4.0f, xCol);
+            DrawLineEx((Vector2){r.x + r.width - pad, r.y + pad},
+                       (Vector2){r.x + pad, r.y + r.height - pad},
+                       4.0f, xCol);
+        }
+
         if (TouchHeldInRect(r, 0.45f)) popupBagIdx = i;
     }
 

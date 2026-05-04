@@ -38,29 +38,32 @@ bool DrawChunkyButton(Rectangle r, const char *label, int fontSize,
 
 bool DrawBackIconButton(Rectangle r)
 {
+    // Re-skinned to match the rest of the UI's parchment-and-ink language —
+    // the cherry-red round chip stuck out as the only saturated colour on
+    // screen. This now reads as "another chunky button, but with a chevron
+    // glyph instead of a label," which is what every other button looks
+    // like.
     bool held = CheckCollisionPointRec(GetMousePosition(), r) &&
                 IsMouseButtonDown(MOUSE_BUTTON_LEFT);
 
-    Color plate = (Color){200, 70, 60, 255};   // red
-    Color glyph = RAYWHITE;
-
-    // Drop shadow + sink-on-press (matches DrawChunkyButton).
     if (!held) {
         DrawRectangleRounded((Rectangle){r.x + 2, r.y + 3, r.width, r.height},
-                             0.5f, 8, (Color){0, 0, 0, 70});
+                             0.30f, 8, (Color){0, 0, 0, 70});
     }
     Rectangle pr = held ? (Rectangle){r.x + 1, r.y + 2, r.width, r.height} : r;
-    DrawRectangleRounded(pr, 0.5f, 8, plate);
-    DrawRectangleRoundedLinesEx(pr, 0.5f, 8, 2.0f, gPH.ink);
+    DrawRectangleRounded(pr, 0.30f, 8, gPH.panel);
+    DrawRectangleRoundedLinesEx(pr, 0.30f, 8, 2.5f, gPH.ink);
 
-    // Centered left-chevron glyph.
+    // Inked left-pointing chevron drawn as two line strokes for a hand-drawn
+    // feel — matches the rest of the parchment chrome.
     float cx = pr.x + pr.width  * 0.5f;
     float cy = pr.y + pr.height * 0.5f;
-    float reach = pr.width * 0.20f;
-    DrawTriangle((Vector2){cx - reach,  cy},
-                 (Vector2){cx + reach * 0.4f, cy - reach * 0.8f},
-                 (Vector2){cx + reach * 0.4f, cy + reach * 0.8f},
-                 glyph);
+    float reach = pr.width * 0.22f;
+    Vector2 tip   = { cx - reach * 0.9f, cy };
+    Vector2 upper = { cx + reach * 0.5f, cy - reach * 0.85f };
+    Vector2 lower = { cx + reach * 0.5f, cy + reach * 0.85f };
+    DrawLineEx(tip, upper, 4.0f, gPH.ink);
+    DrawLineEx(tip, lower, 4.0f, gPH.ink);
 
     return TouchTapInRect(r);
 }

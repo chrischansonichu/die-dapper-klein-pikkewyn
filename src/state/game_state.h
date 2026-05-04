@@ -64,6 +64,10 @@ typedef struct GameState {
     bool     captainDefeated;
     bool     captainTauntShown;
 
+    // Difficulty setting. 0 = easy (default — enemies hit at half power), 1 =
+    // hard (full enemy damage). Persisted in the save; toggled from screen_options.
+    int      difficulty;
+
     // Additional persistent state lands here in later phases:
     //   Roster    dismissedMembers;
     //   uint64_t  storyFlags;

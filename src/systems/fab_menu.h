@@ -25,6 +25,7 @@ typedef struct {
     bool open;
     int  toastFrames;  // countdown for the post-Save confirmation toast
     bool toastOk;      // last save succeeded?
+    char toastMsg[32]; // optional explicit message (overrides Saved/Save failed)
 } FabMenu;
 
 void      FabMenuInit(FabMenu *f);

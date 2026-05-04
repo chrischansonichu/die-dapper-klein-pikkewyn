@@ -7,6 +7,7 @@
 #include "../screen_layout.h"
 #include "../screen_layout.h"
 #include "../systems/touch_input.h"
+#include "../systems/ui_button.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -425,9 +426,11 @@ static void ConsumeMoveUse(BattleContext *ctx, bool actorIsEnemy, int slot)
     if (beforeDur == 1 && beforeId >= 0) {
         const MoveDef *mv = GetMoveDef(beforeId);
         if (mv) {
-            int curLen = (int)strlen(ctx->narration);
-            snprintf(ctx->narration + curLen, NARRATION_LEN - curLen,
-                     "  %s broke!", mv->name);
+            // Queue as its own dialog page rather than appending to the
+            // current attack narration — the user kept missing the break
+            // notice when it shared a panel with the damage line.
+            snprintf(ctx->pendingBreakMsg, NARRATION_LEN,
+                     "%s broke!", mv->name);
         }
     }
     return;
@@ -575,6 +578,13 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
         dmg = dmg / 10;
         if (dmg < 1) dmg = 1;
     }
+    // Easy-mode damping: enemy attacks against the party hit at half power.
+    // Captive-rescue / friendly hits (already attenuated above) and party
+    // attacks against enemies pass through unchanged.
+    if (actorIsEn && !targetIsEnemy && ctx->difficulty == 0) {
+        dmg = (dmg + 1) / 2;
+        if (dmg < 1) dmg = 1;
+    }
     target->hp -= dmg;
     // Aggro bookkeeping: a party member hitting an enemy contributes to that
     // enemy's per-party-index threat tally. ChoosePartyTarget reads this on
@@ -687,6 +697,12 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 if (!t->alive) continue;
                 if (hostileAoe && !RollHit(actor, t)) { misses++; continue; }
                 int dmg = CalculateDamage(actor, t, mv);
+                // Easy-mode AOE damping for party targets — same factor as
+                // single-target hits in ApplyMoveToTile.
+                if (te->isEnemy && ctx->difficulty == 0) {
+                    dmg = (dmg + 1) / 2;
+                    if (dmg < 1) dmg = 1;
+                }
                 t->hp -= dmg;
                 totalDmg += dmg; hits++; lastIdx = i; lastKilled = (t->hp <= 0);
                 if (!enragedTarget && TryEnrage(t)) enragedTarget = t;
@@ -783,6 +799,7 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
     ctx->moveBudget       = 0;
     ctx->targetTile       = (TilePos){0, 0};
     ctx->xpNarrationShown = false;
+    ctx->pendingBreakMsg[0] = '\0';
     ctx->preemptiveAttack = preemptive;
     ctx->menu             = (BattleMenuState){0};
     ctx->anim             = (BattleAnim){0};
@@ -1195,8 +1212,19 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
         // Tap anywhere to advance — no panel hit-test, narration is full
         // width at the bottom so any tap is "continue."
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)
-            || TouchTapOccurred(NULL))
-            ctx->state = BS_ROUND_END;
+            || TouchTapOccurred(NULL)) {
+            // If a weapon-broke notice was queued during this attack, promote
+            // it to its own dialog page before ending the round so it can't
+            // be missed.
+            if (ctx->pendingBreakMsg[0] != '\0') {
+                snprintf(ctx->narration, NARRATION_LEN, "%s",
+                         ctx->pendingBreakMsg);
+                ctx->pendingBreakMsg[0] = '\0';
+                // stay in BS_NARRATION — next tap continues to BS_ROUND_END.
+            } else {
+                ctx->state = BS_ROUND_END;
+            }
+        }
         break;
 
     case BS_ROUND_END:
@@ -1484,26 +1512,17 @@ void BattleDrawUI(const BattleContext *ctx)
         // Don't draw the bottom narration panel — the target cursor lives in
         // the world, and when the actor/target is near the bottom of the
         // screen the panel hides them. Render a thin top-screen hint strip
-        // instead so the player can see the whole grid.
+        // and a red back-icon button consistent with the rest of the UI.
         int sw = GetScreenWidth();
         int th = SCREEN_PORTRAIT ? 44 : 22;
         int fontSize = SCREEN_PORTRAIT ? 20 : 16;
         DrawRectangle(0, 0, sw, th, (Color){0x3C, 0x28, 0x14, 220});
         const char *hint = SCREEN_PORTRAIT
-            ? "Tap target · tap again to confirm"
-            : "Target: Arrows | Z=Confirm | X=Back";
+            ? "Tap target to confirm"
+            : "Tap a target to confirm";
         DrawText(hint, 10, (th - fontSize) / 2, fontSize,
                  (Color){0xF7, 0xEF, 0xD9, 240});
-        // Back button lives in the hint strip so the mobile build has an
-        // explicit cancel (no X key). Landscape keeps the X-key affordance
-        // in the hint text, but still gets the button for parity.
-        Rectangle back = TargetBackRect();
-        DrawRectangleRec(back, (Color){0x7A, 0x33, 0x2B, 240});
-        DrawRectangleLinesEx(back, 2, (Color){0xF7, 0xEF, 0xD9, 255});
-        int bw = MeasureText("Back", fontSize);
-        DrawText("Back", (int)(back.x + (back.width - bw) / 2),
-                 (int)(back.y + (back.height - fontSize) / 2),
-                 fontSize, (Color){0xF7, 0xEF, 0xD9, 255});
+        DrawBackIconButton(TargetBackRect());
         break;
     }
     case BS_NARRATION:

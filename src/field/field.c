@@ -31,6 +31,12 @@
 
 // Post-battle dialogue buffers. DialogueBegin keeps pointers, so these must
 // live at file scope to outlive the call.
+// Whole-battle drop cap. Without it, a 6-enemy cluster (each rolling a 50%
+// gate × ~65% per category) yielded ~4 drop pages — players reported
+// fights felt like "loot piles" instead of fights. 3 keeps the haul
+// meaningful without flooding the post-battle dialogue.
+#define MAX_DROPS_PER_BATTLE 3
+
 // Sized for up to ~3 enemies × 3 drop categories each (item + weapon + armor).
 // Bigger than the old 3 because previous code only narrated the first enemy's
 // drops — every subsequent enemy in a multi-foe fight clobbered the buffer
@@ -568,6 +574,7 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
     memset(ctx, 0, sizeof(*ctx));
     ctx->preemptiveMoveSlot   = preemptiveMoveSlot;
     ctx->preemptiveTargetIdx  = -1; // filled in below once we know the cluster index
+    ctx->difficulty           = ow->gs ? ow->gs->difficulty : 0;
 
     // Aggro cluster into battle enemy slots. CombatantInit copies stats from
     // the creature def; tile position comes from the FieldEnemy.
@@ -851,12 +858,27 @@ static void ResolveBattleEnd(FieldState *ow, int result)
         // from the first enemy that dropped anything — items beyond that
         // landed in the inventory invisibly.
         int dropPages = 0;
+        // Pass 1: deactivate every defeated enemy + roll drops on the boss
+        // first so its guaranteed loot (Harpoon, Captain's Coat) never gets
+        // squeezed out by the cap. Pass 2 then rolls the rest until the cap
+        // is reached.
         for (int k = 0; k < ctx->enemyCount; k++) {
             int idx = ctx->enemyFieldIdx[k];
             if (idx < 0 || idx >= ow->enemyCount) continue;
             FieldEnemy *e = &ow->enemies[idx];
-            if (e->creatureId == CREATURE_CAPTAIN_BOSS) bossDown = true;
-            dropPages = RollEnemyDrops(e, &ow->gs->party, &ow->discardUi, dropPages);
+            if (e->creatureId == CREATURE_CAPTAIN_BOSS) {
+                bossDown = true;
+                dropPages = RollEnemyDrops(e, &ow->gs->party, &ow->discardUi, dropPages);
+            }
+        }
+        for (int k = 0; k < ctx->enemyCount; k++) {
+            int idx = ctx->enemyFieldIdx[k];
+            if (idx < 0 || idx >= ow->enemyCount) continue;
+            FieldEnemy *e = &ow->enemies[idx];
+            if (e->creatureId != CREATURE_CAPTAIN_BOSS &&
+                dropPages < MAX_DROPS_PER_BATTLE) {
+                dropPages = RollEnemyDrops(e, &ow->gs->party, &ow->discardUi, dropPages);
+            }
             e->active = false;
         }
         for (int i = 0; i < dropPages && pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0])); i++) {

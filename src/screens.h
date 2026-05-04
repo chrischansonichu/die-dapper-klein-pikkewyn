@@ -81,8 +81,10 @@ int FinishGameplayScreen(void);
 
 // Called by the title screen before transitioning. Tells the next
 // InitGameplayScreen whether to start a fresh run or load the save file.
-// Default (no call) preserves the already-running session.
-void GameplayRequestNewGame(void);
+// Default (no call) preserves the already-running session. NewGame takes a
+// difficulty (0=easy, 1=hard) chosen on the title screen — there is no
+// default; the player must pick before the run begins.
+void GameplayRequestNewGame(int difficulty);
 void GameplayRequestLoadGame(void);
 
 //----------------------------------------------------------------------------------
