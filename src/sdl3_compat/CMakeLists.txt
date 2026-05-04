@@ -4,22 +4,142 @@ project(ddkp_sdl3 C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# SDL3 + companions (installed via Homebrew on macOS — all ship CMake configs).
-find_package(SDL3       CONFIG REQUIRED)
-find_package(SDL3_ttf   CONFIG REQUIRED)
-find_package(SDL3_image CONFIG REQUIRED)
+# ---------------------------------------------------------------------------
+# Dependency strategy — split by platform.
+#
+# macOS desktop: link against the Homebrew-installed SDL3 / SDL3_ttf / SDL3_image
+# (fast iteration, no source build).
+#
+# iOS / Android: brew's libs are macOS-only; FetchContent the SDL3 sources and
+# build them as part of our Xcode/Gradle project. Vendored deps (FreeType,
+# libpng, etc.) keep the iOS/Android build self-contained — no system libs.
+# ---------------------------------------------------------------------------
+if (CMAKE_SYSTEM_NAME STREQUAL "iOS" OR CMAKE_SYSTEM_NAME STREQUAL "Android")
+    include(FetchContent)
+    set(FETCHCONTENT_QUIET OFF)
+
+    # Pin to released tags. Bump these together when SDL3 advances.
+    FetchContent_Declare(SDL3
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG release-3.4.8
+        GIT_SHALLOW TRUE)
+    FetchContent_Declare(SDL3_ttf
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL_ttf.git
+        GIT_TAG release-3.2.2
+        GIT_SHALLOW TRUE)
+    FetchContent_Declare(SDL3_image
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL_image.git
+        GIT_TAG release-3.4.4
+        GIT_SHALLOW TRUE)
+
+    # All-static for iOS — Apple won't accept dynamic frameworks in the app
+    # bundle without notarization and explicit framework search paths. Pin
+    # BUILD_SHARED_LIBS too: SDL3_ttf/SDL3_image read it to decide which
+    # variant of the SDL3 target to look for (SDL3::SDL3 vs SDL3::SDL3-shared).
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(SDL_SHARED        OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC        ON  CACHE BOOL "" FORCE)
+    set(SDL_TEST_LIBRARY  OFF CACHE BOOL "" FORCE)
+
+    # SDL3_ttf / SDL3_image vendor their image-codec / font-engine deps
+    # (FreeType, libpng, libjpeg, libwebp, etc.) so we don't need system libs.
+    set(SDLTTF_VENDORED   ON CACHE BOOL "" FORCE)
+    set(SDLTTF_HARFBUZZ   ON CACHE BOOL "" FORCE)
+    set(SDLTTF_PLUTOSVG   OFF CACHE BOOL "" FORCE) # plutosvg color-emoji is not needed
+    set(SDLIMAGE_VENDORED ON CACHE BOOL "" FORCE)
+    # We only load PNG today. Disable every other backend so vendored libwebp
+    # / libavif / libtiff don't get pulled in. libwebp's CMake in particular
+    # breaks on iOS bundle install (no BUNDLE DESTINATION for webpmux).
+    set(SDLIMAGE_AVIF OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_BMP  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_GIF  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_JPG  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_JXL  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_LBM  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_PCX  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_PNG  ON  CACHE BOOL "" FORCE)
+    set(SDLIMAGE_PNM  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_QOI  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_SVG  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_TGA  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_TIF  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_WEBP OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_XCF  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_XPM  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_XV   OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_ANI  OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_APNG OFF CACHE BOOL "" FORCE)
+
+    FetchContent_MakeAvailable(SDL3 SDL3_ttf SDL3_image)
+else()
+    find_package(SDL3       CONFIG REQUIRED)
+    find_package(SDL3_ttf   CONFIG REQUIRED)
+    find_package(SDL3_image CONFIG REQUIRED)
+endif()
+
+# ---------------------------------------------------------------------------
+# Game sources — same set on all platforms. Mirrors src/Makefile's
+# PROJECT_SOURCE_FILES; raylib_game.c is replaced by our SDL3 main.c, and
+# real paper_harbor.c is the live one (the earlier stub is gone).
+# ---------------------------------------------------------------------------
+set(GAME_SOURCES
+    ../screen_logo.c
+    ../screen_title.c
+    ../screen_options.c
+    ../screen_gameplay.c
+    ../screen_ending.c
+    ../screen_battle.c
+    ../battle/battle.c
+    ../battle/battle_anim.c
+    ../battle/battle_grid.c
+    ../battle/battle_menu.c
+    ../battle/battle_sprites.c
+    ../battle/combatant.c
+    ../battle/inventory.c
+    ../battle/party.c
+    ../data/armor_defs.c
+    ../data/creature_defs.c
+    ../data/forge_recipes.c
+    ../data/item_defs.c
+    ../data/move_defs.c
+    ../data/room_templates.c
+    ../dev/style_preview.c
+    ../field/blacksmith_ui.c
+    ../field/buildings.c
+    ../field/dev_warp_ui.c
+    ../field/discard_ui.c
+    ../field/donation_ui.c
+    ../field/enemy.c
+    ../field/enemy_sprites.c
+    ../field/field.c
+    ../field/inventory_ui.c
+    ../field/map_authored.c
+    ../field/map_dungeon_proc.c
+    ../field/map_source.c
+    ../field/npc.c
+    ../field/player.c
+    ../field/salvager_ui.c
+    ../field/stats_ui.c
+    ../field/tilemap.c
+    ../field/village.c
+    ../render/paper_harbor.c
+    ../state/game_state.c
+    ../state/save.c
+    ../systems/camera_system.c
+    ../systems/dialogue.c
+    ../systems/fab_menu.c
+    ../systems/modal_close.c
+    ../systems/touch_input.c
+)
 
 add_executable(ddkp_sdl3
     main.c
     raylib_compat.c
-    paper_harbor_stub.c
-    ../screen_logo.c
-    ../screen_title.c
+    ${GAME_SOURCES}
 )
 
-# Two include roots:
-# - sdl3_compat is FIRST so #include "raylib.h" picks up our shim, not real raylib.
-# - src/.. lets the screen file find sibling headers like screens.h, screen_layout.h, state/save.h.
+# sdl3_compat dir comes first so #include "raylib.h" resolves to our shim,
+# not real raylib.
 target_include_directories(ddkp_sdl3 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -31,11 +151,51 @@ target_link_libraries(ddkp_sdl3 PRIVATE
     SDL3_image::SDL3_image
 )
 
-# Mirror the raylib build's resource copy so LoadTexture/LoadFontEx find the
-# assets relative to the binary's working directory.
-add_custom_command(
-    TARGET ddkp_sdl3 POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/../resources
-        $<TARGET_FILE_DIR:ddkp_sdl3>/resources
-)
+# ---------------------------------------------------------------------------
+# Platform-specific packaging
+# ---------------------------------------------------------------------------
+if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # Glob the resources/ tree and bundle each into the .app's "resources/"
+    # subdir so SDL_GetBasePath() + chdir + LoadTexture("resources/foo.png")
+    # resolves identically to the desktop build.
+    file(GLOB_RECURSE RESOURCE_FILES
+         ${CMAKE_SOURCE_DIR}/../resources/*)
+    target_sources(ddkp_sdl3 PRIVATE ${RESOURCE_FILES})
+    foreach(_f ${RESOURCE_FILES})
+        file(RELATIVE_PATH _rel ${CMAKE_SOURCE_DIR}/../resources ${_f})
+        get_filename_component(_dir ${_rel} DIRECTORY)
+        set_source_files_properties(${_f} PROPERTIES
+            MACOSX_PACKAGE_LOCATION "resources/${_dir}")
+    endforeach()
+
+    set_target_properties(ddkp_sdl3 PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in
+        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.dapperpenguin.ddkp"
+        XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"  # iPhone + iPad
+        XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "-"
+        XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "YES"
+        XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "YES"
+    )
+
+    # Re-sign the assembled bundle. Xcode's default sign step runs before
+    # Info.plist is fully placed, leaving "Info.plist=not bound" in the
+    # signature — simctl rejects that as "Missing bundle ID". Forcing an
+    # adhoc resign once the bundle is complete makes simctl accept it.
+    # We use bash -c with a single-quoted command so CMake's Xcode generator
+    # doesn't escape Xcode's $BUILT_PRODUCTS_DIR env var (which it does to
+    # ${EFFECTIVE_PLATFORM_NAME} via $<TARGET_BUNDLE_DIR:...>).
+    add_custom_command(
+        TARGET ddkp_sdl3 POST_BUILD
+        COMMAND bash -c
+            'codesign --force --sign - --identifier com.dapperpenguin.ddkp "$BUILT_PRODUCTS_DIR/$FULL_PRODUCT_NAME"'
+    )
+else()
+    # Desktop: copy resources alongside the binary at build time.
+    add_custom_command(
+        TARGET ddkp_sdl3 POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_SOURCE_DIR}/../resources
+            $<TARGET_FILE_DIR:ddkp_sdl3>/resources
+    )
+endif()

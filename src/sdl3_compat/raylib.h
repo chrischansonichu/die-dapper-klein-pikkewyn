@@ -18,6 +18,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// Math constants raylib exposes through raylib.h.
+#ifndef PI
+    #define PI 3.14159265358979323846f
+#endif
+#define DEG2RAD (PI/180.0f)
+#define RAD2DEG (180.0f/PI)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -147,6 +154,15 @@ typedef struct Camera2D {
 #define TEXTURE_FILTER_BILINEAR    1
 #define TEXTURE_FILTER_TRILINEAR   2
 
+// Blend modes
+#define BLEND_ALPHA               0
+#define BLEND_ADDITIVE            1
+#define BLEND_MULTIPLIED          2
+#define BLEND_ADD_COLORS          3
+#define BLEND_SUBTRACT_COLORS     4
+#define BLEND_ALPHA_PREMULTIPLY   5
+#define BLEND_CUSTOM              6
+
 // Mouse buttons (match raylib's numbering, NOT SDL's)
 #define MOUSE_BUTTON_LEFT     0
 #define MOUSE_BUTTON_RIGHT    1
@@ -207,6 +223,9 @@ typedef struct Camera2D {
 #define KEY_ENTER           257
 #define KEY_TAB             258
 #define KEY_BACKSPACE       259
+#define KEY_DELETE          261
+#define KEY_LEFT_BRACKET    91
+#define KEY_RIGHT_BRACKET   93
 #define KEY_RIGHT           262
 #define KEY_LEFT            263
 #define KEY_DOWN            264
@@ -224,6 +243,9 @@ typedef struct Camera2D {
 #define KEY_LEFT_SHIFT      340
 #define KEY_LEFT_CONTROL    341
 #define KEY_LEFT_ALT        342
+#define KEY_RIGHT_SHIFT     344
+#define KEY_RIGHT_CONTROL   345
+#define KEY_RIGHT_ALT       346
 
 // ----------------------------------------------------------------------------
 // Window / lifecycle
@@ -238,6 +260,32 @@ int  GetScreenHeight(void);
 void SetTargetFPS(int fps);
 int  ChangeDirectory(const char *dir);
 const char *GetApplicationDirectory(void);
+float GetFrameTime(void);
+double GetTime(void);
+int  GetRandomValue(int min, int max);
+void DrawFPS(int posX, int posY);
+
+// File IO
+unsigned char *LoadFileData(const char *fileName, int *bytesRead);
+void UnloadFileData(unsigned char *data);
+bool SaveFileData(const char *fileName, void *data, int bytesToWrite);
+bool FileExists(const char *fileName);
+
+// Text formatting
+const char *TextFormat(const char *text, ...);
+unsigned int TextLength(const char *text);
+
+// Blend / scissor (clip rect)
+void BeginBlendMode(int mode);
+void EndBlendMode(void);
+void BeginScissorMode(int x, int y, int width, int height);
+void EndScissorMode(void);
+
+// 2D camera (translation + zoom; rotation is honored only at the math level).
+void    BeginMode2D(Camera2D camera);
+void    EndMode2D(void);
+Vector2 GetScreenToWorld2D(Vector2 position, Camera2D camera);
+Vector2 GetWorldToScreen2D(Vector2 position, Camera2D camera);
 
 // ----------------------------------------------------------------------------
 // Drawing frame
@@ -251,12 +299,40 @@ void ClearBackground(Color c);
 // Shapes
 // ----------------------------------------------------------------------------
 
+void DrawPixel(int x, int y, Color c);
+void DrawLine(int startX, int startY, int endX, int endY, Color c);
+void DrawLineEx(Vector2 a, Vector2 b, float thickness, Color c);
 void DrawRectangle(int x, int y, int w, int h, Color c);
 void DrawRectangleRec(Rectangle r, Color c);
+void DrawRectangleLines(int x, int y, int w, int h, Color c);
 void DrawRectangleLinesEx(Rectangle r, float thickness, Color c);
 void DrawRectangleGradientV(int x, int y, int w, int h, Color top, Color bottom);
+void DrawRectangleRounded(Rectangle r, float roundness, int segments, Color c);
+void DrawRectangleRoundedLines(Rectangle r, float roundness, int segments, Color c);
+void DrawRectangleRoundedLinesEx(Rectangle r, float roundness, int segments, float thickness, Color c);
 void DrawCircle(int cx, int cy, float radius, Color c);
-void DrawLineEx(Vector2 a, Vector2 b, float thickness, Color c);
+void DrawCircleV(Vector2 center, float radius, Color c);
+void DrawCircleLines(int cx, int cy, float radius, Color c);
+void DrawEllipse(int cx, int cy, float rx, float ry, Color c);
+void DrawTriangle(Vector2 v1, Vector2 v2, Vector2 v3, Color c);
+
+// Touch (mobile — desktop builds usually return 0 / mouse pos)
+int     GetTouchPointCount(void);
+Vector2 GetTouchPosition(int index);
+
+// Gestures (raylib values; IsGestureDetected is a bitwise test on current frame)
+#define GESTURE_NONE         0
+#define GESTURE_TAP          1
+#define GESTURE_DOUBLETAP    2
+#define GESTURE_HOLD         4
+#define GESTURE_DRAG         8
+#define GESTURE_SWIPE_RIGHT  16
+#define GESTURE_SWIPE_LEFT   32
+#define GESTURE_SWIPE_UP     64
+#define GESTURE_SWIPE_DOWN   128
+#define GESTURE_PINCH_IN     256
+#define GESTURE_PINCH_OUT    512
+bool IsGestureDetected(unsigned int gesture);
 
 // ----------------------------------------------------------------------------
 // Textures
@@ -304,6 +380,11 @@ void  CloseAudioDevice(void);
 Sound LoadSound(const char *path);
 void  UnloadSound(Sound s);
 void  PlaySound(Sound s);
+Music LoadMusicStream(const char *path);
+void  UnloadMusicStream(Music m);
+void  UpdateMusicStream(Music m);
+void  PlayMusicStream(Music m);
+void  StopMusicStream(Music m);
 
 // ----------------------------------------------------------------------------
 // Input

@@ -6,6 +6,12 @@
 // no-ops; selecting New/Load on the title prints a milestone marker and
 // exits cleanly. Stubs disappear screen-by-screen as we widen shim coverage.
 
+// SDL_main.h must be included by exactly one TU, and only by the one that
+// defines `int main(...)`. Its macro remaps our main to SDL_main on platforms
+// that need a platform-specific bootstrapper (iOS sets up UIApplication,
+// Android wires up the activity). No-op on macOS/Linux desktop builds.
+#include <SDL3/SDL_main.h>
+
 #include "raylib.h"
 #include "../screens.h"
 #include "../screen_layout.h"
@@ -20,40 +26,6 @@ GameScreen currentScreen = LOGO;
 Font  font  = {0};
 Music music = {0};
 Sound fxCoin = {0};
-
-// ---------------------------------------------------------------------------
-// Stubs for game-state-dependent functions called from screen_title.c.
-// Real implementations land when state/save.c + game_state.c get linked in.
-// ---------------------------------------------------------------------------
-bool SaveGameExists(void) { return false; }
-void GameplayRequestNewGame(void)  { puts("[stub] GameplayRequestNewGame"); }
-void GameplayRequestLoadGame(void) { puts("[stub] GameplayRequestLoadGame"); }
-
-// Stubs for screens not yet ported. Kept minimal — flesh out as each screen
-// joins the build.
-void InitOptionsScreen(void)  {}
-void UpdateOptionsScreen(void){}
-void DrawOptionsScreen(void)  {}
-void UnloadOptionsScreen(void){}
-int  FinishOptionsScreen(void){ return 0; }
-void InitGameplayScreen(void) {}
-void UpdateGameplayScreen(void){}
-void DrawGameplayScreen(void) {}
-void UnloadGameplayScreen(void){}
-int  FinishGameplayScreen(void){ return 0; }
-void InitBattleScreen(void)   {}
-void UpdateBattleScreen(void) {}
-void DrawBattleScreen(void)   {}
-void UnloadBattleScreen(void) {}
-int  FinishBattleScreen(void) { return 0; }
-void InitEndingScreen(void)   {}
-void UpdateEndingScreen(void) {}
-void DrawEndingScreen(void)   {}
-void UnloadEndingScreen(void) {}
-int  FinishEndingScreen(void) { return 0; }
-void BattlePrepareEncounter(Party *p, int e[], int l[], int n) { (void)p; (void)e; (void)l; (void)n; }
-void BattleSetPreemptive(bool p) { (void)p; }
-BattleResult GetLastBattleResult(void) { return BATTLE_ONGOING; }
 
 // ---------------------------------------------------------------------------
 // Per-screen lifecycle dispatchers — same pattern as raylib_game.c so each
@@ -164,7 +136,8 @@ static void DrawTransition(void) {
 // Entry
 // ---------------------------------------------------------------------------
 
-int main(void) {
+int main(int argc, char *argv[]) {
+    (void)argc; (void)argv;
     SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI);
     InitWindow(SCREEN_W, SCREEN_H, "Die Dapper Klein Pikkewyn (SDL3)");
     InitAudioDevice();
@@ -176,7 +149,8 @@ int main(void) {
     fxCoin = LoadSound("resources/coin.wav");
     PHInit(SCREEN_W, SCREEN_H);
 
-    currentScreen = LOGO;
+    // Skip the raylib-style logo splash — go straight to TITLE.
+    currentScreen = TITLE;
     InitScreen(currentScreen);
     SetTargetFPS(60);
 
@@ -187,17 +161,25 @@ int main(void) {
             const int finish = FinishScreen(currentScreen);
             if (finish != 0) {
                 switch (currentScreen) {
-                    case LOGO:
-                        TransitionToScreen(TITLE);
-                        break;
                     case TITLE:
-                        // Title returns 1 = Options, 2 = Start/Load. Both
-                        // exit cleanly until those screens are ported.
-                        printf("[milestone] Title finished with code %d — exiting\n", finish);
-                        quitRequested = true;
+                        if (finish == 1)      TransitionToScreen(OPTIONS);
+                        else if (finish == 2) TransitionToScreen(GAMEPLAY);
+                        break;
+                    case OPTIONS:
+                        if (finish == 1) TransitionToScreen(TITLE);
+                        break;
+                    case GAMEPLAY:
+                        if (finish == 1)      TransitionToScreen(ENDING);
+                        else if (finish == 2) TransitionToScreen(BATTLE);
+                        break;
+                    case BATTLE:
+                        if (finish == 1)      TransitionToScreen(GAMEPLAY);
+                        else if (finish == 2) TransitionToScreen(ENDING);
+                        break;
+                    case ENDING:
+                        if (finish == 1) TransitionToScreen(TITLE);
                         break;
                     default:
-                        // Other screens not yet wired up; ignore.
                         break;
                 }
             }
