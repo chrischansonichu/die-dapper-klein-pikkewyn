@@ -32,6 +32,34 @@
 #include <time.h>
 #include <unistd.h>  // chdir
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
+// On iOS the asset directory inside the .app bundle is named "Assets/" rather
+// than "resources/", because codesign auto-detects a "Resources/" (case-
+// insensitive) subdir at bundle root as the macOS-framework convention and
+// switches to framework-style sealing rules — those rules omit Info.plist
+// from the signature manifest, and IXPackage then rejects the bundle at
+// install. We translate the "resources/" prefix in path arguments to
+// "Assets/" before passing through to SDL — game code stays unchanged.
+#if defined(__APPLE__) && TARGET_OS_IOS
+#define SDL3_REWRITE_RESOURCES_PATH 1
+#else
+#define SDL3_REWRITE_RESOURCES_PATH 0
+#endif
+
+static const char *RewriteAssetPath(const char *p) {
+#if SDL3_REWRITE_RESOURCES_PATH
+    static char buf[1024];
+    if (p && strncmp(p, "resources/", 10) == 0) {
+        snprintf(buf, sizeof(buf), "Assets/%s", p + 10);
+        return buf;
+    }
+#endif
+    return p;
+}
+
 // ---------------------------------------------------------------------------
 // Module state
 // ---------------------------------------------------------------------------
@@ -141,6 +169,12 @@ void SetConfigFlags(unsigned int flags) {
 }
 
 void InitWindow(int width, int height, const char *title) {
+    // Touch→mouse event synthesis. iOS / Android send finger events; we want
+    // game code that polls IsMouseButtonPressed/GetMousePosition to keep
+    // working unchanged. Default in SDL3 *should* be on for touch platforms,
+    // but set explicitly so we don't depend on platform defaults shifting.
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
+
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         exit(1);
@@ -224,6 +258,24 @@ bool WindowShouldClose(void) {
             case SDL_EVENT_MOUSE_MOTION:
                 g_mouse_x = e.motion.x;
                 g_mouse_y = e.motion.y;
+                break;
+            // Touch (iOS / Android). tfinger.x/y are normalized 0..1; expand
+            // to logical-pixel coords. We mirror to mouse state so existing
+            // game-side IsMouseButtonPressed / GetMousePosition logic keeps
+            // working without per-platform branching.
+            case SDL_EVENT_FINGER_DOWN:
+                g_mouse_cur[MOUSE_BUTTON_LEFT] = true;
+                g_mouse_x = e.tfinger.x * (float)g_logical_w;
+                g_mouse_y = e.tfinger.y * (float)g_logical_h;
+                break;
+            case SDL_EVENT_FINGER_UP:
+                g_mouse_cur[MOUSE_BUTTON_LEFT] = false;
+                g_mouse_x = e.tfinger.x * (float)g_logical_w;
+                g_mouse_y = e.tfinger.y * (float)g_logical_h;
+                break;
+            case SDL_EVENT_FINGER_MOTION:
+                g_mouse_x = e.tfinger.x * (float)g_logical_w;
+                g_mouse_y = e.tfinger.y * (float)g_logical_h;
                 break;
         }
     }
@@ -384,6 +436,7 @@ void DrawLineEx(Vector2 a, Vector2 b, float thickness, Color c) {
 
 Texture2D LoadTexture(const char *path) {
     Texture2D t = {0};
+    path = RewriteAssetPath(path);
     SDL_Texture *st = IMG_LoadTexture(g_renderer, path);
     if (!st) {
         fprintf(stderr, "LoadTexture(%s) failed: %s\n", path, SDL_GetError());
@@ -493,6 +546,7 @@ void UnloadImage(Image img) {
 Font LoadFontEx(const char *path, int baseSize, int *codepoints, int codepointCount) {
     (void)codepoints; (void)codepointCount;
     Font f = {0};
+    path = RewriteAssetPath(path);
     TTF_Font *tf = TTF_OpenFont(path, (float)baseSize);
     if (!tf) {
         fprintf(stderr, "LoadFontEx(%s) failed: %s\n", path, SDL_GetError());
@@ -620,7 +674,11 @@ const char *TextSubtext(const char *text, int position, int length) {
 
 void  InitAudioDevice(void) { /* deferred — wire SDL_AudioStream + mixer later */ }
 void  CloseAudioDevice(void) {}
-Sound LoadSound(const char *path) { (void)path; Sound s = {0}; return s; }
+Sound LoadSound(const char *path) {
+    (void)RewriteAssetPath(path);  // currently a no-op — audio impl deferred
+    Sound s = {0};
+    return s;
+}
 void  UnloadSound(Sound s) { (void)s; }
 void  PlaySound(Sound s) { (void)s; }
 
@@ -960,6 +1018,7 @@ void  StopMusicStream(Music m)   { (void)m; }
 
 unsigned char *LoadFileData(const char *fileName, int *bytesRead) {
     if (bytesRead) *bytesRead = 0;
+    fileName = RewriteAssetPath(fileName);
     FILE *f = fopen(fileName, "rb");
     if (!f) return NULL;
     fseek(f, 0, SEEK_END);

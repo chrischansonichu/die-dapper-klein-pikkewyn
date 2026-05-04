@@ -155,9 +155,13 @@ target_link_libraries(ddkp_sdl3 PRIVATE
 # Platform-specific packaging
 # ---------------------------------------------------------------------------
 if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    # Glob the resources/ tree and bundle each into the .app's "resources/"
-    # subdir so SDL_GetBasePath() + chdir + LoadTexture("resources/foo.png")
-    # resolves identically to the desktop build.
+    # Bundle resources under "Assets/" — NOT "resources/" — because codesign
+    # auto-detects "Resources/" (case-insensitive) at bundle root as the macOS-
+    # framework convention and switches to framework-style sealing rules,
+    # which omit Info.plist from the manifest. IXPackage then rejects the
+    # bundle at install with "Missing bundle ID". Game code's
+    # LoadTexture("resources/...") paths are translated to "Assets/..." inside
+    # the shim's Load* helpers when running on iOS.
     file(GLOB_RECURSE RESOURCE_FILES
          ${CMAKE_SOURCE_DIR}/../resources/*)
     target_sources(ddkp_sdl3 PRIVATE ${RESOURCE_FILES})
@@ -165,31 +169,35 @@ if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
         file(RELATIVE_PATH _rel ${CMAKE_SOURCE_DIR}/../resources ${_f})
         get_filename_component(_dir ${_rel} DIRECTORY)
         set_source_files_properties(${_f} PROPERTIES
-            MACOSX_PACKAGE_LOCATION "resources/${_dir}")
+            MACOSX_PACKAGE_LOCATION "Assets/${_dir}")
     endforeach()
 
     set_target_properties(ddkp_sdl3 PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in
+        # Force the iOS application product type. CMake's Xcode generator
+        # otherwise classifies our target as a generic bundle, which makes
+        # codesign use macOS-framework sealing rules (^Resources/) — those
+        # rules omit Info.plist from the signature manifest, which is what
+        # IXPackage rejects as "Missing bundle ID" at install time.
+        XCODE_PRODUCT_TYPE "com.apple.product-type.application"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.dapperpenguin.ddkp"
         XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"  # iPhone + iPad
-        XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "-"
-        XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "YES"
-        XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "YES"
+        # Adhoc sign for simulator. CODE_SIGNING_REQUIRED must be YES for
+        # xcodebuild to run codesign with --generate-entitlement-der (the only
+        # invocation that produces a bundle signature IXPackage will accept).
+        "XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" "-"
+        "XCODE_ATTRIBUTE_CODE_SIGN_STYLE" "Manual"
+        "XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED" "YES"
+        "XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED" "YES"
+        "XCODE_ATTRIBUTE_PROVISIONING_PROFILE_SPECIFIER" ""
     )
 
-    # Re-sign the assembled bundle. Xcode's default sign step runs before
-    # Info.plist is fully placed, leaving "Info.plist=not bound" in the
-    # signature — simctl rejects that as "Missing bundle ID". Forcing an
-    # adhoc resign once the bundle is complete makes simctl accept it.
-    # We use bash -c with a single-quoted command so CMake's Xcode generator
-    # doesn't escape Xcode's $BUILT_PRODUCTS_DIR env var (which it does to
-    # ${EFFECTIVE_PLATFORM_NAME} via $<TARGET_BUNDLE_DIR:...>).
-    add_custom_command(
-        TARGET ddkp_sdl3 POST_BUILD
-        COMMAND bash -c
-            'codesign --force --sign - --identifier com.dapperpenguin.ddkp "$BUILT_PRODUCTS_DIR/$FULL_PRODUCT_NAME"'
-    )
+    # No POST_BUILD codesign — Xcode's own sign step (visible in xcodebuild
+    # logs as `codesign --force --sign - --timestamp=none --generate-entitlement-der`)
+    # is the only one that produces an Info.plist-bound signature that IXPackage
+    # accepts. Any external `codesign --sign -` over-resign loses --generate-entitlement-der
+    # and invalidates the bundle for simctl install.
 else()
     # Desktop: copy resources alongside the binary at build time.
     add_custom_command(
