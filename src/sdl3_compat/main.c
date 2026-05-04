@@ -1,61 +1,106 @@
-// SDL3 hello-world. Proves the toolchain (SDL3 + SDL3_ttf + CMake) is wired
-// up before any game code or compat shim is layered on top. Opens a window
-// matching the game's logical resolution, fills it with a recognizable
-// color, and waits for close/ESC.
+// SDL3 build entry point. Mirrors raylib_game.c's responsibilities: create the
+// window, load globals (font, audio stubs, paper-harbor palette), and drive
+// the main loop. For the title-screen-first milestone the loop only runs the
+// TITLE screen — selecting New/Load/Options prints the chosen action and
+// exits. The other screens get linked in as we widen shim coverage.
 
-#include <SDL3/SDL.h>
-#include <SDL3_ttf/SDL_ttf.h>
+#include "raylib.h"
+#include "../screens.h"
+#include "../screen_layout.h"
+#include "../render/paper_harbor.h"
+
 #include <stdio.h>
 
-#define WIN_W 800
-#define WIN_H 450
+// ---------------------------------------------------------------------------
+// Globals declared `extern` in screens.h / screen_layout.h.
+// ---------------------------------------------------------------------------
+GameScreen currentScreen = LOGO;
+Font  font  = {0};
+Music music = {0};
+Sound fxCoin = {0};
 
-int main(int argc, char *argv[]) {
-    (void)argc; (void)argv;
+// ---------------------------------------------------------------------------
+// Stubs for game-state-dependent functions called from screen_title.c. The
+// real implementations live in state/save.c and screen_gameplay.c — both
+// pull in the full party/inventory/data graph, which we'll wire in once
+// the shim covers more of the API. For now the title screen sees "no save
+// file" (Load button disabled) and the New/Load actions just exit.
+// ---------------------------------------------------------------------------
+bool SaveGameExists(void) { return false; }
+void GameplayRequestNewGame(void)  { puts("[stub] GameplayRequestNewGame"); }
+void GameplayRequestLoadGame(void) { puts("[stub] GameplayRequestLoadGame"); }
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
-        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
-        return 1;
+// Stubs for the other screens' lifecycle functions. screens.h declares them
+// as extern; screen_title.c never calls them, but linking would fail without
+// definitions if anything else (e.g. a future include) referenced them.
+// Kept minimal — flesh out as each screen is ported.
+void InitLogoScreen(void)     {}
+void UpdateLogoScreen(void)   {}
+void DrawLogoScreen(void)     {}
+void UnloadLogoScreen(void)   {}
+int  FinishLogoScreen(void)   { return 0; }
+void InitOptionsScreen(void)  {}
+void UpdateOptionsScreen(void){}
+void DrawOptionsScreen(void)  {}
+void UnloadOptionsScreen(void){}
+int  FinishOptionsScreen(void){ return 0; }
+void InitGameplayScreen(void) {}
+void UpdateGameplayScreen(void){}
+void DrawGameplayScreen(void) {}
+void UnloadGameplayScreen(void){}
+int  FinishGameplayScreen(void){ return 0; }
+void InitBattleScreen(void)   {}
+void UpdateBattleScreen(void) {}
+void DrawBattleScreen(void)   {}
+void UnloadBattleScreen(void) {}
+int  FinishBattleScreen(void) { return 0; }
+void InitEndingScreen(void)   {}
+void UpdateEndingScreen(void) {}
+void DrawEndingScreen(void)   {}
+void UnloadEndingScreen(void) {}
+int  FinishEndingScreen(void) { return 0; }
+void BattlePrepareEncounter(Party *p, int e[], int l[], int n) { (void)p; (void)e; (void)l; (void)n; }
+void BattleSetPreemptive(bool p) { (void)p; }
+BattleResult GetLastBattleResult(void) { return BATTLE_ONGOING; }
+
+// ---------------------------------------------------------------------------
+// Entry
+// ---------------------------------------------------------------------------
+
+int main(void) {
+    SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI);
+    InitWindow(SCREEN_W, SCREEN_H, "Die Dapper Klein Pikkewyn (SDL3)");
+    InitAudioDevice();
+    ChangeDirectory(GetApplicationDirectory());
+
+    font = LoadFontEx("resources/EBGaramond-Bold.ttf", 96, 0, 0);
+    GenTextureMipmaps(&font.texture);
+    SetTextureFilter(font.texture, TEXTURE_FILTER_TRILINEAR);
+    fxCoin = LoadSound("resources/coin.wav");
+    PHInit(SCREEN_W, SCREEN_H);
+
+    currentScreen = TITLE;
+    InitTitleScreen();
+    SetTargetFPS(60);
+
+    while (!WindowShouldClose()) {
+        UpdateTitleScreen();
+
+        const int finish = FinishTitleScreen();
+        if (finish == 1) { puts("[milestone] Options selected — exiting"); break; }
+        if (finish == 2) { puts("[milestone] Start/Load selected — exiting"); break; }
+
+        BeginDrawing();
+        ClearBackground(gPH.bg);
+        DrawTitleScreen();
+        EndDrawing();
     }
-    if (!TTF_Init()) {
-        fprintf(stderr, "TTF_Init failed: %s\n", SDL_GetError());
-        SDL_Quit();
-        return 1;
-    }
 
-    SDL_Window *window = NULL;
-    SDL_Renderer *renderer = NULL;
-    if (!SDL_CreateWindowAndRenderer("Die Dapper Klein Pikkewyn (SDL3)",
-                                     WIN_W, WIN_H,
-                                     SDL_WINDOW_HIGH_PIXEL_DENSITY,
-                                     &window, &renderer)) {
-        fprintf(stderr, "CreateWindowAndRenderer failed: %s\n", SDL_GetError());
-        TTF_Quit(); SDL_Quit();
-        return 1;
-    }
-    SDL_SetRenderVSync(renderer, 1);
-
-    bool running = true;
-    while (running) {
-        SDL_Event e;
-        while (SDL_PollEvent(&e)) {
-            if (e.type == SDL_EVENT_QUIT) running = false;
-            if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) running = false;
-        }
-
-        SDL_SetRenderDrawColor(renderer, 32, 24, 18, 255);
-        SDL_RenderClear(renderer);
-
-        SDL_FRect r = { 100.0f, 100.0f, 200.0f, 100.0f };
-        SDL_SetRenderDrawColor(renderer, 220, 180, 90, 255);
-        SDL_RenderFillRect(renderer, &r);
-
-        SDL_RenderPresent(renderer);
-    }
-
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    TTF_Quit();
-    SDL_Quit();
+    UnloadTitleScreen();
+    UnloadFont(font);
+    UnloadSound(fxCoin);
+    PHUnload();
+    CloseAudioDevice();
+    CloseWindow();
     return 0;
 }

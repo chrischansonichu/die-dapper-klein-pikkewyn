@@ -86,19 +86,68 @@ CMakeFiles/ddkp_sdl3.dir/main.c.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/ddkp_sdl3.dir/main.c.s"
 	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/sdl3_compat/main.c -o CMakeFiles/ddkp_sdl3.dir/main.c.s
 
+CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.o: CMakeFiles/ddkp_sdl3.dir/flags.make
+CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.o: /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/sdl3_compat/raylib_compat.c
+CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.o: CMakeFiles/ddkp_sdl3.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/cmake-build-sdl3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building C object CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.o -MF CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.o.d -o CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.o -c /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/sdl3_compat/raylib_compat.c
+
+CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.i"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/sdl3_compat/raylib_compat.c > CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.i
+
+CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.s"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/sdl3_compat/raylib_compat.c -o CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.s
+
+CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.o: CMakeFiles/ddkp_sdl3.dir/flags.make
+CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.o: /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/sdl3_compat/paper_harbor_stub.c
+CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.o: CMakeFiles/ddkp_sdl3.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/cmake-build-sdl3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building C object CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.o -MF CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.o.d -o CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.o -c /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/sdl3_compat/paper_harbor_stub.c
+
+CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.i"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/sdl3_compat/paper_harbor_stub.c > CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.i
+
+CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.s"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/sdl3_compat/paper_harbor_stub.c -o CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.s
+
+CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.o: CMakeFiles/ddkp_sdl3.dir/flags.make
+CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.o: /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c
+CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.o: CMakeFiles/ddkp_sdl3.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/cmake-build-sdl3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building C object CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.o -MF CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.o.d -o CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.o -c /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c
+
+CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.i"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c > CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.i
+
+CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.s"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c -o CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.s
+
 # Object files for target ddkp_sdl3
 ddkp_sdl3_OBJECTS = \
-"CMakeFiles/ddkp_sdl3.dir/main.c.o"
+"CMakeFiles/ddkp_sdl3.dir/main.c.o" \
+"CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.o" \
+"CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.o" \
+"CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.o"
 
 # External object files for target ddkp_sdl3
 ddkp_sdl3_EXTERNAL_OBJECTS =
 
 ddkp_sdl3: CMakeFiles/ddkp_sdl3.dir/main.c.o
+ddkp_sdl3: CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.o
+ddkp_sdl3: CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.o
+ddkp_sdl3: CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.o
 ddkp_sdl3: CMakeFiles/ddkp_sdl3.dir/build.make
 ddkp_sdl3: /opt/homebrew/lib/libSDL3_ttf.0.2.2.dylib
+ddkp_sdl3: /opt/homebrew/lib/libSDL3_image.0.4.4.dylib
 ddkp_sdl3: /opt/homebrew/lib/libSDL3.0.dylib
 ddkp_sdl3: CMakeFiles/ddkp_sdl3.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/cmake-build-sdl3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking C executable ddkp_sdl3"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/cmake-build-sdl3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Linking C executable ddkp_sdl3"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/ddkp_sdl3.dir/link.txt --verbose=$(VERBOSE)
 	/opt/homebrew/bin/cmake -E copy_directory /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/sdl3_compat/../resources /Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/cmake-build-sdl3/resources
 

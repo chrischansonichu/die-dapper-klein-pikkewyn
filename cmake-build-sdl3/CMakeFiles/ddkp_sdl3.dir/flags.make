@@ -4,7 +4,7 @@
 # compile C with /usr/bin/cc
 C_DEFINES = 
 
-C_INCLUDES = -isystem /opt/homebrew/include
+C_INCLUDES = -I/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/sdl3_compat -I/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/sdl3_compat/.. -isystem /opt/homebrew/include
 
 C_FLAGSarm64 = -std=gnu11 -arch arm64
 

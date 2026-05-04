@@ -129,6 +129,30 @@ ddkp_sdl3/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddkp_sdl3.dir/build.make CMakeFiles/ddkp_sdl3.dir/build
 .PHONY : ddkp_sdl3/fast
 
+Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.o: Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.o
+.PHONY : Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.o
+
+# target to build an object file
+Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddkp_sdl3.dir/build.make CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.o
+.PHONY : Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.o
+
+Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.i: Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.i
+.PHONY : Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.i
+
+# target to preprocess a source file
+Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddkp_sdl3.dir/build.make CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.i
+.PHONY : Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.i
+
+Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.s: Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.s
+.PHONY : Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.s
+
+# target to generate assembly for a file
+Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddkp_sdl3.dir/build.make CMakeFiles/ddkp_sdl3.dir/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.s
+.PHONY : Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.c.s
+
 main.o: main.c.o
 .PHONY : main.o
 
@@ -153,6 +177,54 @@ main.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddkp_sdl3.dir/build.make CMakeFiles/ddkp_sdl3.dir/main.c.s
 .PHONY : main.c.s
 
+paper_harbor_stub.o: paper_harbor_stub.c.o
+.PHONY : paper_harbor_stub.o
+
+# target to build an object file
+paper_harbor_stub.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddkp_sdl3.dir/build.make CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.o
+.PHONY : paper_harbor_stub.c.o
+
+paper_harbor_stub.i: paper_harbor_stub.c.i
+.PHONY : paper_harbor_stub.i
+
+# target to preprocess a source file
+paper_harbor_stub.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddkp_sdl3.dir/build.make CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.i
+.PHONY : paper_harbor_stub.c.i
+
+paper_harbor_stub.s: paper_harbor_stub.c.s
+.PHONY : paper_harbor_stub.s
+
+# target to generate assembly for a file
+paper_harbor_stub.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddkp_sdl3.dir/build.make CMakeFiles/ddkp_sdl3.dir/paper_harbor_stub.c.s
+.PHONY : paper_harbor_stub.c.s
+
+raylib_compat.o: raylib_compat.c.o
+.PHONY : raylib_compat.o
+
+# target to build an object file
+raylib_compat.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddkp_sdl3.dir/build.make CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.o
+.PHONY : raylib_compat.c.o
+
+raylib_compat.i: raylib_compat.c.i
+.PHONY : raylib_compat.i
+
+# target to preprocess a source file
+raylib_compat.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddkp_sdl3.dir/build.make CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.i
+.PHONY : raylib_compat.c.i
+
+raylib_compat.s: raylib_compat.c.s
+.PHONY : raylib_compat.s
+
+# target to generate assembly for a file
+raylib_compat.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddkp_sdl3.dir/build.make CMakeFiles/ddkp_sdl3.dir/raylib_compat.c.s
+.PHONY : raylib_compat.c.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -162,9 +234,18 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... ddkp_sdl3"
+	@echo "... Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.o"
+	@echo "... Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.i"
+	@echo "... Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/src/screen_title.s"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
+	@echo "... paper_harbor_stub.o"
+	@echo "... paper_harbor_stub.i"
+	@echo "... paper_harbor_stub.s"
+	@echo "... raylib_compat.o"
+	@echo "... raylib_compat.i"
+	@echo "... raylib_compat.s"
 .PHONY : help
 
 
