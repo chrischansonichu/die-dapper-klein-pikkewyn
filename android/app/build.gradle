@@ -67,6 +67,16 @@ android {
         }
     }
 
+    // Lint snapshots SDL3's vendored Java glue (org.libsdl.app.*) findings —
+    // Bluetooth permission flags, deprecated APIs, etc. — into a baseline so
+    // future runs only fail on issues we introduce in our own code. Refresh
+    // with `gradle :app:updateLintBaseline` after re-vendoring SDL3.
+    lint {
+        baseline = file('lint-baseline.xml')
+        // Don't trip CI on non-fatal warnings; errors still fail.
+        warningsAsErrors = false
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
