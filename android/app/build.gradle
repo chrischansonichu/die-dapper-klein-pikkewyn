@@ -1,0 +1,81 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.dapperpenguin.ddkp'
+    compileSdk 34
+    ndkVersion '26.3.11579264'
+
+    defaultConfig {
+        applicationId 'com.dapperpenguin.ddkp'
+        minSdk 24                   // Android 7.0 — SDL3 baseline
+        targetSdk 34
+        versionCode 1
+        versionName '0.1.0'
+
+        externalNativeBuild {
+            cmake {
+                // Match the iOS build's flags: static SDL3, vendored deps.
+                // ANDROID_STL is c++_static — SDL3 internals are C++ in places.
+                arguments '-DANDROID_STL=c++_static',
+                          '-DANDROID_PLATFORM=android-24',
+                          '-DCMAKE_BUILD_TYPE=Debug'
+                // arm64 is the only Android ABI worth shipping on a new game
+                // in 2026; armv7/x86 add build time and APK bloat for ~zero
+                // active install share.
+                abiFilters 'arm64-v8a'
+            }
+        }
+    }
+
+    // SDL3's Java glue (org.libsdl.app.*) is vendored under
+    // src/main/java/org/libsdl/app — copied verbatim from the SDL3 source's
+    // android-project/app/src/main/java tree, pinned to the same release-3.4.8
+    // tag as the CMake FetchContent. Re-vendor when bumping the SDL3 pin.
+    sourceSets {
+        main {
+            // The game's data lives at src/resources/ (not a top-level
+            // resources/ as the iOS bundle's MACOSX_PACKAGE_LOCATION
+            // implies). Pointing at the canonical source tree keeps a
+            // single source of truth across desktop, iOS, and Android.
+            assets.srcDirs = ['../../src/resources']
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path '../../src/sdl3_compat/CMakeLists.txt'
+            // Pinned to the version the Android SDK Manager bundles by
+            // default. AGP rejects '3.24+' / '3.24' — it wants a full
+            // major.minor.micro triplet. Our CMakeLists declares
+            // cmake_minimum_required(VERSION 3.24) which is satisfied
+            // because SDL3's own CMakeLists pulls in newer features only
+            // when the host CMake supports them.
+            version '3.22.1'
+        }
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+            jniDebuggable true
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// No Java/Kotlin runtime deps — SDLActivity only uses android.* framework
+// classes. Adding androidx.appcompat pulled a newer kotlin-stdlib that
+// collided with the kotlin-stdlib-jdk7/jdk8 jars AGP brings in itself,
+// causing checkDuplicateClasses to fail.
+dependencies {
+}

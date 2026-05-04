@@ -1,5 +1,9 @@
-cmake_minimum_required(VERSION 3.24)
-project(ddkp_sdl3 C)
+cmake_minimum_required(VERSION 3.22)
+# CXX is enabled (in addition to C) so the NDK toolchain wires libc++ into
+# our final shared library on Android. SDL3's hid.cpp drags C++ symbols in;
+# without CXX enabled the link defaults to the C driver and operator new[],
+# __gxx_personality_v0 and friends go unresolved.
+project(ddkp_sdl3 C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -134,11 +138,24 @@ set(GAME_SOURCES
     ../systems/ui_button.c
 )
 
-add_executable(ddkp_sdl3
-    main.c
-    raylib_compat.c
-    ${GAME_SOURCES}
-)
+# Android wraps a native game as a shared library that the Java
+# SDLActivity loads via System.loadLibrary("ddkp_sdl3"). Every other
+# platform builds an executable. Same source set either way; the wrapper
+# changes only the artifact type and the link of libc++ (SDL3's hid.cpp
+# pulls C++ symbols our pure-C target wouldn't otherwise drag in).
+if (CMAKE_SYSTEM_NAME STREQUAL "Android")
+    add_library(ddkp_sdl3 SHARED
+        main.c
+        raylib_compat.c
+        ${GAME_SOURCES}
+    )
+else()
+    add_executable(ddkp_sdl3
+        main.c
+        raylib_compat.c
+        ${GAME_SOURCES}
+    )
+endif()
 
 # sdl3_compat dir comes first so #include "raylib.h" resolves to our shim,
 # not real raylib.
@@ -152,6 +169,19 @@ target_link_libraries(ddkp_sdl3 PRIVATE
     SDL3_ttf::SDL3_ttf
     SDL3_image::SDL3_image
 )
+
+# SDL3 has a few C++ source files (e.g. hid.cpp on Android). Our shared
+# library is otherwise pure C, so the NDK toolchain doesn't link the C++
+# runtime by default — explicitly request it so operator new[], terminate,
+# and gxx_personality_v0 resolve.
+if (CMAKE_SYSTEM_NAME STREQUAL "Android")
+    target_link_libraries(ddkp_sdl3 PRIVATE log android)
+    # Force the C++ link driver so the NDK auto-pulls libc++_static. With
+    # only C sources present, CMake otherwise picks the C driver and SDL3's
+    # hid.cpp symbols (operator new[], terminate, __gxx_personality_v0)
+    # stay unresolved.
+    set_target_properties(ddkp_sdl3 PROPERTIES LINKER_LANGUAGE CXX)
+endif()
 
 # Mirror the desktop build: Debug config gets the dev menu (FAB → Dev Warp,
 # F9 picker, etc). Release omits it.

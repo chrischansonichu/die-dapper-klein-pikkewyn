@@ -65,6 +65,9 @@ dkms.conf
 *.aps
 .vs
 
+# macOS Finder metadata — keeps showing up under repo roots / src/.
+.DS_Store
+
 # Clangd LSP
 .cache
 compile_commands.json
