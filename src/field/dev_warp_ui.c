@@ -33,10 +33,13 @@ static const DevWarpDest gDests[] = {
 };
 static const int gDestCount = (int)(sizeof(gDests) / sizeof(gDests[0]));
 
+// Panel sized to fit all 10 destinations without scrolling — at 32px rows
+// + 4px gap, header + 10 rows + bottom margin lands at 50 + 360 + 14 = 424.
+// On the 450-tall logical canvas that leaves a small letterbox top/bottom.
 #define DEV_PANEL_W 380
-#define DEV_PANEL_H 380
-#define DEV_ROW_H    34
-#define DEV_ROW_GAP   2
+#define DEV_PANEL_H 430
+#define DEV_ROW_H    32
+#define DEV_ROW_GAP   4
 
 static inline Rectangle DevPanelRect(void)
 {

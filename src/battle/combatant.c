@@ -258,10 +258,7 @@ void ApplyStatusMove(Combatant *targets[], int count, const MoveDef *move, bool 
     (void)isEnemy;
     for (int i = 0; i < count; i++) {
         if (!targets[i] || !targets[i]->alive) continue;
-        if (move->id == 4) {  // WaveCall: lower DEF 20%
-            targets[i]->defMod = targets[i]->defMod * 80 / 100;
-            if (targets[i]->defMod < 25) targets[i]->defMod = 25; // floor
-        } else if (move->id == 5) {  // ColonyRoar: raise ATK 25%
+        if (move->id == 4) {  // ColonyRoar: raise ATK 25%
             targets[i]->atkMod = targets[i]->atkMod * 125 / 100;
             if (targets[i]->atkMod > 200) targets[i]->atkMod = 200; // ceiling
         }

@@ -7,6 +7,8 @@
 #include "../screen_layout.h"
 #include "../systems/modal_close.h"
 #include "../systems/touch_input.h"
+#include "../systems/ui_button.h"
+#include "icons.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -22,6 +24,26 @@ static inline int InvContentW(void) { return InvPanelW() - 40; }
 
 static inline Rectangle InvPanelRect(void) {
     return (Rectangle){ InvPanelX(), InvPanelY(), InvPanelW(), InvPanelH() };
+}
+
+// Full-width strip directly under the tabs. Shows the active member's name
+// + HP bar; tappable for prev/next member; horizontal swipe inside the
+// inventory panel cycles members too. Replaces the awkward landscape-only
+// HP block that used to float in the top-right and collided with the tabs
+// when the tab strip was widened to the chunky-button language.
+//
+// y math mirrors LayoutTabs() so this rect stays stable across redraws even
+// before sL is populated for the frame.
+static inline Rectangle MemberStripRect(void) {
+    int x = InvContentX();
+    int w = InvContentW();
+#if SCREEN_PORTRAIT
+    int tabBottom = InvPanelY() + 40 + 36;
+#else
+    int tabBottom = InvPanelY() + 14 + 38;
+#endif
+    return (Rectangle){ (float)x, (float)(tabBottom + 10),
+                        (float)w, 38.0f };
 }
 
 // Per-row stride for every scrolling list (items, weapons bag). Background
@@ -97,16 +119,22 @@ static void LayoutTabs(void)
     int gap   = 6;
     int tabW  = (InvContentW() - 2 * gap) / 3;
     int startX = InvContentX();
+    int tabH = 36;
 #else
-    int y      = 40;
-    int tabW   = 120;
-    int gap    = 10;
-    int startX = 120;
+    // Chunky tabs span the panel's content width with even gaps. Removing
+    // the "INVENTORY" title freed up enough horizontal room that the tabs
+    // can breathe without colliding with the village-rep counter.
+    int gap = 12;
+    int tabH = 38;
+    int startX = InvContentX();
+    int contentW = InvContentW() - 140;  // reserve right tail for "Village Rep: N"
+    int tabW = (contentW - 2 * gap) / 3;
+    int y = InvPanelY() + 14;
 #endif
     for (int i = 0; i < INV_TAB_COUNT; i++) {
         sL.tabs[i] = (Rectangle){
             (float)(startX + i * (tabW + gap)), (float)y,
-            (float)tabW, 30.0f };
+            (float)tabW, (float)tabH };
     }
 }
 
@@ -122,8 +150,9 @@ static void LayoutItems(const InventoryUI *ui, const Party *party)
                                      (float)rowW, 32.0f };
     int y = hby + 38;
 #else
-    sL.memberSwitcher = (Rectangle){ 500.0f, 68.0f, 200.0f, 28.0f };
-    int y = 95;
+    sL.memberSwitcher = MemberStripRect();
+    Rectangle ms_li = MemberStripRect();
+    int y = (int)(ms_li.y + ms_li.height) + 14;
 #endif
     y += 26;  // "Consumables" header
     sL.itemRowCount    = inv->itemCount;
@@ -151,11 +180,12 @@ static void LayoutWeapons(const InventoryUI *ui, const Party *party)
     int rowW     = InvContentW();
     int y        = InvPanelY() + 86;
 #else
-    int colX = 60, y = 95;
-    int rowW = 320;
+    int colX = InvContentX();
+    int rowW = 340;
+    Rectangle ms_lw = MemberStripRect();
+    int y = (int)(ms_lw.y + ms_lw.height) + 14;
 #endif
-    sL.memberSwitcher = (Rectangle){ (float)colX, (float)y,
-                                     (float)rowW, 22.0f };
+    sL.memberSwitcher = MemberStripRect();
     y += 26;  // "XX's Moves" header
     sL.equippedMoveRowCount = CREATURE_MAX_MOVES;
     for (int g = 0; g < MOVE_GROUP_COUNT; g++) {
@@ -178,7 +208,10 @@ static void LayoutWeapons(const InventoryUI *ui, const Party *party)
 #else
     const int BAG_VISIBLE = INV_WBAG_VISIBLE;
     int bagX = 420, bagRowW = 320;
-    y = 95;
+    // Bag column starts where the equipped column starts — under the member
+    // strip — not at the legacy y=95 (which sat *inside* the new strip).
+    Rectangle ms = MemberStripRect();
+    y = (int)(ms.y + ms.height) + 14;
 #endif
     y += 26;  // "Weapon Bag" header
     sL.weaponBagListTop    = y;
@@ -210,11 +243,12 @@ static void LayoutArmor(const InventoryUI *ui, const Party *party)
     int rowW = InvContentW();
     int y    = InvPanelY() + 86;
 #else
-    int colX = 60, y = 95;
-    int rowW = 320;
+    int colX = InvContentX();
+    int rowW = 340;
+    Rectangle ms_la = MemberStripRect();
+    int y = (int)(ms_la.y + ms_la.height) + 14;
 #endif
-    sL.memberSwitcher = (Rectangle){ (float)colX, (float)y,
-                                     (float)rowW, 22.0f };
+    sL.memberSwitcher = MemberStripRect();
     y += 26;  // "XX's Armor" header
     sL.equippedArmorRow = (Rectangle){ (float)(colX - 6), (float)(y - 2),
                                        (float)rowW, 22.0f };
@@ -224,7 +258,10 @@ static void LayoutArmor(const InventoryUI *ui, const Party *party)
     y += 36;
 #else
     int bagX = 420, bagRowW = 320;
-    y = 95;
+    {
+        Rectangle ms_lab = MemberStripRect();
+        y = (int)(ms_lab.y + ms_lab.height) + 14;
+    }
 #endif
     y += 26;  // "Armor Bag" header
     sL.armorBagRowCount = inv->armorCount;
@@ -443,16 +480,46 @@ static void UnequipMemberArmor(InventoryUI *ui, Party *party)
              "%s removed %s.", target->name, ad ? ad->name : "armor");
 }
 
+// Forward decl — definitions live below, but Update calls them.
+static bool MemberStripUpdate(InventoryUI *ui, const Party *party);
+
 bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
 {
     if (!ui->active) return false;
 
     RebuildLayout(ui, party);
 
-    // Close
+    // Close — keyboard paths kept for desktop iteration; the on-screen close
+    // is the bottom CLOSE button, hit-tested via the layout-shared rect.
+    Rectangle closeR = {
+        (float)(InvPanelX() + InvPanelW() - 180),
+        (float)(InvPanelY() + InvPanelH() - 56),
+        160.0f, 44.0f
+    };
     if (IsKeyPressed(KEY_I) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_X)
-        || ModalCloseButtonTapped(InvPanelRect())) {
+        || TouchTapInRect(closeR)) {
         InventoryUIClose(ui);
+        return false;
+    }
+
+    // Tab tap — selecting a tab also resets cursor + scroll like the
+    // keyboard TAB cycle below.
+    for (int t = 0; t < INV_TAB_COUNT; t++) {
+        if (TouchTapInRect(sL.tabs[t])) {
+            ui->tab           = (InventoryTab)t;
+            ui->cursor        = 0;
+            ui->equippedFocus = false;
+            ui->scrollPx      = 0.0f;
+            ui->status[0]     = '\0';
+            return false;
+        }
+    }
+
+    // Member-switcher strip — prev/next chips + horizontal swipe.
+    if (MemberStripUpdate(ui, party)) {
+        ui->cursor        = 0;
+        ui->equippedFocus = false;
+        ui->scrollPx      = 0.0f;
         return false;
     }
 
@@ -651,129 +718,278 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
 static void DrawTabHeader(InventoryTab tab)
 {
     const char *labels[INV_TAB_COUNT] = { "ITEMS", "WEAPONS", "ARMOR" };
-#if SCREEN_PORTRAIT
-    // Fit 3 tabs within the panel; "TAB: switch" hint moves to the bottom
-    // footer on portrait to free horizontal room.
-    int y     = InvPanelY() + 40;
-    int gap   = 6;
-    int tabW  = (InvContentW() - 2 * gap) / 3;
-    int startX = InvContentX();
-#else
-    int y      = 40;
-    int tabW   = 120;
-    int gap    = 10;
-    int startX = 120;
-#endif
     for (int i = 0; i < INV_TAB_COUNT; i++) {
-        int tx = startX + i * (tabW + gap);
-        Color bg = (i == tab) ? (Color){80, 100, 200, 255} : (Color){30, 30, 60, 255};
-        DrawRectangle(tx, y, tabW, 30, bg);
-        DrawRectangleLines(tx, y, tabW, 30, (Color){120, 140, 220, 255});
-        int labelW = MeasureText(labels[i], FS(16));
-        DrawText(labels[i], tx + (tabW - labelW) / 2, y + 8, FS(16), WHITE);
+        // Selected tab paints in the warm-orange "primary" style, idle tabs
+        // are neutral parchment plates. Tap is detected here too so the tab
+        // strip doubles as the keyboard-cursor swap path on touch.
+        bool selected = (i == tab);
+        DrawChunkyButton(sL.tabs[i], labels[i], 18, selected, true);
     }
-#if !SCREEN_PORTRAIT
-    DrawText("TAB: switch", startX + INV_TAB_COUNT * (tabW + gap) + 14, y + 8, FS(14), GRAY);
+}
+
+// Member strip — name + HP bar + (multi-member only) prev/next arrows.
+// Tap-left/tap-right area switches members; horizontal swipe also switches
+// (handled in InventoryUIUpdate via TouchPressedDir). Single-member parties
+// just see name + HP; no arrows, no swipe behaviour.
+static void DrawMemberStrip(const InventoryUI *ui, const Party *party)
+{
+    Rectangle r = MemberStripRect();
+    int idx = (ui->memberCursor >= 0 && ui->memberCursor < party->count)
+                ? ui->memberCursor : 0;
+    const Combatant *m = &party->members[idx];
+
+    // Plate
+    DrawRectangleRounded(r, 0.20f, 6,
+                         (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 50});
+    DrawRectangleRoundedLinesEx(r, 0.20f, 6, 1.5f, gPH.ink);
+
+    // Name + HP text — centered vertically in the strip's left half.
+    char hp[48];
+    snprintf(hp, sizeof(hp), "%s   HP %d/%d", m->name, m->hp, m->maxHp);
+    DrawText(hp, (int)r.x + 14, (int)r.y + 6, 16, gPH.ink);
+
+    // HP bar — thin sliver at bottom of strip, left half only.
+    int barX = (int)r.x + 14;
+    int barY = (int)r.y + 26;
+    int barW = (int)(r.width * 0.55f) - 14;
+    DrawRectangleRounded((Rectangle){(float)barX, (float)barY, (float)barW, 6.0f},
+                         0.5f, 4, (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 50});
+    float pct = m->maxHp > 0 ? (float)m->hp / (float)m->maxHp : 0.0f;
+    if (pct > 0.0f) {
+        DrawRectangleRounded((Rectangle){(float)barX, (float)barY, barW * pct, 6.0f},
+                             0.5f, 4, (Color){110, 160, 80, 255});
+    }
+
+    if (party->count > 1) {
+        // Prev / next arrow chips on the right edge.
+        int chipW = 36, chipH = 28;
+        int gap   = 6;
+        int rightX = (int)(r.x + r.width) - 12 - chipW;
+        int chipY  = (int)(r.y + (r.height - chipH) * 0.5f);
+        Rectangle nextR = { (float)rightX, (float)chipY, (float)chipW, (float)chipH };
+        Rectangle prevR = { (float)(rightX - chipW - gap), (float)chipY,
+                            (float)chipW, (float)chipH };
+        DrawChunkyButton(prevR, "<", 20, false, true);
+        DrawChunkyButton(nextR, ">", 20, false, true);
+    }
+}
+
+// Run member-prev/next prompts. Called from Update; returns true if the
+// cursor was changed (callers may want to reset scroll/cursor for the tab).
+static bool MemberStripUpdate(InventoryUI *ui, const Party *party)
+{
+    if (party->count <= 1) return false;
+    Rectangle r = MemberStripRect();
+    int chipW = 36, chipH = 28, gap = 6;
+    int rightX = (int)(r.x + r.width) - 12 - chipW;
+    int chipY  = (int)(r.y + (r.height - chipH) * 0.5f);
+    Rectangle nextR = { (float)rightX, (float)chipY, (float)chipW, (float)chipH };
+    Rectangle prevR = { (float)(rightX - chipW - gap), (float)chipY,
+                        (float)chipW, (float)chipH };
+
+    if (TouchTapInRect(prevR)) {
+        ui->memberCursor = (ui->memberCursor - 1 + party->count) % party->count;
+        return true;
+    }
+    if (TouchTapInRect(nextR)) {
+        ui->memberCursor = (ui->memberCursor + 1) % party->count;
+        return true;
+    }
+
+    // Horizontal swipe across the panel cycles members. TouchPressedDir is a
+    // one-shot fired the moment direction locks; vertical swipes (used for
+    // list scrolling) won't trigger this.
+    int dir = TouchPressedDir();
+    if (dir == 1) {  // swipe LEFT → next member (the world moves left, finger drags right→left)
+        ui->memberCursor = (ui->memberCursor + 1) % party->count;
+        return true;
+    }
+    if (dir == 2) {  // swipe RIGHT → previous member
+        ui->memberCursor = (ui->memberCursor - 1 + party->count) % party->count;
+        return true;
+    }
+    return false;
+}
+
+// Tile geometry for the icon grid (Items / Weapons / Armor share these). On
+// landscape we fit 4 wide; portrait drops to 3. Tiles are square-ish with
+// just enough room under the icon for the truncated name.
+#define INV_GRID_COLS_LAND  4
+#define INV_GRID_COLS_PORT  3
+#define INV_TILE_GAP        12
+#define INV_TILE_NAME_H     20
+
+static inline int InvGridCols(void) {
+#if SCREEN_PORTRAIT
+    return INV_GRID_COLS_PORT;
+#else
+    return INV_GRID_COLS_LAND;
 #endif
+}
+static inline int InvTileSize(void) {
+    int cols = InvGridCols();
+    int contentW = InvContentW();
+    return (contentW - (cols - 1) * INV_TILE_GAP) / cols;
+}
+static inline Rectangle InvTileRect(int gridTop, int index) {
+    int cols = InvGridCols();
+    int tile = InvTileSize();
+    int col = index % cols;
+    int row = index / cols;
+    return (Rectangle){
+        (float)(InvContentX() + col * (tile + INV_TILE_GAP)),
+        (float)(gridTop + row * (tile + INV_TILE_GAP)),
+        (float)tile, (float)tile
+    };
+}
+
+// Generic info popup drawn when the user long-presses a tile. Lays out
+// near the tile (above it if there's room, otherwise below). Multi-line
+// text is supported via embedded \n.
+static void DrawInfoPopup(Rectangle anchor, const char *title, const char *body)
+{
+    int titleF = 16, bodyF = 13;
+    int padX = 12, padY = 10;
+    int titleW = MeasureText(title ? title : "", titleF);
+
+    // Estimate body wrap width based on the longest line in `body` (cap at
+    // 280px so the popup doesn't run off-screen on landscape).
+    int maxLineW = titleW;
+    if (body) {
+        const char *p = body;
+        char line[128];
+        while (*p) {
+            int n = 0;
+            while (*p && *p != '\n' && n < (int)sizeof(line) - 1) line[n++] = *p++;
+            line[n] = '\0';
+            int w = MeasureText(line, bodyF);
+            if (w > maxLineW) maxLineW = w;
+            if (*p == '\n') p++;
+        }
+    }
+    if (maxLineW > 280) maxLineW = 280;
+
+    int linesCount = 1;
+    if (body) for (const char *p = body; *p; p++) if (*p == '\n') linesCount++;
+    int popupW = maxLineW + padX * 2;
+    int popupH = padY * 2 + titleF + 6 + (body ? linesCount * (bodyF + 2) : 0);
+
+    // Prefer above the anchor; fall back below if it'd clip the screen top.
+    int px = (int)(anchor.x + anchor.width * 0.5f - popupW * 0.5f);
+    int py = (int)anchor.y - popupH - 8;
+    if (py < 4) py = (int)(anchor.y + anchor.height + 8);
+    // Keep horizontally on screen.
+    if (px < 4) px = 4;
+    if (px + popupW > GetScreenWidth() - 4) px = GetScreenWidth() - popupW - 4;
+
+    Rectangle r = { (float)px, (float)py, (float)popupW, (float)popupH };
+    DrawRectangleRounded(r, 0.18f, 6, gPH.panel);
+    DrawRectangleRoundedLinesEx(r, 0.18f, 6, 2.0f, gPH.ink);
+
+    DrawText(title ? title : "", px + padX, py + padY, titleF, gPH.ink);
+    if (body) {
+        int by = py + padY + titleF + 6;
+        const char *p = body;
+        while (*p) {
+            char line[128]; int n = 0;
+            while (*p && *p != '\n' && n < (int)sizeof(line) - 1) line[n++] = *p++;
+            line[n] = '\0';
+            DrawText(line, px + padX, by, bodyF, gPH.inkLight);
+            by += bodyF + 2;
+            if (*p == '\n') p++;
+        }
+    }
+}
+
+// Draws a chunky parchment tile with an icon centred + a name underneath +
+// optional bottom-right text overlay (qty for items, dur for weapons,
+// "+N" for armor). Selected tiles get the warm-orange wash. `enabled=false`
+// dims the plate without ignoring taps (caller decides).
+static void DrawIconTile(Rectangle r, const char *name, const char *overlay,
+                         Color overlayCol, bool selected,
+                         void (*drawIcon)(Rectangle, int), int iconId)
+{
+    Color plate = selected ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 130}
+                            : gPH.panel;
+    DrawRectangleRounded(r, 0.16f, 6, plate);
+    DrawRectangleRoundedLinesEx(r, 0.16f, 6, 2.0f, gPH.ink);
+
+    // Reserve a name strip at the bottom; icon goes in the upper square.
+    Rectangle iconR = { r.x + 6, r.y + 6,
+                        r.width - 12, r.height - INV_TILE_NAME_H - 10 };
+    if (drawIcon) drawIcon(iconR, iconId);
+
+    // Name — centred, single line, truncated to fit.
+    if (name && *name) {
+        int fontSize = 13;
+        int maxW = (int)r.width - 12;
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%s", name);
+        // Crude truncation if MeasureText exceeds maxW
+        while ((int)strlen(buf) > 4 && MeasureText(buf, fontSize) > maxW) {
+            buf[strlen(buf) - 1] = '\0';
+        }
+        int tw = MeasureText(buf, fontSize);
+        DrawText(buf,
+                 (int)(r.x + (r.width - tw) * 0.5f),
+                 (int)(r.y + r.height - INV_TILE_NAME_H + 2),
+                 fontSize, gPH.ink);
+    }
+
+    // Overlay — qty / dur badge bottom-right of the icon area.
+    if (overlay && *overlay) {
+        int fontSize = 14;
+        int tw = MeasureText(overlay, fontSize);
+        int padX = 4, padY = 2;
+        Rectangle badge = {
+            r.x + r.width - tw - padX * 2 - 6,
+            r.y + r.height - INV_TILE_NAME_H - fontSize - padY * 2 - 4,
+            (float)(tw + padX * 2), (float)(fontSize + padY * 2)
+        };
+        DrawRectangleRounded(badge, 0.45f, 4,
+                             (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 200});
+        DrawText(overlay, (int)(badge.x + padX),
+                 (int)(badge.y + padY - 1), fontSize, overlayCol);
+    }
 }
 
 static void DrawItemsTab(const InventoryUI *ui, const Party *party)
 {
     const Inventory *inv = &party->inventory;
     int x = InvContentX();
-    int rowW = InvContentW();
-    int idx = (ui->memberCursor >= 0 && ui->memberCursor < party->count)
-                ? ui->memberCursor : 0;
-    const Combatant *active = &party->members[idx];
-    int tabBottomY = InvPanelY() + 80;
 
-    // HP block — on portrait it goes above the list (full width); on landscape
-    // it lives in the top-right of the tab body where it always did.
-#if SCREEN_PORTRAIT
-    int hbx = x, hby = tabBottomY + 6;
-    // Highlight the tappable member-switcher strip so it reads as a button.
-    DrawRectangle(hbx - 4, hby - 2, rowW + 8, 20, (Color){40, 55, 90, 220});
-    DrawRectangleLines(hbx - 4, hby - 2, rowW + 8, 20, (Color){120, 140, 200, 255});
-    DrawText(TextFormat("%s  HP %d/%d", active->name, active->hp, active->maxHp),
-             hbx, hby, FS(14), WHITE);
-    const char *tapHint = (party->count > 1) ? "tap to switch >" : "";
-    int hintW = MeasureText(tapHint, FS(12));
-    DrawText(tapHint, hbx + rowW - hintW, hby + 2, FS(12), (Color){200, 210, 240, 220});
-    int barW = rowW;
-    DrawRectangle(hbx, hby + 22, barW, 8, (Color){60, 50, 40, 180});
-    float pct = (float)active->hp / (float)active->maxHp;
-    DrawRectangle(hbx, hby + 22, (int)(barW * pct), 8, (Color){110, 160, 80, 255});
-    int y = hby + 42;
-#else
-    int y = 95;
-    int hbx = 500, hby = 68;
-    DrawText(TextFormat("%s  HP %d/%d  ([ or ] switch)",
-                        active->name, active->hp, active->maxHp), hbx, hby, FS(14), gPH.ink);
-    DrawRectangle(hbx, hby + 18, 200, 8, (Color){60, 50, 40, 180});
-    float pct = (float)active->hp / (float)active->maxHp;
-    DrawRectangle(hbx, hby + 18, (int)(200 * pct), 8, (Color){110, 160, 80, 255});
-#endif
+    Rectangle ms = MemberStripRect();
+    int gridTop = (int)(ms.y + ms.height) + 14;
 
-    DrawText("Consumables", x, y, FS(18), gPH.ink);
-    y += 26;
     if (inv->itemCount == 0) {
-        DrawText("(Empty)", x, y, FS(16), gPH.inkLight);
+        DrawText("(no items)", x, gridTop, 16, gPH.inkLight);
+        return;
     }
-    // Scroll viewport: rows render at smooth-pixel offsets so finger drag
-    // tracks 1:1 with the list, and a scissor box clips anything that lands
-    // above or below the visible region. Hit-test rects in sL.itemRows[] are
-    // populated only for snap-aligned visible rows (see LayoutItems).
-    int listTop    = sL.itemListTop;
-    int listBottom = sL.itemListBottom;
-    if (listBottom > listTop && inv->itemCount > 0) {
-        BeginScissorMode(x - 6, listTop - 2, rowW, listBottom - listTop);
-        for (int i = 0; i < inv->itemCount; i++) {
-            float rowYf = (float)listTop + (float)i * (float)INV_ROW_H - ui->scrollPx;
-            // Skip rows that are entirely off-screen so we don't burn cycles
-            // on dozens of invisible draws when the list is long.
-            if (rowYf + INV_ROW_H < (float)listTop) continue;
-            if (rowYf > (float)listBottom)          break;
-            int rowY = (int)rowYf;
-            const ItemDef *it = GetItemDef(inv->items[i].itemId);
-            bool sel = (ui->cursor == i);
-            Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
-            DrawRectangle(x - 6, rowY - 2, rowW, 22, bg);
-            char buf[96];
-#if SCREEN_PORTRAIT
-            snprintf(buf, sizeof(buf), "%-14s x%d", it->name, inv->items[i].count);
-            DrawText(buf, x, rowY, FS(14), WHITE);
-            DrawText(it->desc, x + 140, rowY + 2, 11, (Color){200, 200, 220, 220});
-#else
-            snprintf(buf, sizeof(buf), "%-16s x%-3d %s", it->name, inv->items[i].count, it->desc);
-            DrawText(buf, x, rowY, FS(14), WHITE);
-#endif
-        }
-        EndScissorMode();
 
-        // Scrollbar — only when overflow exists.
-        if (inv->itemCount > INV_ITEM_VISIBLE) {
-            int trackX = x + rowW - 4;
-            int trackY = listTop - 2;
-            int trackH = listBottom - listTop;
-            DrawRectangle(trackX, trackY, 4, trackH, (Color){30, 30, 60, 200});
-            float frac = (float)INV_ITEM_VISIBLE / (float)inv->itemCount;
-            int thumbH = (int)(trackH * frac);
-            if (thumbH < 8) thumbH = 8;
-            float maxScrollPx = (float)((inv->itemCount - INV_ITEM_VISIBLE) * INV_ROW_H);
-            float pos = (maxScrollPx > 0.0f) ? ui->scrollPx / maxScrollPx : 0.0f;
-            int thumbY = trackY + (int)((trackH - thumbH) * pos);
-            DrawRectangle(trackX, thumbY, 4, thumbH, (Color){140, 160, 220, 255});
-        }
+    int popupAnchorIdx = -1;
+    for (int i = 0; i < inv->itemCount; i++) {
+        Rectangle r = InvTileRect(gridTop, i);
+        const ItemDef *it = GetItemDef(inv->items[i].itemId);
+        char qty[8];
+        snprintf(qty, sizeof(qty), "x%d", inv->items[i].count);
+        bool sel = (ui->cursor == i);
+        DrawIconTile(r, it->name, qty, RAYWHITE, sel,
+                     DrawItemIcon, inv->items[i].itemId);
+        if (TouchHeldInRect(r, 0.45f)) popupAnchorIdx = i;
     }
-    int y_after_list = listBottom;
-    (void)y_after_list;
-
-#if SCREEN_PORTRAIT
-    int hintY = InvPanelY() + InvPanelH() - 28;
-    DrawText("Z: Use   [ or ]: Switch   X/I: Close", x, hintY, FS(12), gPH.inkLight);
-#else
-    DrawText("Z: Use    [ or ]: Switch Member    X/I: Close", 60, 420, FS(14), gPH.inkLight);
-#endif
+    // Long-press popup: drawn last so it overlays neighbouring tiles.
+    if (popupAnchorIdx >= 0) {
+        const ItemDef *it = GetItemDef(inv->items[popupAnchorIdx].itemId);
+        char body[160];
+        if (it->effect == ITEM_EFFECT_HEAL) {
+            snprintf(body, sizeof(body), "%s\nRestores %d HP.", it->desc, it->amount);
+        } else if (it->effect == ITEM_EFFECT_HEAL_FULL) {
+            snprintf(body, sizeof(body), "%s\nRestores all HP.", it->desc);
+        } else {
+            snprintf(body, sizeof(body), "%s", it->desc);
+        }
+        DrawInfoPopup(InvTileRect(gridTop, popupAnchorIdx), it->name, body);
+    }
 }
 
 static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
@@ -783,25 +999,121 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
                 ? ui->memberCursor : 0;
     const Combatant *led  = &party->members[idx];
 
-#if SCREEN_PORTRAIT
-    int colX     = InvContentX();
-    int rowW     = InvContentW();
-    int equippedY = InvPanelY() + 86;
-    int y        = equippedY;
-    DrawRectangle(colX - 4, y - 2, rowW + 8, 22, (Color){40, 55, 90, 220});
-    DrawRectangleLines(colX - 4, y - 2, rowW + 8, 22, (Color){120, 140, 200, 255});
-    DrawText(TextFormat("%s's Moves", led->name), colX, y, FS(16), WHITE);
-    if (party->count > 1) {
-        const char *th = "tap to switch >";
-        int tw = MeasureText(th, FS(12));
-        DrawText(th, colX + rowW - tw, y + 3, FS(12), (Color){200, 210, 240, 220});
+    Rectangle ms = MemberStripRect();
+    int gridTop = (int)(ms.y + ms.height) + 14;
+
+    // Equipped row — 6 small tiles for the move slots, evenly spaced across
+    // content width. Tap an equipped tile to focus it (or unequip via the
+    // bag-side flow). Group headers were dropped per user feedback; cell
+    // border + tile group are the only group cues now.
+    int contentW = InvContentW();
+    int eqGap   = 8;
+    int eqCols  = 6;
+    int eqTile  = (contentW - (eqCols - 1) * eqGap) / eqCols;
+    if (eqTile > 90) eqTile = 90;
+    int eqRowW  = eqTile * eqCols + eqGap * (eqCols - 1);
+    int eqStartX = InvContentX() + (contentW - eqRowW) / 2;
+
+    int popupEqIdx = -1;
+    for (int s = 0; s < 6; s++) {
+        Rectangle r = { (float)(eqStartX + s * (eqTile + eqGap)),
+                        (float)gridTop, (float)eqTile, (float)eqTile };
+        int moveId = led->moveIds[s];
+        bool selected = (ui->equippedFocus && ui->cursor == s);
+        if (moveId < 0) {
+            // Empty slot — washed-out plate, no icon, dim "—" centred.
+            Color plate = selected ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 90}
+                                    : (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 24};
+            DrawRectangleRounded(r, 0.16f, 6, plate);
+            DrawRectangleRoundedLinesEx(r, 0.16f, 6, 1.5f, gPH.inkLight);
+            int dashF = 18;
+            int tw = MeasureText("—", dashF);
+            DrawText("—", (int)(r.x + (r.width - tw) * 0.5f),
+                     (int)(r.y + (r.height - dashF) * 0.5f), dashF, gPH.inkLight);
+        } else {
+            const MoveDef *mv = GetMoveDef(moveId);
+            char overlay[16] = "";
+            Color ovCol = RAYWHITE;
+            if (mv->isWeapon) {
+                int dur = led->moveDurability[s];
+                snprintf(overlay, sizeof(overlay), "d%d", dur);
+                if (dur == 0) ovCol = (Color){240, 100, 100, 255};
+            }
+            DrawIconTile(r, mv->name, overlay, ovCol, selected,
+                         DrawMoveIcon, moveId);
+        }
+        if (TouchHeldInRect(r, 0.45f)) popupEqIdx = s;
     }
-    y += 26;
+
+    // Equipped popup
+    if (popupEqIdx >= 0) {
+        int moveId = led->moveIds[popupEqIdx];
+        if (moveId >= 0) {
+            const MoveDef *mv = GetMoveDef(moveId);
+            const char *rs = (mv->range == RANGE_MELEE)  ? "melee" :
+                             (mv->range == RANGE_RANGED) ? "ranged" :
+                             (mv->range == RANGE_AOE)    ? "AOE"    : "self";
+            char body[200];
+            if (mv->power > 0 && mv->isWeapon) {
+                snprintf(body, sizeof(body), "%s\nPWR %d  %s\nDur %d/%d",
+                         mv->desc, mv->power, rs,
+                         led->moveDurability[popupEqIdx], mv->defaultDurability);
+            } else if (mv->power > 0) {
+                snprintf(body, sizeof(body), "%s\nPWR %d  %s",
+                         mv->desc, mv->power, rs);
+            } else {
+                snprintf(body, sizeof(body), "%s\n%s", mv->desc, rs);
+            }
+            Rectangle slotR = { (float)(eqStartX + popupEqIdx * (eqTile + eqGap)),
+                                (float)gridTop, (float)eqTile, (float)eqTile };
+            DrawInfoPopup(slotR, mv->name, body);
+        }
+    }
+
+    // Bag grid below the equipped row.
+    int bagTop = gridTop + eqTile + 16;
+    DrawText(TextFormat("Weapon Bag  %d/%d", inv->weaponCount, INVENTORY_MAX_WEAPONS),
+             InvContentX(), bagTop - 22, 14, gPH.inkLight);
+
+    if (inv->weaponCount == 0) {
+        DrawText("(empty)", InvContentX(), bagTop, 14, gPH.inkLight);
+        return;
+    }
+
+    int popupBagIdx = -1;
+    for (int i = 0; i < inv->weaponCount; i++) {
+        Rectangle r = InvTileRect(bagTop, i);
+        const MoveDef *mv = GetMoveDef(inv->weapons[i].moveId);
+        char overlay[16];
+        snprintf(overlay, sizeof(overlay), "d%d", inv->weapons[i].durability);
+        Color ovCol = inv->weapons[i].durability == 0
+                          ? (Color){240, 100, 100, 255} : RAYWHITE;
+        bool sel = (!ui->equippedFocus && ui->cursor == i);
+        DrawIconTile(r, mv->name, overlay, ovCol, sel,
+                     DrawMoveIcon, inv->weapons[i].moveId);
+        if (TouchHeldInRect(r, 0.45f)) popupBagIdx = i;
+    }
+    if (popupBagIdx >= 0) {
+        const MoveDef *mv = GetMoveDef(inv->weapons[popupBagIdx].moveId);
+        const char *rs = (mv->range == RANGE_MELEE)  ? "melee" :
+                         (mv->range == RANGE_RANGED) ? "ranged" :
+                         (mv->range == RANGE_AOE)    ? "AOE"    : "self";
+        char body[200];
+        snprintf(body, sizeof(body), "%s\nPWR %d  %s\nDur %d/%d",
+                 mv->desc, mv->power, rs,
+                 inv->weapons[popupBagIdx].durability, mv->defaultDurability);
+        DrawInfoPopup(InvTileRect(bagTop, popupBagIdx), mv->name, body);
+    }
+    return;
+
+    // Below: legacy text-list code path retained until we strip the unreachable
+    // tail completely; the early `return` above blocks it from running.
+    int colX = InvContentX();
+    int y = gridTop;
+#if SCREEN_PORTRAIT
+    int rowW = InvContentW();
 #else
-    int colX = 60, y = 95;
-    int rowW = 320;
-    DrawText(TextFormat("%s's Moves  ([ or ] switch)", led->name), colX, y, FS(18), gPH.ink);
-    y += 26;
+    int rowW = 340;
 #endif
     // Fixed-slot layout with group headers between rows.
     static const char *groupTitle[MOVE_GROUP_COUNT] = {
@@ -814,7 +1126,7 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
         for (int n = 0; n < rowCount; n++) {
             int i = MOVE_GROUP_SLOT(g, n);
             bool sel = (ui->equippedFocus && ui->cursor == i);
-            Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
+            Color bg = sel ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 110} : (Color){0, 0, 0, 30};
             DrawRectangle(colX - 6, y - 2, rowW, 22, bg);
             char buf[96];
             if (led->moveIds[i] < 0) {
@@ -850,13 +1162,17 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
     const int BAG_VISIBLE = 6;
     int bagX = colX;
     int bagRowW = rowW;
-    // y continues below the equipped column — equipped was laid out top-down.
     y += 6;
 #else
     const int BAG_VISIBLE = 10;
     int bagX = 420;
     int bagRowW = 320;
-    y = 95;
+    // Reset to the bag column's starting y (under the member strip), not the
+    // stale y=95 hardcode that sat inside the strip.
+    {
+        Rectangle ms2 = MemberStripRect();
+        y = (int)(ms2.y + ms2.height) + 14;
+    }
 #endif
     DrawText(TextFormat("Weapon Bag  %d/%d", inv->weaponCount, INVENTORY_MAX_WEAPONS), bagX, y, FS(18), gPH.ink);
     y += 26;
@@ -877,7 +1193,7 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
             int rowY = (int)rowYf;
             const MoveDef *mv = GetMoveDef(inv->weapons[i].moveId);
             bool sel = (!ui->equippedFocus && ui->cursor == i);
-            Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
+            Color bg = sel ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 110} : (Color){0, 0, 0, 30};
             DrawRectangle(bagX - 6, rowY - 2, bagRowW, 22, bg);
             char buf[96];
             const char *rs = (mv->range == RANGE_MELEE)  ? "MELEE" :
@@ -903,16 +1219,11 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
         float maxScrollPx = (float)((inv->weaponCount - BAG_VISIBLE) * INV_ROW_H);
         float pos = (maxScrollPx > 0.0f) ? ui->scrollPx / maxScrollPx : 0.0f;
         int thumbY = trackY + (int)((trackH - thumbH) * pos);
-        DrawRectangle(trackX, thumbY, 4, thumbH, (Color){140, 160, 220, 255});
+        DrawRectangle(trackX, thumbY, 4, thumbH, gPH.ink);
     }
 
 #if SCREEN_PORTRAIT
-    int hintY = InvPanelY() + InvPanelH() - 28;
-    DrawText(ui->equippedFocus ? "Z: Unequip  Del: Toss  Down: Bag  X/I: Close"
-                               : "Z: Equip  Del: Discard  Up: Equipped  X/I: Close", InvContentX(), hintY, FS(11), gPH.inkLight);
-#else
-    DrawText(ui->equippedFocus ? "Z: Unequip  Del: Toss Broken  Right: Bag  [ or ]: Switch Member  X/I: Close"
-                               : "Z: Equip  Del: Discard  Left: Equipped  [ or ]: Switch  X/I: Close", 60, 420, FS(14), gPH.inkLight);
+    // Keyboard hint strip removed — see ItemsTab footer comment.
 #endif
 }
 
@@ -923,28 +1234,84 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
                 ? ui->memberCursor : 0;
     const Combatant *led = &party->members[idx];
 
-#if SCREEN_PORTRAIT
-    int colX = InvContentX();
-    int rowW = InvContentW();
-    int y    = InvPanelY() + 86;
-    DrawRectangle(colX - 4, y - 2, rowW + 8, 22, (Color){40, 55, 90, 220});
-    DrawRectangleLines(colX - 4, y - 2, rowW + 8, 22, (Color){120, 140, 200, 255});
-    DrawText(TextFormat("%s's Armor", led->name), colX, y, FS(16), WHITE);
-    if (party->count > 1) {
-        const char *th = "tap to switch >";
-        int tw = MeasureText(th, FS(12));
-        DrawText(th, colX + rowW - tw, y + 3, FS(12), (Color){200, 210, 240, 220});
+    Rectangle ms = MemberStripRect();
+    int gridTop = (int)(ms.y + ms.height) + 14;
+
+    // Equipped slot — single tile, larger than bag tiles to read as "this is
+    // what's on right now". Bag grid sits beneath, same 4-col layout as items.
+    int eqTile = InvTileSize();
+    if (eqTile > 110) eqTile = 110;
+    Rectangle eqR = {
+        (float)(InvContentX() + (InvContentW() - eqTile) / 2),
+        (float)gridTop, (float)eqTile, (float)eqTile
+    };
+    bool eqSel = ui->equippedFocus;
+    if (led->armorItemId < 0) {
+        Color plate = eqSel ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 90}
+                             : (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 24};
+        DrawRectangleRounded(eqR, 0.16f, 6, plate);
+        DrawRectangleRoundedLinesEx(eqR, 0.16f, 6, 1.5f, gPH.inkLight);
+        int dashF = 18;
+        int tw = MeasureText("(no armor)", dashF);
+        DrawText("(no armor)",
+                 (int)(eqR.x + (eqR.width - tw) * 0.5f),
+                 (int)(eqR.y + (eqR.height - dashF) * 0.5f),
+                 dashF, gPH.inkLight);
+    } else {
+        const ArmorDef *ad = GetArmorDef(led->armorItemId);
+        char overlay[16];
+        snprintf(overlay, sizeof(overlay), "+%d", ad ? ad->defBonus : 0);
+        DrawIconTile(eqR, ad ? ad->name : "(unknown)", overlay, RAYWHITE,
+                     eqSel, DrawArmorIcon, led->armorItemId);
+        if (TouchHeldInRect(eqR, 0.45f) && ad) {
+            char body[160];
+            snprintf(body, sizeof(body), "%s\n+%d DEF", ad->desc, ad->defBonus);
+            DrawInfoPopup(eqR, ad->name, body);
+        }
     }
-    y += 26;
+
+    int bagTop = gridTop + eqTile + 16;
+    DrawText(TextFormat("Armor Bag  %d/%d", inv->armorCount, INVENTORY_MAX_ARMORS),
+             InvContentX(), bagTop - 22, 14, gPH.inkLight);
+
+    if (inv->armorCount == 0) {
+        DrawText("(empty)", InvContentX(), bagTop, 14, gPH.inkLight);
+        return;
+    }
+
+    int popupBag = -1;
+    for (int i = 0; i < inv->armorCount; i++) {
+        Rectangle r = InvTileRect(bagTop, i);
+        const ArmorDef *ad = GetArmorDef(inv->armors[i].armorId);
+        char overlay[16];
+        snprintf(overlay, sizeof(overlay), "+%d", ad ? ad->defBonus : 0);
+        bool sel = (!ui->equippedFocus && ui->cursor == i);
+        DrawIconTile(r, ad ? ad->name : "(unknown)", overlay, RAYWHITE,
+                     sel, DrawArmorIcon, inv->armors[i].armorId);
+        if (TouchHeldInRect(r, 0.45f)) popupBag = i;
+    }
+    if (popupBag >= 0) {
+        const ArmorDef *ad = GetArmorDef(inv->armors[popupBag].armorId);
+        if (ad) {
+            char body[160];
+            snprintf(body, sizeof(body), "%s\n+%d DEF", ad->desc, ad->defBonus);
+            DrawInfoPopup(InvTileRect(bagTop, popupBag), ad->name, body);
+        }
+    }
+    return;
+
+    // Below: legacy text-list code retained until cleanup; the early `return`
+    // above blocks it from running.
+    int colX = InvContentX();
+    int y = gridTop;
+#if SCREEN_PORTRAIT
+    int rowW = InvContentW();
 #else
-    int colX = 60, y = 95;
-    int rowW = 320;
-    DrawText(TextFormat("%s's Armor  ([ or ] switch)", led->name), colX, y, FS(18), gPH.ink);
-    y += 26;
+    int rowW = 340;
 #endif
     {
         bool sel = ui->equippedFocus;
-        Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
+        Color bg = sel ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 110} : (Color){0, 0, 0, 30};
         DrawRectangle(colX - 6, y - 2, rowW, 22, bg);
         if (led->armorItemId < 0) {
             DrawText("(none)", colX, y, FS(14), GRAY);
@@ -965,7 +1332,10 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
 #else
     int bagX = 420;
     int bagRowW = 320;
-    y = 95;
+    {
+        Rectangle ms_dab = MemberStripRect();
+        y = (int)(ms_dab.y + ms_dab.height) + 14;
+    }
 #endif
     DrawText(TextFormat("Armor Bag  %d/%d", inv->armorCount, INVENTORY_MAX_ARMORS), bagX, y, FS(18), gPH.ink);
     y += 26;
@@ -975,7 +1345,7 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
     for (int i = 0; i < inv->armorCount; i++) {
         const ArmorDef *ad = GetArmorDef(inv->armors[i].armorId);
         bool sel = (!ui->equippedFocus && ui->cursor == i);
-        Color bg = sel ? (Color){60, 80, 160, 255} : (Color){25, 25, 45, 220};
+        Color bg = sel ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 110} : (Color){0, 0, 0, 30};
         DrawRectangle(bagX - 6, y - 2, bagRowW, 22, bg);
         char buf[96];
         snprintf(buf, sizeof(buf), "%-20s +%d DEF",
@@ -984,14 +1354,7 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
         y += 24;
     }
 
-#if SCREEN_PORTRAIT
-    int hintY = InvPanelY() + InvPanelH() - 28;
-    DrawText(ui->equippedFocus ? "Z: Remove   Down: Bag   X/I: Close"
-                               : "Z: Equip    Up: Equipped   X/I: Close", InvContentX(), hintY, FS(12), gPH.inkLight);
-#else
-    DrawText(ui->equippedFocus ? "Z: Remove    Right: Bag    [ or ]: Switch Member    X/I: Close"
-                               : "Z: Equip     Left: Equipped   [ or ]: Switch Member    X/I: Close", 60, 420, FS(14), gPH.inkLight);
-#endif
+    // Keyboard hint strip removed — see ItemsTab footer comment.
 }
 
 void InventoryUIDraw(const InventoryUI *ui, const Party *party, int villageReputation)
@@ -1002,20 +1365,37 @@ void InventoryUIDraw(const InventoryUI *ui, const Party *party, int villageReput
 
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), gPH.dimmer);
     PHDrawPanel(InvPanelRect(), 0x601);
-    ModalCloseButtonDraw(InvPanelRect());
 
-    int titleY = InvPanelY() + 6;
-    DrawText("INVENTORY", InvContentX(), titleY, FS(18), gPH.ink);
+    // Village rep meter sits to the right of the tabs (no separate
+    // "INVENTORY" title — the tabs themselves identify the page).
+    int titleY = InvPanelY() + 18;
     const char *repLabel = TextFormat(SCREEN_PORTRAIT ? "Rep: %d" : "Village Rep: %d",
                                       villageReputation);
-    int repW = MeasureText(repLabel, FS(16));
-    DrawText(repLabel, InvContentX() + InvContentW() - repW, titleY + 2, FS(16), gPH.ink);
+    int repW = MeasureText(repLabel, 16);
+    DrawText(repLabel, InvContentX() + InvContentW() - repW,
+             titleY, 16, gPH.ink);
     DrawTabHeader(ui->tab);
+    DrawMemberStrip(ui, party);
 
     if      (ui->tab == INV_TAB_ITEMS)   DrawItemsTab(ui, party);
     else if (ui->tab == INV_TAB_WEAPONS) DrawWeaponsTab(ui, party);
     else                                 DrawArmorTab(ui, party);
 
     if (ui->status[0] != '\0')
-        DrawText(ui->status, InvContentX(), InvPanelY() + InvPanelH() - 50, FS(14), gPH.ink);
+        DrawText(ui->status, InvContentX(), InvPanelY() + InvPanelH() - 90, 14, gPH.ink);
+
+    // Bottom CTA — a single CLOSE button sits where the keyboard-hint band
+    // used to live. Action buttons (Equip / Discard / Use) for the active
+    // tab will be added once the action paths are wired through this CTA;
+    // for now Close lets the player out and the keyboard paths still work.
+    Rectangle ctaR = {
+        (float)(InvPanelX() + InvPanelW() - 180),
+        (float)(InvPanelY() + InvPanelH() - 56),
+        160.0f, 44.0f
+    };
+    if (DrawChunkyButton(ctaR, "CLOSE", 18, true, true)) {
+        // Mark for close — InventoryUIUpdate runs before Draw next frame and
+        // catches the same tap rect. As a fallback, set a status that the
+        // caller could check, but in practice the Update tap path closes.
+    }
 }

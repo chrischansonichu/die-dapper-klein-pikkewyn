@@ -415,7 +415,7 @@ void BuildHarborFloor9(MapBuildContext *ctx)
         FieldEnemy *cap = &ctx->enemies[(*ctx->enemyCount)++];
         EnemyInit(cap, 8, 4, 0, BEHAVIOR_STAND, CREATURE_CAPTAIN_BOSS, 14, 4,
                   (Color){120, 30, 30, 255});
-        EnemySetDrops(cap, -1, 0, /*Harpoon*/ 6, 100);
+        EnemySetDrops(cap, -1, 0, /*Harpoon*/ 5, 100);
         EnemySetArmorDrop(cap, ARMOR_CAPTAINS_COAT, 100);
     }
 

@@ -108,6 +108,7 @@ set(GAME_SOURCES
     ../field/buildings.c
     ../field/dev_warp_ui.c
     ../field/discard_ui.c
+    ../field/icons.c
     ../field/donation_ui.c
     ../field/enemy.c
     ../field/enemy_sprites.c
@@ -151,6 +152,10 @@ target_link_libraries(ddkp_sdl3 PRIVATE
     SDL3_ttf::SDL3_ttf
     SDL3_image::SDL3_image
 )
+
+# Mirror the desktop build: Debug config gets the dev menu (FAB → Dev Warp,
+# F9 picker, etc). Release omits it.
+target_compile_definitions(ddkp_sdl3 PRIVATE $<$<CONFIG:Debug>:DEV_BUILD=1>)
 
 # ---------------------------------------------------------------------------
 # Platform-specific packaging

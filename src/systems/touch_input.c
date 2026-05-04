@@ -185,6 +185,16 @@ bool TouchTapInRect(Rectangle r)
     return false;
 }
 
+bool TouchHeldInRect(Rectangle r, float secs)
+{
+    if (!g.active) return false;
+    if (g.totalDist > TAP_MAX_DIST_PX) return false;
+    if (GetTime() - g.startTime < (double)secs) return false;
+    Vector2 p = g.curPos;
+    return (p.x >= r.x && p.x < r.x + r.width &&
+            p.y >= r.y && p.y < r.y + r.height);
+}
+
 float TouchScrollDeltaY(Rectangle r)
 {
     if (!g.active) return 0.0f;
