@@ -229,6 +229,13 @@ bool WindowShouldClose(void) {
 
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
+        // Translate event coordinates from window pixels into the renderer's
+        // logical space — without this, taps on iOS land in window-relative
+        // coords that don't account for letterbox bars and miss UI hit-rects
+        // built in logical (800×450) coords. Mouse motion and finger events
+        // both get touched up here.
+        SDL_ConvertEventToRenderCoordinates(g_renderer, &e);
+
         switch (e.type) {
             case SDL_EVENT_QUIT:
                 g_should_quit = true;
@@ -259,23 +266,22 @@ bool WindowShouldClose(void) {
                 g_mouse_x = e.motion.x;
                 g_mouse_y = e.motion.y;
                 break;
-            // Touch (iOS / Android). tfinger.x/y are normalized 0..1; expand
-            // to logical-pixel coords. We mirror to mouse state so existing
-            // game-side IsMouseButtonPressed / GetMousePosition logic keeps
-            // working without per-platform branching.
+            // Touch (iOS / Android). After SDL_ConvertEventToRenderCoordinates
+            // above, e.tfinger.x/y are already in renderer-logical coords —
+            // no need to multiply by g_logical_w/h.
             case SDL_EVENT_FINGER_DOWN:
                 g_mouse_cur[MOUSE_BUTTON_LEFT] = true;
-                g_mouse_x = e.tfinger.x * (float)g_logical_w;
-                g_mouse_y = e.tfinger.y * (float)g_logical_h;
+                g_mouse_x = e.tfinger.x;
+                g_mouse_y = e.tfinger.y;
                 break;
             case SDL_EVENT_FINGER_UP:
                 g_mouse_cur[MOUSE_BUTTON_LEFT] = false;
-                g_mouse_x = e.tfinger.x * (float)g_logical_w;
-                g_mouse_y = e.tfinger.y * (float)g_logical_h;
+                g_mouse_x = e.tfinger.x;
+                g_mouse_y = e.tfinger.y;
                 break;
             case SDL_EVENT_FINGER_MOTION:
-                g_mouse_x = e.tfinger.x * (float)g_logical_w;
-                g_mouse_y = e.tfinger.y * (float)g_logical_h;
+                g_mouse_x = e.tfinger.x;
+                g_mouse_y = e.tfinger.y;
                 break;
         }
     }
@@ -310,8 +316,11 @@ void BeginDrawing(void) {
 void EndDrawing(void) {
     SDL_RenderPresent(g_renderer);
 
-    // Soft FPS cap when vsync is off.
-    if (g_target_fps > 0 && !(g_config_flags & FLAG_VSYNC_HINT)) {
+    // Soft FPS cap. Applied even when vsync is on, because iOS Pro models /
+    // some iPad Pros vsync at 120Hz and the game's frame-counted update
+    // logic (PlayerUpdate's moveFrames++, animation tickers) runs at 2× the
+    // intended speed otherwise.
+    if (g_target_fps > 0) {
         const Uint64 frame_ns = 1000000000ULL / (Uint64)g_target_fps;
         const Uint64 now = SDL_GetTicksNS();
         const Uint64 elapsed = now - g_last_frame_ns;
