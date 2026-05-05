@@ -40,16 +40,11 @@ This is a raylib-API game on top of SDL3, focusing on iOS and Android targets.
 - Distance-aware combat system
 - Environmental combat system (penguins move faster in water than humans)
 - Use weapons in unique ways (attack an enemy with your fishing hook, or use it to free your friend from his ropes)
-- Mobile WASM build
 
 ### Controls
 
-Keyboard:
-
-- Arrow Keys or WASD to move
-- Z to interact, X to cancel
-- I to open/close inventory
-- Tab to switch inventory tabs
+All touch-based. Touch and drag in any direction to move in that direction. Touch another character you're looking at to
+interact with them. 
 
 ### Screenshots
 
@@ -63,7 +58,7 @@ Keyboard:
 
 ### Links
 
-- YouTube Gameplay: $(YouTube Link)
+- YouTube Gameplay: https://www.youtube.com/playlist?list=PLOtrDFaoeSia_QthMnhLI9wekN-yLVG5w
 - itch.io Release: $(itch.io Game Page)
 - Steam Release: $(Steam Game Page)
 
