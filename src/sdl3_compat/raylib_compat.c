@@ -246,7 +246,15 @@ void InitWindow(int width, int height, const char *title) {
     }
 }
 
+// Forward decls: rasterized-text cache lives lower in the file but
+// CloseWindow / EndDrawing need to reach into it.
+static void   TextCacheClear(void);
+static Uint64 sTextFrame;
+
 void CloseWindow(void) {
+    // Cached text textures live on the renderer — destroy them before the
+    // renderer goes away so SDL_DestroyTexture sees a valid backend.
+    TextCacheClear();
     if (g_renderer) { SDL_DestroyRenderer(g_renderer); g_renderer = NULL; }
     if (g_window)   { SDL_DestroyWindow(g_window);     g_window   = NULL; }
     TTF_Quit();
@@ -345,6 +353,7 @@ void BeginDrawing(void) {
 }
 
 void EndDrawing(void) {
+    sTextFrame++;
     SDL_RenderPresent(g_renderer);
 
     // Soft FPS cap. Applied even when vsync is on, because iOS Pro models /
@@ -604,20 +613,124 @@ void UnloadFont(Font font) {
     if (font._ttf) TTF_CloseFont((TTF_Font*)font._ttf);
 }
 
+// ---------------------------------------------------------------------------
+// Rasterized-text cache.
+//
+// SDL3_ttf rasterizes a glyph string to an RGBA surface every call. Without
+// caching, every DrawText hits CPU+GPU twice per frame (rasterize + upload +
+// destroy) — that was the dominant frame cost in the SDL3 build, showing up
+// as low frame-time but high Activity-Monitor CPU and ever-growing RAM as
+// SDL3_ttf's internal glyph cache rebuilt on every TTF_SetFontSize call.
+//
+// Cache: 1024 open-addressed buckets, replace-on-collision (no probing). The
+// working set of ~50-80 unique (string, size, color) tuples per frame fits
+// well under the table's birthday-collision threshold; the few collisions
+// per second cost one rasterize, identical to the no-cache cost we're
+// replacing. Strings longer than TEXT_KEY_MAX bypass the cache (long
+// narration lines vary per page anyway, so caching wouldn't help).
+// ---------------------------------------------------------------------------
+#define TEXT_CACHE_BUCKETS 1024
+#define TEXT_KEY_MAX        80
+
+typedef struct {
+    char         text[TEXT_KEY_MAX];
+    int          size;          // pixels (rounded)
+    Uint32       rgba;          // packed tint
+    SDL_Texture *tex;
+    int          w, h;
+    Uint64       lastUsedFrame;
+} TextCacheEntry;
+
+static TextCacheEntry sTextCache[TEXT_CACHE_BUCKETS];
+// Storage definition for sTextFrame — the forward decl up near CloseWindow
+// lets EndDrawing/CloseWindow reach this counter without re-ordering the
+// whole file.
+
+// FNV-1a over text + size + rgba. Plenty fast for per-frame dispatch.
+static unsigned TextCacheHash(const char *s, size_t len, int size, Uint32 rgba) {
+    unsigned h = 2166136261u;
+    for (size_t i = 0; i < len; i++) { h ^= (unsigned char)s[i]; h *= 16777619u; }
+    h ^= (unsigned)size;       h *= 16777619u;
+    h ^= (unsigned)(rgba);     h *= 16777619u;
+    h ^= (unsigned)(rgba >> 8);  h *= 16777619u;
+    return h;
+}
+
+static void TextCacheClear(void) {
+    for (int i = 0; i < TEXT_CACHE_BUCKETS; i++) {
+        if (sTextCache[i].tex) {
+            SDL_DestroyTexture(sTextCache[i].tex);
+            sTextCache[i].tex = NULL;
+        }
+        sTextCache[i].text[0] = '\0';
+    }
+}
+
+// Track the font size SDL3_ttf is currently configured at. SetFontSize
+// rebuilds the internal glyph cache, so calling it with the same value the
+// font is already set to is a costly no-op we want to skip.
+static int sCurFontSize = -1;
+static void SetFontSizeIfNeeded(TTF_Font *tf, int size) {
+    if (sCurFontSize == size) return;
+    TTF_SetFontSize(tf, (float)size);
+    sCurFontSize = size;
+}
+
 // Render a single line (no embedded newlines). Caller handles the line-by-line
 // layout — SDL3_ttf otherwise renders '\n' as a .notdef glyph (visible squares).
+//
+// Cached: hash (text, size, rgba) into the bucket table; reuse the texture
+// across frames. Replace-on-collision keeps the table O(1) and doesn't need
+// LRU bookkeeping for our access pattern.
 static void DrawTextLineSDL(TTF_Font *tf, const char *line, size_t length,
-                            float screenX, float screenY, SDL_Color c) {
+                            int sizePx, float screenX, float screenY, SDL_Color c) {
     if (length == 0) return;
-    SDL_Surface *surf = TTF_RenderText_Blended(tf, line, length, c);
-    if (!surf) return;
-    SDL_Texture *tex = SDL_CreateTextureFromSurface(g_renderer, surf);
-    if (tex) {
-        SDL_FRect dst = { screenX, screenY, (float)surf->w, (float)surf->h };
-        SDL_RenderTexture(g_renderer, tex, NULL, &dst);
-        SDL_DestroyTexture(tex);
+
+    Uint32 rgba = ((Uint32)c.r << 24) | ((Uint32)c.g << 16)
+                | ((Uint32)c.b <<  8) |  (Uint32)c.a;
+
+    SDL_Texture *tex = NULL;
+    int texW = 0, texH = 0;
+
+    bool cacheable = (length < TEXT_KEY_MAX);
+    unsigned bucket = 0;
+    if (cacheable) {
+        bucket = TextCacheHash(line, length, sizePx, rgba) % TEXT_CACHE_BUCKETS;
+        TextCacheEntry *e = &sTextCache[bucket];
+        if (e->tex && e->size == sizePx && e->rgba == rgba
+            && strncmp(e->text, line, length) == 0
+            && e->text[length] == '\0') {
+            // Hit.
+            tex = e->tex;
+            texW = e->w; texH = e->h;
+            e->lastUsedFrame = sTextFrame;
+        }
     }
-    SDL_DestroySurface(surf);
+
+    if (!tex) {
+        SetFontSizeIfNeeded(tf, sizePx);
+        SDL_Surface *surf = TTF_RenderText_Blended(tf, line, length, c);
+        if (!surf) return;
+        tex = SDL_CreateTextureFromSurface(g_renderer, surf);
+        texW = surf->w; texH = surf->h;
+        SDL_DestroySurface(surf);
+        if (!tex) return;
+
+        if (cacheable) {
+            TextCacheEntry *e = &sTextCache[bucket];
+            if (e->tex) SDL_DestroyTexture(e->tex);
+            memcpy(e->text, line, length);
+            e->text[length] = '\0';
+            e->size = sizePx; e->rgba = rgba;
+            e->tex = tex; e->w = texW; e->h = texH;
+            e->lastUsedFrame = sTextFrame;
+        }
+    }
+
+    SDL_FRect dst = { screenX, screenY, (float)texW, (float)texH };
+    SDL_RenderTexture(g_renderer, tex, NULL, &dst);
+
+    if (!cacheable) SDL_DestroyTexture(tex);
 }
 
 void DrawTextEx(Font font, const char *text, Vector2 position,
@@ -628,7 +741,8 @@ void DrawTextEx(Font font, const char *text, Vector2 position,
     // Inside BeginMode2D, scale font size by zoom and place at transformed origin.
     float renderSize = XformLen(fontSize);
     if (renderSize < 1.0f) return;
-    TTF_SetFontSize(tf, renderSize);
+    int sizePx = (int)(renderSize + 0.5f);
+    SetFontSizeIfNeeded(tf, sizePx);
     SDL_Color c = { tint.r, tint.g, tint.b, tint.a };
     float px = position.x, py = position.y;
     XformPoint(&px, &py);
@@ -636,13 +750,13 @@ void DrawTextEx(Font font, const char *text, Vector2 position,
     // Walk the string, drawing each \n-delimited line at an incrementing Y.
     // TTF_GetFontLineSkip gives the recommended vertical advance.
     int lineSkip = TTF_GetFontLineSkip(tf);
-    if (lineSkip <= 0) lineSkip = (int)renderSize;
+    if (lineSkip <= 0) lineSkip = sizePx;
     const char *seg = text;
     float y = py;
     for (;;) {
         const char *nl = strchr(seg, '\n');
         size_t segLen = nl ? (size_t)(nl - seg) : strlen(seg);
-        DrawTextLineSDL(tf, seg, segLen, px, y, c);
+        DrawTextLineSDL(tf, seg, segLen, sizePx, px, y, c);
         if (!nl) break;
         seg = nl + 1;
         y += (float)lineSkip;
@@ -654,7 +768,7 @@ Vector2 MeasureTextEx(Font font, const char *text, float fontSize, float spacing
     Vector2 v = {0, 0};
     TTF_Font *tf = (TTF_Font*)font._ttf;
     if (!tf || !text) return v;
-    TTF_SetFontSize(tf, fontSize);
+    SetFontSizeIfNeeded(tf, (int)(fontSize + 0.5f));
     // Per-line max width + cumulative height. Skip newline characters so they
     // don't get measured as glyphs.
     int lineSkip = TTF_GetFontLineSkip(tf);
