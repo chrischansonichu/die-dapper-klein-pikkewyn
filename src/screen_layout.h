@@ -45,15 +45,15 @@
 //----------------------------------------------------------------------------------
 extern Font font;
 
-// EB Garamond is a delicate book serif — at the sizes the UI was tuned for
-// (10–20px, originally targeting raylib's chunky default bitmap font) the
-// strokes vanish into the parchment background. UI_TEXT_SCALE bumps every
-// requested size by ~50% so glyphs read at roughly the same visual weight
-// as the old bitmap font did. We deliberately do NOT faux-bold by drawing
-// twice at an offset — at small sizes that produces a doubled "ghost"
-// smudge instead of thicker strokes. If text needs to be heavier still,
-// bump this scale or swap to a font with a native bold weight.
-#define UI_TEXT_SCALE 1.5f
+// SDL3_ttf rasterizes glyphs at the requested point size against a HiDPI
+// backbuffer (the renderer's logical-presentation scale handles upscaling
+// from our 800×450 canvas to the device's physical pixels). At 1.0 the text
+// is already crisp on retina displays and on iPhone simulators. The 1.5
+// multiplier was a hack for raylib's chunky bitmap-font path; layout code
+// across the codebase does `y += fontSize` for line spacing, and the 1.5
+// scale silently broke that math (overlapping selection bars, clipped
+// modal hints, etc.) — see donation_ui.c.
+#define UI_TEXT_SCALE 1.0f
 
 static inline void DrawTextShim(const char *text, int x, int y, int size, Color color) {
     float s = (float)size * UI_TEXT_SCALE;

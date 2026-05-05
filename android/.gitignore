@@ -1,0 +1,17 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.cxx/
+captures/
+.externalNativeBuild/
+
+# Build outputs (root .gitignore catches *apk* too; this is for clarity).
+*.apk
+*.aab
+
+# Signing material — never commit these.
+*.keystore
+*.jks
+keystore.properties

@@ -15,7 +15,11 @@
 // (Combatant.tileX/tileY) for the duration of the fight.
 //----------------------------------------------------------------------------------
 
-#define BATTLE_MAX_ENEMIES 4
+// Bumped from 4 to 6 (2026-05-04). The captive-rescue cluster force-includes
+// captors of the rescued NPC; with cap=4 there was little room left for
+// nearby idle enemies (patrol, dock sailors) to join even after sorting by
+// distance. 6 leaves headroom without making fights brutal.
+#define BATTLE_MAX_ENEMIES 6
 #define NARRATION_LEN      256
 
 // Duration of a single tile-step slide animation. Tuned so a 3-step move
@@ -80,6 +84,12 @@ typedef struct BattleContext {
     int tempAllyPartyIdx;
 
     char  narration[NARRATION_LEN];
+    // Queued follow-up narration page. ConsumeMoveUse stashes a "Weapon broke!"
+    // message here when a weapon hits 0 dur; the BS_NARRATION advance handler
+    // promotes it into `narration` and stays on BS_NARRATION, so the break
+    // notice always gets its own dialog page instead of being squashed onto
+    // the damage line where players miss it.
+    char  pendingBreakMsg[NARRATION_LEN];
     bool  xpNarrationShown;
     bool  preemptiveAttack;  // consumed by Begin
     // Which move slot on Jan the sneak attack uses, and which enemy it lands
@@ -104,6 +114,10 @@ typedef struct BattleContext {
     // the per-turn budget + target.
     int     enemyStepsRemaining;
     TilePos enemyMoveGoal;
+
+    // Mirrored from GameState->difficulty when the battle starts. 0 = easy
+    // (enemy attacks deal half damage), 1 = hard (full).
+    int     difficulty;
 } BattleContext;
 
 // Compute the per-turn movement budget from a combatant's effective speed

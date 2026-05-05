@@ -33,6 +33,7 @@ typedef struct SalvagerUI {
     bool          give[SALVAGER_MAX_ENTRIES];      // player's selection
     int           handedTotal;                     // filled at commit
     int           fishGained;                      // filled at commit
+    float         scrollX;                         // horizontal strip scroll
 } SalvagerUI;
 
 void SalvagerUIInit(SalvagerUI *s);

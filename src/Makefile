@@ -80,7 +80,8 @@ PROJECT_SOURCE_FILES  ?= \
     systems/dialogue.c \
     systems/fab_menu.c \
     systems/modal_close.c \
-    systems/touch_input.c
+    systems/touch_input.c \
+    systems/ui_button.c
 
 # raylib library variables
 RAYLIB_SRC_PATH       ?= ../../raylib/src

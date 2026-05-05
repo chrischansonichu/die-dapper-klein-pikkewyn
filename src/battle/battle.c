@@ -7,6 +7,7 @@
 #include "../screen_layout.h"
 #include "../screen_layout.h"
 #include "../systems/touch_input.h"
+#include "../systems/ui_button.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -414,7 +415,25 @@ static void ConsumeMoveUse(BattleContext *ctx, bool actorIsEnemy, int slot)
     if (actorIsEnemy || slot < 0) return;
     Combatant *actor = GetCurrentActor(ctx);
     if (!actor) return;
+    // Capture state before the consume so we can detect a 1→0 break and
+    // append a "X broke!" note to whatever narration the move's main path
+    // just composed. The check has to happen here (not inside
+    // ConsumePlayerWeapon) because we need the move name from before the
+    // slot got cleared on break.
+    int beforeDur = actor->moveDurability[slot];
+    int beforeId  = actor->moveIds[slot];
     ConsumePlayerWeapon(actor, slot, ctx->party ? &ctx->party->inventory : NULL);
+    if (beforeDur == 1 && beforeId >= 0) {
+        const MoveDef *mv = GetMoveDef(beforeId);
+        if (mv) {
+            // Queue as its own dialog page rather than appending to the
+            // current attack narration — the user kept missing the break
+            // notice when it shared a panel with the damage line.
+            snprintf(ctx->pendingBreakMsg, NARRATION_LEN,
+                     "%s broke!", mv->name);
+        }
+    }
+    return;
 }
 
 // Return the combatant occupying the target tile, or NULL if empty. Sets
@@ -559,6 +578,13 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
         dmg = dmg / 10;
         if (dmg < 1) dmg = 1;
     }
+    // Easy-mode damping: enemy attacks against the party hit at half power.
+    // Captive-rescue / friendly hits (already attenuated above) and party
+    // attacks against enemies pass through unchanged.
+    if (actorIsEn && !targetIsEnemy && ctx->difficulty == 0) {
+        dmg = (dmg + 1) / 2;
+        if (dmg < 1) dmg = 1;
+    }
     target->hp -= dmg;
     // Aggro bookkeeping: a party member hitting an enemy contributes to that
     // enemy's per-party-index threat tally. ChoosePartyTarget reads this on
@@ -566,7 +592,6 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
     if (!actorIsEn && targetIsEnemy && te->idx >= 0 && te->idx < PARTY_MAX) {
         target->damageTakenFrom[te->idx] += dmg;
     }
-    ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
     bool enraged = TryEnrage(target);
 
     if (target->hp <= 0) {
@@ -598,6 +623,10 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
                      "%s used %s! Dealt %d dmg.", actor->name, mv->name, dmg);
     }
     if (enraged) AppendEnrageLine(ctx->narration, target);
+    // Consume LAST so any "weapon broke" append from ConsumeMoveUse lands
+    // on top of the kill/hit narration set above. Previously this ran before
+    // the snprintfs, and the kill message clobbered the break notice.
+    ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
 }
 
 static void ExecuteAction(BattleContext *ctx, const TileMap *m)
@@ -668,6 +697,12 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 if (!t->alive) continue;
                 if (hostileAoe && !RollHit(actor, t)) { misses++; continue; }
                 int dmg = CalculateDamage(actor, t, mv);
+                // Easy-mode AOE damping for party targets — same factor as
+                // single-target hits in ApplyMoveToTile.
+                if (te->isEnemy && ctx->difficulty == 0) {
+                    dmg = (dmg + 1) / 2;
+                    if (dmg < 1) dmg = 1;
+                }
                 t->hp -= dmg;
                 totalDmg += dmg; hits++; lastIdx = i; lastKilled = (t->hp <= 0);
                 if (!enragedTarget && TryEnrage(t)) enragedTarget = t;
@@ -764,6 +799,7 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
     ctx->moveBudget       = 0;
     ctx->targetTile       = (TilePos){0, 0};
     ctx->xpNarrationShown = false;
+    ctx->pendingBreakMsg[0] = '\0';
     ctx->preemptiveAttack = preemptive;
     ctx->menu             = (BattleMenuState){0};
     ctx->anim             = (BattleAnim){0};
@@ -1176,8 +1212,19 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
         // Tap anywhere to advance — no panel hit-test, narration is full
         // width at the bottom so any tap is "continue."
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)
-            || TouchTapOccurred(NULL))
-            ctx->state = BS_ROUND_END;
+            || TouchTapOccurred(NULL)) {
+            // If a weapon-broke notice was queued during this attack, promote
+            // it to its own dialog page before ending the round so it can't
+            // be missed.
+            if (ctx->pendingBreakMsg[0] != '\0') {
+                snprintf(ctx->narration, NARRATION_LEN, "%s",
+                         ctx->pendingBreakMsg);
+                ctx->pendingBreakMsg[0] = '\0';
+                // stay in BS_NARRATION — next tap continues to BS_ROUND_END.
+            } else {
+                ctx->state = BS_ROUND_END;
+            }
+        }
         break;
 
     case BS_ROUND_END:
@@ -1295,9 +1342,16 @@ void BattleDrawWorldOverlay(const BattleContext *ctx)
 
 static void DrawRosterPanel(const Combatant *roster, int count,
                             int panelX, int panelY, int activeIdx,
-                            bool showXpBar, const float *flashT)
+                            bool showXpBar, const float *flashT,
+                            float alphaMult)
 {
     if (count <= 0) return;
+    // alphaMult < 1 fades the whole panel (used while the player is picking
+    // a target so the HP bars don't obscure the enemies underneath).
+    if (alphaMult < 0.0f) alphaMult = 0.0f;
+    if (alphaMult > 1.0f) alphaMult = 1.0f;
+    // Use Fade() in our shim (single-arg-as-macro doesn't survive C99
+    // preprocessor when Color literal contains commas) — explicit arg pass.
 
     // Portrait bumps every measurement — text was unreadable at 12pt/8px-bar
     // on phones; card now uses ~18pt names + 14px HP bar so it scales with
@@ -1319,8 +1373,8 @@ static void DrawRosterPanel(const Combatant *roster, int count,
                         (showXpBar ? (xpBarH + xpNumF + 4) : 0);
     const int panelH  = padY * 2 + count * rowH;
 
-    DrawRectangle(panelX, panelY, panelW, panelH, (Color){20, 20, 40, 220});
-    DrawRectangleLines(panelX, panelY, panelW, panelH, (Color){80, 80, 140, 255});
+    DrawRectangle(panelX, panelY, panelW, panelH, Fade((Color){20, 20, 40, 220}, alphaMult));
+    DrawRectangleLines(panelX, panelY, panelW, panelH, Fade((Color){80, 80, 140, 255}, alphaMult));
 
     for (int i = 0; i < count; i++) {
         const Combatant *c = &roster[i];
@@ -1329,7 +1383,7 @@ static void DrawRosterPanel(const Combatant *roster, int count,
 
         if (i == activeIdx) {
             DrawRectangle(panelX + 2, rowY - 2, panelW - 4, rowH,
-                          (Color){60, 60, 110, 180});
+                          Fade((Color){60, 60, 110, 180}, alphaMult));
         }
         if (flash > 0.0f) {
             // Pulsing gold fill — sin on GetTime for the shimmer.
@@ -1346,7 +1400,7 @@ static void DrawRosterPanel(const Combatant *roster, int count,
         Color nameCol = c->alive ? (Color){230, 230, 240, 255}
                                  : (Color){120, 120, 130, 180};
         if (flash > 0.0f) nameCol = (Color){255, 240, 150, 255};
-        DrawText(label, panelX + padX, rowY, nameF, nameCol);
+        DrawText(label, panelX + padX, rowY, nameF, Fade(nameCol, alphaMult));
 
         // HP numeric reads at the right end of the name row so it stays clear
         // of the bar below.
@@ -1355,8 +1409,8 @@ static void DrawRosterPanel(const Combatant *roster, int count,
         int hpNumW = MeasureText(hpStr, hpNumF);
         DrawText(hpStr, panelX + panelW - padX - hpNumW, rowY + (nameF - hpNumF),
                  hpNumF,
-                 c->alive ? (Color){200, 210, 220, 255}
-                          : (Color){110, 110, 120, 200});
+                 Fade(c->alive ? (Color){200, 210, 220, 255}
+                                       : (Color){110, 110, 120, 200}, alphaMult));
 
         if (flash > 0.0f) {
             const char *lu = "LEVEL UP!";
@@ -1368,7 +1422,7 @@ static void DrawRosterPanel(const Combatant *roster, int count,
         int barX = panelX + padX;
         int barY = rowY + nameF + 4;
         int barW = panelW - padX * 2;
-        DrawRectangle(barX, barY, barW, hpBarH, (Color){30, 30, 50, 255});
+        DrawRectangle(barX, barY, barW, hpBarH, Fade((Color){30, 30, 50, 255}, alphaMult));
         if (c->alive && c->maxHp > 0) {
             int fill = barW * c->hp / c->maxHp;
             if (fill < 0) fill = 0;
@@ -1376,25 +1430,25 @@ static void DrawRosterPanel(const Combatant *roster, int count,
             Color hpCol = (c->hp * 2 < c->maxHp)
                               ? (Color){220, 90, 70, 255}
                               : (Color){90, 200, 110, 255};
-            DrawRectangle(barX, barY, fill, hpBarH, hpCol);
+            DrawRectangle(barX, barY, fill, hpBarH, Fade(hpCol, alphaMult));
         }
-        DrawRectangleLines(barX, barY, barW, hpBarH, (Color){70, 70, 100, 255});
+        DrawRectangleLines(barX, barY, barW, hpBarH, Fade((Color){70, 70, 100, 255}, alphaMult));
 
         if (showXpBar) {
             int xpY = barY + hpBarH + 2;
-            DrawRectangle(barX, xpY, barW, xpBarH, (Color){30, 30, 50, 255});
+            DrawRectangle(barX, xpY, barW, xpBarH, Fade((Color){30, 30, 50, 255}, alphaMult));
             if (c->xpToNext > 0) {
                 int xpFill = barW * c->xp / c->xpToNext;
                 if (xpFill < 0) xpFill = 0;
                 if (xpFill > barW) xpFill = barW;
                 DrawRectangle(barX, xpY, xpFill, xpBarH,
-                              (Color){110, 170, 240, 255});
+                              Fade((Color){110, 170, 240, 255}, alphaMult));
             }
-            DrawRectangleLines(barX, xpY, barW, xpBarH, (Color){60, 60, 90, 255});
+            DrawRectangleLines(barX, xpY, barW, xpBarH, Fade((Color){60, 60, 90, 255}, alphaMult));
             char xpStr[24];
             snprintf(xpStr, sizeof(xpStr), "XP %d/%d", c->xp, c->xpToNext);
             DrawText(xpStr, barX, xpY + xpBarH + 1, xpNumF,
-                     (Color){150, 170, 210, 220});
+                     Fade((Color){150, 170, 210, 220}, alphaMult));
         }
     }
 }
@@ -1414,11 +1468,14 @@ static void DrawRosters(const BattleContext *ctx)
     // panel rect itself. Drift between them clips the HP bars and right-
     // aligned HP numbers off the screen edge.
     int rosterPanelW = SCREEN_PORTRAIT ? 217 : 230;
+    // Fade the panels to ~25% while the player is picking a target. The
+    // bars otherwise overlay enemies the player needs to read to choose.
+    float alpha = (ctx->state == BS_TARGET_SELECT) ? 0.25f : 1.0f;
     DrawRosterPanel(ctx->enemies, ctx->enemyCount, SCREEN_W - rosterPanelW - 8, 8, activeEnemy,
-                    false, NULL);
+                    false, NULL, alpha);
     if (ctx->party) {
         DrawRosterPanel(ctx->party->members, ctx->party->count, 8, 8, activeParty,
-                        true, ctx->levelUpFlashT);
+                        true, ctx->levelUpFlashT, alpha);
     }
 }
 
@@ -1455,26 +1512,17 @@ void BattleDrawUI(const BattleContext *ctx)
         // Don't draw the bottom narration panel — the target cursor lives in
         // the world, and when the actor/target is near the bottom of the
         // screen the panel hides them. Render a thin top-screen hint strip
-        // instead so the player can see the whole grid.
+        // and a red back-icon button consistent with the rest of the UI.
         int sw = GetScreenWidth();
         int th = SCREEN_PORTRAIT ? 44 : 22;
         int fontSize = SCREEN_PORTRAIT ? 20 : 16;
         DrawRectangle(0, 0, sw, th, (Color){0x3C, 0x28, 0x14, 220});
         const char *hint = SCREEN_PORTRAIT
-            ? "Tap target · tap again to confirm"
-            : "Target: Arrows | Z=Confirm | X=Back";
+            ? "Tap target to confirm"
+            : "Tap a target to confirm";
         DrawText(hint, 10, (th - fontSize) / 2, fontSize,
                  (Color){0xF7, 0xEF, 0xD9, 240});
-        // Back button lives in the hint strip so the mobile build has an
-        // explicit cancel (no X key). Landscape keeps the X-key affordance
-        // in the hint text, but still gets the button for parity.
-        Rectangle back = TargetBackRect();
-        DrawRectangleRec(back, (Color){0x7A, 0x33, 0x2B, 240});
-        DrawRectangleLinesEx(back, 2, (Color){0xF7, 0xEF, 0xD9, 255});
-        int bw = MeasureText("Back", fontSize);
-        DrawText("Back", (int)(back.x + (back.width - bw) / 2),
-                 (int)(back.y + (back.height - fontSize) / 2),
-                 fontSize, (Color){0xF7, 0xEF, 0xD9, 255});
+        DrawBackIconButton(TargetBackRect());
         break;
     }
     case BS_NARRATION:
@@ -1482,10 +1530,10 @@ void BattleDrawUI(const BattleContext *ctx)
         BattleMenuDrawNarration(ctx->narration);
         break;
     case BS_VICTORY:
-        BattleMenuDrawNarration("Victory! Press Z to continue.");
+        BattleMenuDrawNarration("Victory!");
         break;
     case BS_DEFEAT:
-        BattleMenuDrawNarration("Defeated... Press Z to continue.");
+        BattleMenuDrawNarration("Defeated...");
         break;
     default:
         break;

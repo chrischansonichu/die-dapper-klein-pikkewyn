@@ -65,16 +65,23 @@ dkms.conf
 *.aps
 .vs
 
+# macOS Finder metadata — keeps showing up under repo roots / src/.
+.DS_Store
+
 # Clangd LSP
 .cache
 compile_commands.json
 
 # Build folder
 [Bb]uild
+cmake-build-*/
+ddkp_sdl3
 
-# Android files
-*apk*
-android.*
+# Android build outputs (the in-tree android/ project + .github/workflows
+# need to be tracked, so don't use a bare `android.*` glob — it caught
+# .github/workflows/android.yml).
+*.apk
+*.aab
 
 # WebAssembly release files
 *.data

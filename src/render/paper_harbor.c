@@ -26,7 +26,10 @@ const PHPalette gPH = {
     .inkLight  = {0x6A, 0x4E, 0x32, 255},
     .inkDark   = {0x2E, 0x20, 0x14, 255},
     .panel     = {0xF6, 0xEB, 0xCA, 245},
-    .dimmer    = {0x3C, 0x28, 0x14, 120},
+    // Bumped from .a=120 (≈47%) so modals on iOS read as a clear focus shift
+    // rather than a faint tint. The HUD (Jan's HP bar etc.) needs to recede
+    // when a modal owns the screen.
+    .dimmer    = {0x3C, 0x28, 0x14, 190},
 };
 
 static Texture2D gPHGrain = {0};

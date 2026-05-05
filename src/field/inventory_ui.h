@@ -34,6 +34,16 @@ typedef struct InventoryUI {
     // the tab/member changes; clamped during layout. Keyboard cursor moves
     // pull this back so the cursor stays visible.
     float        scrollPx;
+    // Horizontal-strip scroll for the WEAPONS bag's single-row viewport.
+    // Independent from `scrollPx` (which is vertical for the items tab). Reset
+    // when tab/member changes.
+    float        bagScrollX;
+    // Member-switch slide animation. > 0.0 means the body is mid-transition;
+    // counts down to 0 over MEMBER_SLIDE_SECS. Sign of `memberTransitionDir`
+    // sets which side the new content slides in from (+1 = from right when
+    // tapping NEXT, -1 = from left when tapping PREV).
+    float        memberTransitionT;
+    int          memberTransitionDir;
     char         status[128];   // last action message, e.g. "Ate Fresh Fish +30 HP"
 } InventoryUI;
 

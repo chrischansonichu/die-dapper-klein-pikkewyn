@@ -246,24 +246,18 @@ void BuildOverworldHub(MapBuildContext *ctx)
     for (int y = 0; y < m->height; y++) TileMapSetTile(m, 0,            y, TILE_ROCK);
     for (int y = 0; y < m->height; y++) TileMapSetTile(m, m->width - 1, y, TILE_ROCK);
 
-    // Building footprints — four 3x3 huts (Keeper, Salvager, Blacksmith,
-    // Food Bank). Tiles stay as TILE_GRASS so surrounding grass texture
-    // continues through the corners that the triangular roof leaves
-    // exposed; collision comes from the SOLID flag. The painted huts
-    // live in field.c::FieldDraw via DrawBeachHut. Footprint coords here
-    // must match the `huts[]` table over there.
+    // Footprint table — four 3x3 huts (Keeper, Salvager, Blacksmith, Food
+    // Bank). Coords here must match the `huts[]` table in field.c::FieldDraw.
+    // The SOLID flag is applied AFTER the path-laying pass below, because
+    // TileMapSetTile() resets flags to the tile-type defaults — running the
+    // SOLID stamp first lets the sand paths punch holes in the footprint
+    // (you could walk south through Blacksmith / Food Bank's central column).
     static const struct { int x0, y0; } kHuts[] = {
         { 2,  2}, // Keeper's House (top-left)
         {18,  4}, // Salvager (under the pond, east side)
         { 3,  9}, // Blacksmith (west)
         {15, 10}, // Food Bank (east)
     };
-    for (int h = 0; h < (int)(sizeof(kHuts) / sizeof(kHuts[0])); h++) {
-        for (int dy = 0; dy < 3; dy++)
-            for (int dx = 0; dx < 3; dx++)
-                TileMapAddFlag(m, kHuts[h].x0 + dx, kHuts[h].y0 + dy,
-                               TILE_FLAG_SOLID);
-    }
 
     // Decorative pond in the top-right corner — OCEAN tiles render as deep
     // water (animated) and are solid, so the player can't walk through.
@@ -294,6 +288,18 @@ void BuildOverworldHub(MapBuildContext *ctx)
 
     // Sand path: plaza → south gate.
     for (int y = 9; y <= 13; y++) TileMapSetTile(m, 11, y, TILE_SAND);
+
+    // Stamp building SOLID flag last so sand paths laid through the central
+    // column of Blacksmith / Food Bank don't punch a walk-through hole.
+    // Tiles stay as TILE_SAND / TILE_GRASS underneath so surrounding texture
+    // reads continuously through the corners that the triangular roof leaves
+    // exposed; collision comes from the SOLID flag alone.
+    for (int h = 0; h < (int)(sizeof(kHuts) / sizeof(kHuts[0])); h++) {
+        for (int dy = 0; dy < 3; dy++)
+            for (int dx = 0; dx < 3; dx++)
+                TileMapAddFlag(m, kHuts[h].x0 + dx, kHuts[h].y0 + dy,
+                               TILE_FLAG_SOLID);
+    }
 
     // South gate — a 2-tile-wide sand opening up to the outer wall row. The
     // wall-row tiles (height-1) are the warp doors themselves: drawn as sand
@@ -409,7 +415,7 @@ void BuildHarborFloor9(MapBuildContext *ctx)
         FieldEnemy *cap = &ctx->enemies[(*ctx->enemyCount)++];
         EnemyInit(cap, 8, 4, 0, BEHAVIOR_STAND, CREATURE_CAPTAIN_BOSS, 14, 4,
                   (Color){120, 30, 30, 255});
-        EnemySetDrops(cap, -1, 0, /*Harpoon*/ 6, 100);
+        EnemySetDrops(cap, -1, 0, /*Harpoon*/ 5, 100);
         EnemySetArmorDrop(cap, ARMOR_CAPTAINS_COAT, 100);
     }
 

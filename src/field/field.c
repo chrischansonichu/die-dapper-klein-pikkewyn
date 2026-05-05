@@ -1,4 +1,5 @@
 #include "field.h"
+#include "../systems/ui_button.h"
 #include "buildings.h"
 #include "enemy_sprites.h"
 #include "map_source.h"
@@ -30,7 +31,17 @@
 
 // Post-battle dialogue buffers. DialogueBegin keeps pointers, so these must
 // live at file scope to outlive the call.
-#define DROP_MSG_PAGES 3
+// Whole-battle drop cap. Without it, a 6-enemy cluster (each rolling a 50%
+// gate × ~65% per category) yielded ~4 drop pages — players reported
+// fights felt like "loot piles" instead of fights. 3 keeps the haul
+// meaningful without flooding the post-battle dialogue.
+#define MAX_DROPS_PER_BATTLE 3
+
+// Sized for up to ~3 enemies × 3 drop categories each (item + weapon + armor).
+// Bigger than the old 3 because previous code only narrated the first enemy's
+// drops — every subsequent enemy in a multi-foe fight clobbered the buffer
+// even though their drops *were* added to inventory.
+#define DROP_MSG_PAGES 9
 #define DROP_MSG_LEN   160
 static char gDropMsg[DROP_MSG_PAGES][DROP_MSG_LEN];
 
@@ -438,7 +449,15 @@ static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
     anchorY[anchorCount] = ow->player.tileY;
     anchorCount++;
 
-    for (int i = 0; i < ow->enemyCount && written < maxOut; i++) {
+    // Build a list of *eligible* candidates with their min-anchor distance,
+    // then add them in nearest-first order so a tight cluster (small
+    // BATTLE_MAX_ENEMIES) preserves the closest enemies. Without sorting, a
+    // captor scene could fill the slots with distant sailors at indices 0/1
+    // and exclude a much closer patrol at index 4.
+    typedef struct { int idx; int dist; bool detected; } Candidate;
+    Candidate cands[64];
+    int candCount = 0;
+    for (int i = 0; i < ow->enemyCount; i++) {
         if (i == seedIdx) continue;
         if (!ow->enemies[i].active) continue;
         bool already = false;
@@ -449,22 +468,46 @@ static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
         bool iIsCaptor = FieldEnemyIsCaptor(ow, i);
         if (!seedIsCaptor && iIsCaptor) continue;
         const FieldEnemy *e = &ow->enemies[i];
-        // An enemy that has already detected the player on its own (showing "!"
-        // or actively chasing) is force-recruited: it's the one that was about
-        // to join the fight next, so skipping it would spawn a "ghost aggro"
-        // that re-engages the moment the current battle ends.
-        if (e->aiState == ENEMY_ALERTED || e->aiState == ENEMY_CHASING) {
-            outIdxs[written++] = i;
-            continue;
+        bool detected = (e->aiState == ENEMY_ALERTED ||
+                         e->aiState == ENEMY_CHASING);
+        int bestD = 99999;
+        bool inRange = detected;  // detected enemies bypass distance/LOS checks
+        if (!detected) {
+            for (int k = 0; k < anchorCount; k++) {
+                int d = Chebyshev(anchorX[k], anchorY[k], e->tileX, e->tileY);
+                if (d > FIELD_AGGRO_RADIUS) continue;
+                if (!seedIsCaptor &&
+                    !FieldAggroLOS(&ow->map, anchorX[k], anchorY[k],
+                                   e->tileX, e->tileY)) continue;
+                if (d < bestD) bestD = d;
+                inRange = true;
+            }
+        } else {
+            bestD = 0;
         }
-        for (int k = 0; k < anchorCount; k++) {
-            int d = Chebyshev(anchorX[k], anchorY[k], e->tileX, e->tileY);
-            if (d > FIELD_AGGRO_RADIUS) continue;
-            if (!FieldAggroLOS(&ow->map, anchorX[k], anchorY[k],
-                               e->tileX, e->tileY)) continue;
-            outIdxs[written++] = i;
-            break;
+        if (!inRange) continue;
+        if (candCount < (int)(sizeof(cands)/sizeof(cands[0]))) {
+            cands[candCount].idx      = i;
+            cands[candCount].dist     = bestD;
+            cands[candCount].detected = detected;
+            candCount++;
         }
+    }
+    // Insertion sort by (detected first, then ascending distance). Stable;
+    // simple at this small N (typically < 10 candidates).
+    for (int i = 1; i < candCount; i++) {
+        Candidate key = cands[i];
+        int j = i - 1;
+        while (j >= 0 && (
+                  (cands[j].detected < key.detected) ||
+                  (cands[j].detected == key.detected && cands[j].dist > key.dist))) {
+            cands[j + 1] = cands[j];
+            j--;
+        }
+        cands[j + 1] = key;
+    }
+    for (int i = 0; i < candCount && written < maxOut; i++) {
+        outIdxs[written++] = cands[i].idx;
     }
     return written;
 }
@@ -531,6 +574,7 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
     memset(ctx, 0, sizeof(*ctx));
     ctx->preemptiveMoveSlot   = preemptiveMoveSlot;
     ctx->preemptiveTargetIdx  = -1; // filled in below once we know the cluster index
+    ctx->difficulty           = ow->gs ? ow->gs->difficulty : 0;
 
     // Aggro cluster into battle enemy slots. CombatantInit copies stats from
     // the creature def; tile position comes from the FieldEnemy.
@@ -683,11 +727,23 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
 // populated. If the weapon bag is full on a weapon drop, opens `discard` with
 // the incoming weapon instead of silently dropping it — narrating a short
 // lead-in page so the player sees what triggered the modal.
-static int RollEnemyDrops(FieldEnemy *e, Party *party, DiscardUI *discard)
+// `startPage` is the first page index in gDropMsg this call may write into;
+// the function returns the next free page index. Threading the index through
+// the caller's loop keeps every enemy's drops visible in the post-battle
+// narration; the previous version overwrote gDropMsg[0..] each call so only
+// the last enemy's pages survived.
+static int RollEnemyDrops(FieldEnemy *e, Party *party, DiscardUI *discard,
+                          int startPage)
 {
     Inventory *inv = &party->inventory;
-    int pages = 0;
-    if (e->dropItemId >= 0 && GetRandomValue(1, 100) <= e->dropItemPct) {
+    int pages = startPage;
+    // Per-enemy 50% gate — half the time an enemy yields nothing at all.
+    // Per-category percentages on the FieldEnemy still apply *inside* this
+    // gate so enemies remain individually weighted (rare-drop weapons stay
+    // rare), but the floor is now "two of every four enemies are silent."
+    if (GetRandomValue(1, 100) > 50) return pages;
+    if (e->dropItemId >= 0 && GetRandomValue(1, 100) <= e->dropItemPct
+        && pages < DROP_MSG_PAGES) {
         const ItemDef *it = GetItemDef(e->dropItemId);
         if (InventoryAddItem(inv, e->dropItemId, 1)) {
             snprintf(gDropMsg[pages], DROP_MSG_LEN, "Got %s!", it->name);
@@ -700,7 +756,7 @@ static int RollEnemyDrops(FieldEnemy *e, Party *party, DiscardUI *discard)
         if (mv->isWeapon) {
             if (InventoryAddWeapon(inv, e->dropWeaponId, mv->defaultDurability)) {
                 snprintf(gDropMsg[pages], DROP_MSG_LEN,
-                         "Picked up a %s! (open inventory with I to equip)", mv->name);
+                         "Picked up a %s!", mv->name);
                 pages++;
             } else if (discard) {
                 // Bag full — narrate the drop and open the discard modal.
@@ -717,7 +773,7 @@ static int RollEnemyDrops(FieldEnemy *e, Party *party, DiscardUI *discard)
         const ArmorDef *ad = GetArmorDef(e->dropArmorId);
         if (InventoryAddArmor(inv, e->dropArmorId)) {
             snprintf(gDropMsg[pages], DROP_MSG_LEN,
-                     "Picked up %s! (open inventory with I to equip)", ad->name);
+                     "Picked up %s!", ad->name);
             pages++;
         } else {
             // Armor bag is small but can still overflow — narrate the loss.
@@ -796,16 +852,37 @@ static void ResolveBattleEnd(FieldState *ow, int result)
         // Deactivate each field enemy that participated, roll drops on the
         // first one that produces any narration.
         bool bossDown = false;
+        // Thread `dropPages` through every enemy in the cluster so each
+        // enemy's drops (now actually granted to inventory by RollEnemyDrops)
+        // also produces narration. The previous version only collected pages
+        // from the first enemy that dropped anything — items beyond that
+        // landed in the inventory invisibly.
+        int dropPages = 0;
+        // Pass 1: deactivate every defeated enemy + roll drops on the boss
+        // first so its guaranteed loot (Harpoon, Captain's Coat) never gets
+        // squeezed out by the cap. Pass 2 then rolls the rest until the cap
+        // is reached.
         for (int k = 0; k < ctx->enemyCount; k++) {
             int idx = ctx->enemyFieldIdx[k];
             if (idx < 0 || idx >= ow->enemyCount) continue;
             FieldEnemy *e = &ow->enemies[idx];
-            if (e->creatureId == CREATURE_CAPTAIN_BOSS) bossDown = true;
-            int pages = RollEnemyDrops(e, &ow->gs->party, &ow->discardUi);
-            e->active = false;
-            if (pageCount == 0 && pages > 0) {
-                for (int i = 0; i < pages; i++) ptrs[pageCount++] = gDropMsg[i];
+            if (e->creatureId == CREATURE_CAPTAIN_BOSS) {
+                bossDown = true;
+                dropPages = RollEnemyDrops(e, &ow->gs->party, &ow->discardUi, dropPages);
             }
+        }
+        for (int k = 0; k < ctx->enemyCount; k++) {
+            int idx = ctx->enemyFieldIdx[k];
+            if (idx < 0 || idx >= ow->enemyCount) continue;
+            FieldEnemy *e = &ow->enemies[idx];
+            if (e->creatureId != CREATURE_CAPTAIN_BOSS &&
+                dropPages < MAX_DROPS_PER_BATTLE) {
+                dropPages = RollEnemyDrops(e, &ow->gs->party, &ow->discardUi, dropPages);
+            }
+            e->active = false;
+        }
+        for (int i = 0; i < dropPages && pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0])); i++) {
+            ptrs[pageCount++] = gDropMsg[i];
         }
         if (bossDown && !ow->gs->captainDefeated) {
             ow->gs->captainDefeated     = true;
@@ -979,10 +1056,10 @@ void FieldInit(FieldState *ow, GameState *gs)
 
 void FieldUpdate(FieldState *ow, float dt)
 {
-    // Touch/mouse state is tracked once per frame and read by whichever UI
-    // layer owns input this frame. Desktop keyboard paths still work in
-    // parallel; this only emits events when a pointer is actually active.
-    TouchInputUpdate();
+    // Touch/mouse gesture state is now ticked once per frame from the SDL3
+    // main loop (sdl3_compat/main.c) so the title / battle / options screens
+    // also receive taps. Calling it again here would clear the tapReady
+    // flag mid-frame and silently eat field taps.
 
     // In battle: BattleUpdate owns input. Once it finishes, resolve drops and
     // return to FIELD_FREE.
@@ -1165,21 +1242,35 @@ void FieldUpdate(FieldState *ow, float dt)
             ow->warpPromptIdx = -1;
             return;
         }
+        // Tap routing matches the YES/NO button rects in FieldDraw — must
+        // mirror their math exactly so taps land on the chunky buttons.
+        int sw = GetScreenWidth(), sh = GetScreenHeight();
+        int boxW = 560, boxH = 200;
+        if (boxW > sw - 40) boxW = sw - 40;
+        int bx = (sw - boxW) / 2;
+        int by = (sh - boxH) / 2;
+        int btnW = 160, btnH = 56, btnGap = 24;
+        int btnY = by + boxH - btnH - 18;
+        Rectangle yesR = { (float)(bx + boxW / 2 - btnW - btnGap / 2),
+                           (float)btnY, (float)btnW, (float)btnH };
+        Rectangle noR  = { (float)(bx + boxW / 2 + btnGap / 2),
+                           (float)btnY, (float)btnW, (float)btnH };
+        if (TouchTapInRect(yesR)) {
+            ApplyWarp(ow, ow->warpPromptIdx);
+            ow->warpPromptIdx = -1;
+            return;
+        }
+        if (TouchTapInRect(noR)) {
+            ow->warpPromptIdx = -1;
+            return;
+        }
+        // Tap outside the panel cancels — same as the previous behaviour,
+        // just narrowed to the panel rect.
         Vector2 tp;
         if (TouchTapOccurred(&tp)) {
-            int sw = GetScreenWidth(), sh = GetScreenHeight();
-            int boxW = 560, boxH = 140;
-            if (boxW > sw - 40) boxW = sw - 40;
-            int bx = (sw - boxW) / 2;
-            int by = (sh - boxH) / 2;
             bool inside = (tp.x >= bx && tp.x < bx + boxW &&
                            tp.y >= by && tp.y < by + boxH);
-            if (inside) {
-                ApplyWarp(ow, ow->warpPromptIdx);
-                ow->warpPromptIdx = -1;
-            } else {
-                ow->warpPromptIdx = -1;
-            }
+            if (!inside) ow->warpPromptIdx = -1;
         }
         return;
     }
@@ -1794,10 +1885,6 @@ void FieldDraw(const FieldState *ow)
 
     if (ow->warpPromptIdx >= 0) {
         const FieldWarp *w = &ow->warps[ow->warpPromptIdx];
-        // Hub → F1 is the dungeon entrance — no "point of no return" warning,
-        // since that's the normal way into the game. Deeper descents (F1→F2,
-        // proc→proc, proc→F9) do warn. Hub-return shows its own friendly
-        // line.
         const char *title;
         const char *warn;
         if (w->targetMapId == MAP_OVERWORLD_HUB) {
@@ -1810,23 +1897,35 @@ void FieldDraw(const FieldState *ow)
             title = "Continue to the next area?";
             warn  = "You won't be able to return.";
         }
+        // Bigger panel to fit larger title text + chunky YES/NO buttons. The
+        // old "Z / Enter: Yes" hint band is gone — the buttons are the
+        // affordance now.
         int sw = GetScreenWidth(), sh = GetScreenHeight();
-        int boxW = 560, boxH = 140;
+        int boxW = 560, boxH = 200;
         if (boxW > sw - 40) boxW = sw - 40;
         int bx = (sw - boxW) / 2;
         int by = (sh - boxH) / 2;
         DrawRectangle(0, 0, sw, sh, gPH.dimmer);
         PHDrawPanel((Rectangle){bx, by, boxW, boxH}, 0x901);
-        DrawText(title, bx + 20, by + 20, 20, gPH.ink);
-        if (warn[0] != '\0')
-            DrawText(warn, bx + 20, by + 52, 16, gPH.ink);
-#if SCREEN_PORTRAIT
-        DrawText("Tap box: Yes     Tap outside: No",
-                 bx + 20, by + boxH - 30, 14, gPH.inkLight);
-#else
-        DrawText("Z / Enter: Yes    X / Esc: No",
-                 bx + 20, by + boxH - 30, 14, gPH.inkLight);
-#endif
+
+        int titleF = 28;
+        int titleW = MeasureText(title, titleF);
+        DrawText(title, bx + (boxW - titleW) / 2, by + 24, titleF, gPH.ink);
+        if (warn[0] != '\0') {
+            int warnF = 18;
+            int warnW = MeasureText(warn, warnF);
+            DrawText(warn, bx + (boxW - warnW) / 2, by + 60, warnF, gPH.inkLight);
+        }
+        // YES / NO buttons — bottom-anchored, sized for thumbs.
+        int btnW = 160, btnH = 56;
+        int btnGap = 24;
+        int btnY = by + boxH - btnH - 18;
+        Rectangle yesR = { (float)(bx + boxW / 2 - btnW - btnGap / 2),
+                           (float)btnY, (float)btnW, (float)btnH };
+        Rectangle noR  = { (float)(bx + boxW / 2 + btnGap / 2),
+                           (float)btnY, (float)btnW, (float)btnH };
+        DrawChunkyButton(noR,  "NO",  22, false, true);
+        DrawChunkyButton(yesR, "YES", 22, true,  true);
     }
 
     // Paper-grain overlay over the whole frame — reads as texture, not noise.

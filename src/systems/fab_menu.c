@@ -3,6 +3,7 @@
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
 #include <stddef.h>
+#include <stdio.h>
 
 #if SCREEN_PORTRAIT
     #define FAB_SIZE      64
@@ -78,6 +79,7 @@ void FabMenuShowSavedToast(FabMenu *f, bool ok)
 {
     f->toastFrames = 90;   // ~1.5s at 60fps
     f->toastOk     = ok;
+    f->toastMsg[0] = '\0';
 }
 
 FabAction FabMenuUpdate(FabMenu *f)
@@ -157,7 +159,8 @@ void FabMenuDraw(const FabMenu *f)
                          (float)(FAB_MARGIN + FAB_SIZE + 8),
                          (float)w, (float)h };
         PHDrawPanel(tr, 0x7A03);
-        const char *msg = f->toastOk ? "Saved" : "Save failed";
+        const char *msg = f->toastMsg[0] ? f->toastMsg
+                                          : (f->toastOk ? "Saved" : "Save failed");
         int tw = MeasureText(msg, TOAST_FONT);
         DrawText(msg,
                  (int)(tr.x + (tr.width - tw) * 0.5f),

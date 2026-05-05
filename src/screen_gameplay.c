@@ -25,10 +25,14 @@ typedef enum GameplayEntry {
 static int  finishScreen   = 0;
 static bool gInitialized   = false;
 static GameplayEntry gEntryMode = ENTRY_CONTINUE;
+static int  gPendingDifficulty = 0;  // overwritten by GameplayRequestNewGame
 static GameState  gGameState = {0};
 static FieldState gField    = {0};
 
-void GameplayRequestNewGame(void)  { gEntryMode = ENTRY_NEW; }
+void GameplayRequestNewGame(int difficulty) {
+    gEntryMode = ENTRY_NEW;
+    gPendingDifficulty = difficulty;
+}
 void GameplayRequestLoadGame(void) { gEntryMode = ENTRY_LOAD; }
 
 // Rescue dialogue — shown after a battle-defeat hub rescue transition.
@@ -62,6 +66,10 @@ void InitGameplayScreen(void)
     }
     if (!loaded) {
         GameStateInit(&gGameState);
+        // Apply the difficulty chosen on the title screen. Loading from a
+        // save preserves the saved difficulty (set inside LoadGame); this
+        // path covers fresh runs only.
+        gGameState.difficulty = gPendingDifficulty;
     }
     FieldInit(&gField, &gGameState);
 
