@@ -112,6 +112,38 @@ static struct InvLayout {
     int       armorBagRowCount;
 } sL;
 
+// Tile geometry for the icon grid (Items / Weapons / Armor share these). On
+// landscape we fit 4 wide; portrait drops to 3. Tiles are square-ish with
+// just enough room under the icon for the truncated name.
+#define INV_GRID_COLS_LAND  4
+#define INV_GRID_COLS_PORT  3
+#define INV_TILE_GAP        12
+#define INV_TILE_NAME_H     20
+
+static inline int InvGridCols(void) {
+#if SCREEN_PORTRAIT
+    return INV_GRID_COLS_PORT;
+#else
+    return INV_GRID_COLS_LAND;
+#endif
+}
+static inline int InvTileSize(void) {
+    int cols = InvGridCols();
+    int contentW = InvContentW();
+    return (contentW - (cols - 1) * INV_TILE_GAP) / cols;
+}
+static inline Rectangle InvTileRect(int gridTop, int index) {
+    int cols = InvGridCols();
+    int tile = InvTileSize();
+    int col = index % cols;
+    int row = index / cols;
+    return (Rectangle){
+        (float)(InvContentX() + col * (tile + INV_TILE_GAP)),
+        (float)(gridTop + row * (tile + INV_TILE_GAP)),
+        (float)tile, (float)tile
+    };
+}
+
 static void LayoutTabs(void)
 {
 #if SCREEN_PORTRAIT
@@ -632,10 +664,13 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
             if (ui->cursor >= n) ui->cursor = n - 1;
             if (moved) EnsureCursorVisible(ui, n, INV_ITEM_VISIBLE);
             if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER)) UseItemOnMember(ui, party);
-            // Tap-to-use: a tap on a row moves the cursor and consumes in one
-            // motion, mirroring the Z-press flow on desktop.
+            // Tap-to-use uses the same icon-grid math as DrawItemsTab; the
+            // legacy sL.itemRows rects are a flat list and don't match where
+            // tiles actually render.
+            Rectangle ms_i = MemberStripRect();
+            int gridTop_i = (int)(ms_i.y + ms_i.height) + 14;
             for (int i = 0; i < n && i < INVENTORY_MAX_ITEMS; i++) {
-                if (TouchTapInRect(sL.itemRows[i])) {
+                if (TouchTapInRect(InvTileRect(gridTop_i, i))) {
                     ui->cursor = i;
                     UseItemOnMember(ui, party);
                     break;
@@ -900,38 +935,6 @@ static bool MemberStripUpdate(InventoryUI *ui, const Party *party)
     }
     return false;
     #undef SLIDE_SECS
-}
-
-// Tile geometry for the icon grid (Items / Weapons / Armor share these). On
-// landscape we fit 4 wide; portrait drops to 3. Tiles are square-ish with
-// just enough room under the icon for the truncated name.
-#define INV_GRID_COLS_LAND  4
-#define INV_GRID_COLS_PORT  3
-#define INV_TILE_GAP        12
-#define INV_TILE_NAME_H     20
-
-static inline int InvGridCols(void) {
-#if SCREEN_PORTRAIT
-    return INV_GRID_COLS_PORT;
-#else
-    return INV_GRID_COLS_LAND;
-#endif
-}
-static inline int InvTileSize(void) {
-    int cols = InvGridCols();
-    int contentW = InvContentW();
-    return (contentW - (cols - 1) * INV_TILE_GAP) / cols;
-}
-static inline Rectangle InvTileRect(int gridTop, int index) {
-    int cols = InvGridCols();
-    int tile = InvTileSize();
-    int col = index % cols;
-    int row = index / cols;
-    return (Rectangle){
-        (float)(InvContentX() + col * (tile + INV_TILE_GAP)),
-        (float)(gridTop + row * (tile + INV_TILE_GAP)),
-        (float)tile, (float)tile
-    };
 }
 
 // Generic info popup drawn when the user long-presses a tile. Lays out
