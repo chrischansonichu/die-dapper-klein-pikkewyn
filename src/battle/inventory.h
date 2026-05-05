@@ -17,9 +17,16 @@ typedef struct ItemStack {
 } ItemStack;
 
 typedef struct WeaponStack {
-    int moveId;     // weapon's MoveDef id (must have isWeapon == true)
-    int durability; // remaining uses
+    int moveId;       // weapon's MoveDef id (must have isWeapon == true)
+    int durability;   // remaining uses
+    int upgradeLevel; // 0..WEAPON_UPGRADE_MAX, blacksmith bumps this; effective
+                      // weapon level = MoveDef.baseWeaponLevel + upgradeLevel
 } WeaponStack;
+
+// Hard cap on how many times a single weapon can be upgraded at the
+// blacksmith. The weapon's effective level still goes higher (a Harpoon at +3
+// is level 5), but the blacksmith refuses further work past this many bumps.
+#define WEAPON_UPGRADE_MAX 3
 
 typedef struct ArmorStack {
     int armorId;    // ArmorDef id
@@ -43,8 +50,12 @@ bool InventoryAddItem(Inventory *inv, int itemId, int count);
 // Consume one of the item in slot `slotIdx`. Removes the slot if it empties.
 void InventoryConsumeItem(Inventory *inv, int slotIdx);
 
-// Add a weapon (moveId, durability) to the bag. Returns false if full.
+// Add a weapon (moveId, durability) to the bag at upgrade level 0. Returns
+// false if full. Use InventoryAddWeaponEx to insert a pre-upgraded weapon
+// (e.g. when a swap returns it to the bag from a combatant slot).
 bool InventoryAddWeapon(Inventory *inv, int moveId, int durability);
+bool InventoryAddWeaponEx(Inventory *inv, int moveId, int durability,
+                          int upgradeLevel);
 
 // Remove weapon at slotIdx, writing its data to *out. Returns false on bad index.
 bool InventoryTakeWeapon(Inventory *inv, int slotIdx, WeaponStack *out);

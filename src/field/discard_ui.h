@@ -27,6 +27,7 @@ typedef struct DiscardUI {
     int          entryCount;        // = party->inventory.weaponCount at open
     int          pendingMoveId;
     int          pendingDurability;
+    int          pendingUpgradeLevel;
     bool         cancelled;         // RESULT narration: true if the player tossed the incoming
     int          swappedOutMoveId;  // RESULT narration: what they chose to discard
 } DiscardUI;
@@ -38,7 +39,8 @@ bool DiscardUIIsOpen(const DiscardUI *d);
 // that the bag is full; calling when there's room is harmless (the modal
 // opens with a full picker anyway — but the caller should just add it).
 void DiscardUIOpen(DiscardUI *d, const Party *party,
-                   int incomingMoveId, int incomingDurability);
+                   int incomingMoveId, int incomingDurability,
+                   int incomingUpgradeLevel);
 void DiscardUIClose(DiscardUI *d);
 
 // Drives input and, on confirm, swaps the chosen weapon out and the pending in.

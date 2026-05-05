@@ -404,9 +404,11 @@ static void ConsumePlayerWeapon(Combatant *actor, int slot, Inventory *inv)
     if (id < 0) return;
     const MoveDef *mv = GetMoveDef(id);
     if (!mv || !mv->isWeapon) return;
-    if (inv && InventoryAddWeapon(inv, id, 0)) {
-        actor->moveIds[slot]        = -1;
-        actor->moveDurability[slot] = -1;
+    int upg = actor->moveUpgradeLevel[slot];
+    if (inv && InventoryAddWeaponEx(inv, id, 0, upg)) {
+        actor->moveIds[slot]          = -1;
+        actor->moveDurability[slot]   = -1;
+        actor->moveUpgradeLevel[slot] = 0;
     }
 }
 
@@ -573,6 +575,8 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
     }
 
     int dmg = CalculateDamage(actor, target, mv);
+    // Blacksmith upgrade bonus: +10% damage per upgrade level on this slot.
+    dmg = (dmg * WeaponPowerBonusPct(actor->moveUpgradeLevel[ctx->selectedMove])) / 100;
     dmg = ApplyRangeFalloff(dmg, actor, target, mv);
     if (friendly) {
         dmg = dmg / 10;
@@ -585,6 +589,8 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
         dmg = (dmg + 1) / 2;
         if (dmg < 1) dmg = 1;
     }
+    // Dev god mode: party takes zero damage from enemy strikes.
+    if (actorIsEn && !targetIsEnemy && ctx->godMode) dmg = 0;
     target->hp -= dmg;
     // Aggro bookkeeping: a party member hitting an enemy contributes to that
     // enemy's per-party-index threat tally. ChoosePartyTarget reads this on
@@ -683,6 +689,7 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 if (!t->alive) continue;
                 if (hostileAoe && !RollHit(actor, t)) { misses++; continue; }
                 int dmg = CalculateDamage(actor, t, mv);
+                dmg = (dmg * WeaponPowerBonusPct(actor->moveUpgradeLevel[ctx->selectedMove])) / 100;
                 t->hp -= dmg;
                 if (!te->isEnemy && te->idx >= 0 && te->idx < PARTY_MAX) {
                     t->damageTakenFrom[te->idx] += dmg;
@@ -697,12 +704,14 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 if (!t->alive) continue;
                 if (hostileAoe && !RollHit(actor, t)) { misses++; continue; }
                 int dmg = CalculateDamage(actor, t, mv);
+                dmg = (dmg * WeaponPowerBonusPct(actor->moveUpgradeLevel[ctx->selectedMove])) / 100;
                 // Easy-mode AOE damping for party targets — same factor as
                 // single-target hits in ApplyMoveToTile.
                 if (te->isEnemy && ctx->difficulty == 0) {
                     dmg = (dmg + 1) / 2;
                     if (dmg < 1) dmg = 1;
                 }
+                if (te->isEnemy && ctx->godMode) dmg = 0;
                 t->hp -= dmg;
                 totalDmg += dmg; hits++; lastIdx = i; lastKilled = (t->hp <= 0);
                 if (!enragedTarget && TryEnrage(t)) enragedTarget = t;
@@ -818,6 +827,7 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
         if (jan->alive && target->alive) {
             const MoveDef *mv = GetMoveDef(jan->moveIds[slot]);
             int dmg = CalculateDamage(jan, target, mv);
+            dmg = (dmg * WeaponPowerBonusPct(jan->moveUpgradeLevel[slot])) / 100;
             dmg = ApplyRangeFalloff(dmg, jan, target, mv);
             target->hp -= dmg;
             // Jan is party slot 0 by construction — the sneak opens the aggro

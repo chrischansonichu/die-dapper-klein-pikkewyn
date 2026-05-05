@@ -54,15 +54,17 @@ void DiscardUIInit(DiscardUI *d) { memset(d, 0, sizeof(*d)); }
 bool DiscardUIIsOpen(const DiscardUI *d) { return d->active; }
 
 void DiscardUIOpen(DiscardUI *d, const Party *party,
-                   int incomingMoveId, int incomingDurability)
+                   int incomingMoveId, int incomingDurability,
+                   int incomingUpgradeLevel)
 {
     memset(d, 0, sizeof(*d));
-    d->active            = true;
-    d->phase             = DISC_PHASE_PICK;
-    d->entryCount        = party->inventory.weaponCount;
-    d->pendingMoveId     = incomingMoveId;
-    d->pendingDurability = incomingDurability;
-    d->swappedOutMoveId  = -1;
+    d->active              = true;
+    d->phase               = DISC_PHASE_PICK;
+    d->entryCount          = party->inventory.weaponCount;
+    d->pendingMoveId       = incomingMoveId;
+    d->pendingDurability   = incomingDurability;
+    d->pendingUpgradeLevel = incomingUpgradeLevel;
+    d->swappedOutMoveId    = -1;
 }
 
 void DiscardUIClose(DiscardUI *d) { d->active = false; }
@@ -74,7 +76,8 @@ static void CommitSwap(DiscardUI *d, Party *party)
     WeaponStack out;
     if (!InventoryTakeWeapon(inv, d->cursor, &out)) return;
     d->swappedOutMoveId = out.moveId;
-    InventoryAddWeapon(inv, d->pendingMoveId, d->pendingDurability);
+    InventoryAddWeaponEx(inv, d->pendingMoveId, d->pendingDurability,
+                         d->pendingUpgradeLevel);
     d->cancelled = false;
     d->phase     = DISC_PHASE_RESULT;
 }

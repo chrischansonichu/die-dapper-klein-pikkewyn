@@ -59,6 +59,8 @@ void CombatantInit(Combatant *c, int creatureId, int level)
     c->xpToNext = c->level * 50;
 
     // Copy the fixed move layout verbatim; -1 slots carry -1 durability.
+    // Innate moves spawn at upgrade level 0 — only player-bag weapons that
+    // pass through the blacksmith ever bump above zero.
     for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
         c->moveIds[i] = cdef->moveIds[i];
         if (c->moveIds[i] >= 0) {
@@ -67,6 +69,7 @@ void CombatantInit(Combatant *c, int creatureId, int level)
         } else {
             c->moveDurability[i] = -1;
         }
+        c->moveUpgradeLevel[i] = 0;
     }
 }
 
@@ -141,25 +144,41 @@ static int FindEmptyItemAttackSlot(const Combatant *c)
 
 bool CombatantEquipWeapon(Combatant *c, int moveId, int durability)
 {
+    return CombatantEquipWeaponEx(c, moveId, durability, 0);
+}
+
+bool CombatantEquipWeaponEx(Combatant *c, int moveId, int durability,
+                            int upgradeLevel)
+{
     int slot = FindEmptyItemAttackSlot(c);
     if (slot < 0) return false;
-    c->moveIds[slot]        = moveId;
-    c->moveDurability[slot] = durability;
+    c->moveIds[slot]          = moveId;
+    c->moveDurability[slot]   = durability;
+    c->moveUpgradeLevel[slot] = upgradeLevel;
     return true;
 }
 
 bool CombatantUnequipWeapon(Combatant *c, int slot, int *outMoveId, int *outDurability)
 {
+    int unused = 0;
+    return CombatantUnequipWeaponEx(c, slot, outMoveId, outDurability, &unused);
+}
+
+bool CombatantUnequipWeaponEx(Combatant *c, int slot, int *outMoveId,
+                              int *outDurability, int *outUpgradeLevel)
+{
     if (slot < 0 || slot >= CREATURE_MAX_MOVES) return false;
     if (c->moveIds[slot] < 0) return false;
     if (!GetMoveDef(c->moveIds[slot])->isWeapon) return false;
 
-    *outMoveId     = c->moveIds[slot];
-    *outDurability = c->moveDurability[slot];
+    *outMoveId       = c->moveIds[slot];
+    *outDurability   = c->moveDurability[slot];
+    *outUpgradeLevel = c->moveUpgradeLevel[slot];
 
     // Fixed layout: clear the slot in place (no shifting).
-    c->moveIds[slot]        = -1;
-    c->moveDurability[slot] = -1;
+    c->moveIds[slot]          = -1;
+    c->moveDurability[slot]   = -1;
+    c->moveUpgradeLevel[slot] = 0;
     return true;
 }
 

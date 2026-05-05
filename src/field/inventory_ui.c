@@ -387,14 +387,14 @@ static void EquipBagWeapon(InventoryUI *ui, Party *party)
     const MoveDef *mv = GetMoveDef(w.moveId);
     if (target->level < mv->minLevel) {
         // Gate: too low level. Put the weapon back in the bag unchanged.
-        InventoryAddWeapon(&party->inventory, w.moveId, w.durability);
+        InventoryAddWeaponEx(&party->inventory, w.moveId, w.durability, w.upgradeLevel);
         snprintf(ui->status, sizeof(ui->status),
                  "%s needs Lv %d to equip %s.", target->name, mv->minLevel, mv->name);
         return;
     }
-    if (!CombatantEquipWeapon(target, w.moveId, w.durability)) {
+    if (!CombatantEquipWeaponEx(target, w.moveId, w.durability, w.upgradeLevel)) {
         // Put it back — every item-attack slot is full.
-        InventoryAddWeapon(&party->inventory, w.moveId, w.durability);
+        InventoryAddWeaponEx(&party->inventory, w.moveId, w.durability, w.upgradeLevel);
         snprintf(ui->status, sizeof(ui->status),
                  "%s's item-attack slots are full. Unequip first.", target->name);
         return;
@@ -450,20 +450,20 @@ static void UnequipMemberWeapon(InventoryUI *ui, Party *party, DiscardUI *discar
     if (ui->memberCursor < 0 || ui->memberCursor >= party->count) return;
     Combatant *target = &party->members[ui->memberCursor];
     int slot = ui->cursor;
-    int id, dur;
-    if (!CombatantUnequipWeapon(target, slot, &id, &dur)) {
+    int id, dur, upg;
+    if (!CombatantUnequipWeaponEx(target, slot, &id, &dur, &upg)) {
         snprintf(ui->status, sizeof(ui->status), "That slot isn't a weapon.");
         return;
     }
-    if (!InventoryAddWeapon(&party->inventory, id, dur)) {
+    if (!InventoryAddWeaponEx(&party->inventory, id, dur, upg)) {
         // Bag full — hand the swap decision to the player. Fallback to
         // re-equip only if no discard UI is wired in (defensive).
         if (discard) {
-            DiscardUIOpen(discard, party, id, dur);
+            DiscardUIOpen(discard, party, id, dur, upg);
             snprintf(ui->status, sizeof(ui->status),
                      "Weapon bag full - pick one to toss.");
         } else {
-            CombatantEquipWeapon(target, id, dur);
+            CombatantEquipWeaponEx(target, id, dur, upg);
             snprintf(ui->status, sizeof(ui->status), "Weapon bag full.");
         }
         return;
@@ -1130,6 +1130,7 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
             char overlay[16] = "";
             Color ovCol = RAYWHITE;
             int dur = led->moveDurability[s];
+            int upg = led->moveUpgradeLevel[s];
             if (mv->isWeapon) {
                 snprintf(overlay, sizeof(overlay), "d%d", dur);
                 if (dur == 0) ovCol = (Color){240, 100, 100, 255};
@@ -1142,7 +1143,10 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
             // Drop the orange "currently selected" wash — there's no keyboard
             // cursor on mobile, only direct tap-to-act. The ARMOR_MAX_TILES
             // and weapon equipped slots all draw with a neutral parchment.
-            DrawIconTile(r, mv->name, overlay, ovCol, false,
+            char nameBuf[40];
+            if (upg > 0) snprintf(nameBuf, sizeof(nameBuf), "%s+%d", mv->name, upg);
+            else         snprintf(nameBuf, sizeof(nameBuf), "%s", mv->name);
+            DrawIconTile(r, nameBuf, overlay, ovCol, false,
                          DrawMoveIcon, moveId);
             (void)selected;
         }
@@ -1219,6 +1223,7 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
 
         const MoveDef *mv = GetMoveDef(inv->weapons[i].moveId);
         int dur = inv->weapons[i].durability;
+        int upg = inv->weapons[i].upgradeLevel;
         bool broken = (dur == 0);
         char overlay[16];
         if (broken) snprintf(overlay, sizeof(overlay), "BRK");
@@ -1235,7 +1240,10 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
         }
 
         // No "currently selected" wash on bag tiles — tap-to-equip is direct.
-        DrawIconTile(r, mv->name, overlay, ovCol, false,
+        char nameBuf[40];
+        if (upg > 0) snprintf(nameBuf, sizeof(nameBuf), "%s+%d", mv->name, upg);
+        else         snprintf(nameBuf, sizeof(nameBuf), "%s", mv->name);
+        DrawIconTile(r, nameBuf, overlay, ovCol, false,
                      DrawMoveIcon, inv->weapons[i].moveId);
 
         // Broken-weapon affordance: red wash + red X across the whole tile,

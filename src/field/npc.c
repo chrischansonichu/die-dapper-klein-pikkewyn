@@ -163,6 +163,14 @@ static void DrawPenguinElder(int px, int py, int sz, int dir) {
                       0xC101, true);
 }
 
+// Plain villager — same cream-belly silhouette as the elder but without the
+// mayoral top hat / cane. Used for the harbor crowd and any non-mayor penguin.
+static void DrawPenguinVillager(int px, int py, int sz, int dir) {
+    DrawPenguinPerson(px, py, sz, dir,
+                      (Color){0xEC, 0xDA, 0xAC, 255}, (Color){0, 0, 0, 0},
+                      0xC102, false);
+}
+
 static void DrawKeeper(int px, int py, int sz, int dir) {
     // Grass-bellied — the trader in the village.
     DrawPenguinPerson(px, py, sz, dir,
@@ -305,7 +313,8 @@ void NpcDraw(const Npc *n, Camera2D cam)
                 (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 90});
 
     switch (n->type) {
-        case NPC_PENGUIN_ELDER: DrawPenguinElder(px, py, sz, n->dir); break;
+        case NPC_PENGUIN_ELDER:    DrawPenguinElder(px, py, sz, n->dir);    break;
+        case NPC_PENGUIN_VILLAGER: DrawPenguinVillager(px, py, sz, n->dir); break;
         case NPC_SEAL:          DrawSeal(px, py, sz, n->dir);         break;
         case NPC_KEEPER:        DrawKeeper(px, py, sz, n->dir);       break;
         case NPC_FOOD_BANK:     DrawFoodBank(px, py, sz, n->dir);     break;

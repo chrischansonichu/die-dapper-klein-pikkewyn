@@ -123,7 +123,8 @@ int KeeperInteract(GameState *gs, DiscardUI *discard,
     // Weapon bag full: hand the swap decision to the player via DiscardUI
     // instead of silently dropping the reward.
     if (!gotWeapon && discard) {
-        DiscardUIOpen(discard, &gs->party, r.weaponMoveId, rwMv->defaultDurability);
+        DiscardUIOpen(discard, &gs->party, r.weaponMoveId,
+                      rwMv->defaultDurability, 0);
         if (!gotFish) {
             snprintf(scratch[2], NPC_DIALOGUE_LEN,
                      "(Your food bag is full too - some of the reward couldn't fit.)");

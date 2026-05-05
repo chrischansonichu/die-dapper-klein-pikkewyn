@@ -3,62 +3,65 @@
 
 #include <stdbool.h>
 #include "../battle/party.h"
-#include "discard_ui.h"
 
 //----------------------------------------------------------------------------------
-// BlacksmithUI — post-harbor forge modal. Two modes toggled via TAB:
-//   REPAIR:  pick a target weapon, sacrifice other weapons as fuel, spend
-//            2 Reputation flat to restore durability (capped at max).
-//   UPGRADE: pick a recipe from forge_recipes.h; consume its inputs + rep,
-//            add the result weapon at full durability. Bag-full spills into
-//            DiscardUI, same as the boss Harpoon drop.
+// BlacksmithUI — village forge modal. Three tabs:
+//   UPGRADE: pick a weapon (bag or equipped), spend scrap to bump its
+//            upgrade level by 1 (+10% damage, +10% max durability per bump).
+//            Cost: 2 × current effective level scrap. Capped at +3.
+//   MELT:    pick a weapon, destroy it for scrap equal to its current
+//            effective level (base + upgrade).
+//   REPAIR:  pick a weapon, pay 1 reputation per durability point restored.
+//            Restores to the weapon's max durability at its current upgrade
+//            level. Confirm screen shows the cost before charging.
+//
+// Scrap is held by the blacksmith on the player's behalf (GameState slot),
+// not in the player's inventory.
 //----------------------------------------------------------------------------------
 
-#define BLACKSMITH_MAX_ENTRIES 16
-#define BLACKSMITH_REPAIR_REP  2
-// Minimum durability contributed per sacrificed weapon. A broken weapon still
-// gives this much so the player always has something to throw in the forge.
-#define BLACKSMITH_MIN_FUEL    3
+#define BLACKSMITH_MAX_ENTRIES  40   // bag (16) + party_max(4) * 6 slots
 
-typedef enum BlacksmithMode {
-    SMITH_MODE_REPAIR = 0,
-    SMITH_MODE_UPGRADE,
-} BlacksmithMode;
+typedef enum BlacksmithTab {
+    BS_TAB_UPGRADE = 0,
+    BS_TAB_MELT,
+    BS_TAB_REPAIR,
+    BS_TAB_COUNT,
+} BlacksmithTab;
 
-typedef enum BlacksmithPhase {
-    SMITH_PHASE_PICK_TARGET = 0,
-    SMITH_PHASE_PICK_FUEL,
-    SMITH_PHASE_PICK_RECIPE,
-    SMITH_PHASE_CONFIRM,
-    SMITH_PHASE_RESULT,
-} BlacksmithPhase;
+typedef enum BSPhase {
+    BS_PHASE_PICK = 0,
+    BS_PHASE_CONFIRM,
+    BS_PHASE_RESULT,
+} BSPhase;
+
+// Source of a listed weapon — either the shared bag or a specific combatant
+// move slot. Equipped weapons can be operated on directly without forcing the
+// player to unequip first.
+typedef struct BSEntry {
+    int kind;       // 0 = bag, 1 = equipped
+    int bagIdx;     // valid when kind == 0
+    int memberIdx;  // valid when kind == 1 (party slot 0..count-1)
+    int slot;       // valid when kind == 1 (combatant move slot 0..CREATURE_MAX_MOVES-1)
+} BSEntry;
 
 typedef struct BlacksmithUI {
-    bool            active;
-    BlacksmithMode  mode;
-    BlacksmithPhase phase;
+    bool          active;
+    BlacksmithTab tab;
+    BSPhase       phase;
 
-    // Cursor over whichever list the current phase is showing.
-    int             cursor;
+    int           entryCount;
+    BSEntry       entries[BLACKSMITH_MAX_ENTRIES];
 
-    // Snapshot of inv->weapons at open / when re-entering PICK.
-    int             entryCount;
-    int             weaponIdx[BLACKSMITH_MAX_ENTRIES];
-    int             startDur [BLACKSMITH_MAX_ENTRIES];
-    int             maxDur   [BLACKSMITH_MAX_ENTRIES];
+    int           selectedEntry;  // index into entries[], valid in CONFIRM/RESULT
 
-    // REPAIR state
-    int             targetEntry;                       // index into weaponIdx[]
-    bool            fuel[BLACKSMITH_MAX_ENTRIES];      // per-entry sacrifice flag
-    int             pendingDurGain;                    // previewed durability restored
+    // Last-known indices used to refresh entries[] when the inventory mutates.
+    // The picker rebuilds on every update tick; CONFIRM / RESULT freeze the
+    // entry until the player exits the action.
 
-    // UPGRADE state
-    int             recipeIdx;
-    bool            recipeAffordable;
+    char          resultLine1[120];
+    char          resultLine2[120];
 
-    // RESULT narration (two lines)
-    char            resultLine1[96];
-    char            resultLine2[96];
+    float         scrollX;        // horizontal scroll for the weapon strip
 } BlacksmithUI;
 
 void BlacksmithUIInit(BlacksmithUI *b);
@@ -67,13 +70,10 @@ bool BlacksmithUIIsOpen(const BlacksmithUI *b);
 void BlacksmithUIOpen(BlacksmithUI *b, const Party *party);
 void BlacksmithUIClose(BlacksmithUI *b);
 
-// `discard` may be NULL — if a recipe result would overflow the bag and
-// DiscardUI isn't wired, the operation narrates a "nowhere to stow it" page
-// and reverts nothing (inputs are already consumed). Caller should pass it.
-void BlacksmithUIUpdate(BlacksmithUI *b, Party *party, int *villageReputation,
-                        DiscardUI *discard);
+void BlacksmithUIUpdate(BlacksmithUI *b, Party *party,
+                        int *villageReputation, int *blacksmithScrap);
 
 void BlacksmithUIDraw(const BlacksmithUI *b, const Party *party,
-                      int villageReputation);
+                      int villageReputation, int blacksmithScrap);
 
 #endif // BLACKSMITH_UI_H

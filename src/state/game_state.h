@@ -75,6 +75,17 @@ typedef struct GameState {
     // redirect — they'd land back on F1 anyway).
     int      rescueResumeFloor;
 
+    // Scrap stash held by the blacksmith — currency for weapon upgrades.
+    // Scrap is produced by melting weapons and never lives in the player's
+    // inventory; the blacksmith holds it on the player's behalf.
+    int      blacksmithScrap;
+
+    // Dev-only god-mode toggle. Transient (not saved). When true, party
+    // damage taken is zeroed at the battle's hp-decrement step. Gated behind
+    // DEV_BUILD at the UI layer; the runtime check is unconditional but the
+    // flag has no UI to flip in shipping builds.
+    bool     devGodMode;
+
     // Additional persistent state lands here in later phases:
     //   Roster    dismissedMembers;
     //   uint64_t  storyFlags;

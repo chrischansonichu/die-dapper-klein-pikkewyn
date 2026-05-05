@@ -118,6 +118,12 @@ typedef struct BattleContext {
     // Mirrored from GameState->difficulty when the battle starts. 0 = easy
     // (enemy attacks deal half damage), 1 = hard (full).
     int     difficulty;
+
+    // Dev-only: mirrored from GameState->devGodMode at battle start. When
+    // true, enemy hits against the party deal 0 damage. UI to flip the flag
+    // is gated behind DEV_BUILD; the runtime check itself is always live so
+    // the field's per-frame mirror stays simple.
+    bool    godMode;
 } BattleContext;
 
 // Compute the per-turn movement budget from a combatant's effective speed

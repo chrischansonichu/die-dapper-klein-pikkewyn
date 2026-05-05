@@ -14,7 +14,8 @@
 #define NPC_SPRITE_SIZE        16
 
 typedef enum NpcType {
-    NPC_PENGUIN_ELDER,
+    NPC_PENGUIN_ELDER,    // top-hat + cane silhouette — village mayor only
+    NPC_PENGUIN_VILLAGER, // plain penguin (no hat) — generic crowd / harbor NPCs
     NPC_SEAL,
     NPC_KEEPER,      // hub barter NPC — trades loot for leveled rewards
     NPC_FOOD_BANK,   // hub donation NPC — accepts consumables for reputation

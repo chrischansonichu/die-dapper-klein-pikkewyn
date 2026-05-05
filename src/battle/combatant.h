@@ -55,6 +55,10 @@ typedef struct Combatant {
     int   xpToNext;
     // Per-move durability: mirrors moveIds[]; -1 = unlimited, 0 = broken
     int   moveDurability[CREATURE_MAX_MOVES];
+    // Per-move blacksmith upgrade level: mirrors moveIds[]. 0 for innate or
+    // un-upgraded weapons. Effective weapon level for damage / scrap math is
+    // MoveDef.baseWeaponLevel + this value.
+    int   moveUpgradeLevel[CREATURE_MAX_MOVES];
     // Active status flags (bitmask of CombatantStatus).
     int   statusFlags;
     // Equipped armor (ArmorDef id). -1 = none. Armor's defBonus is added to
@@ -108,10 +112,14 @@ int  CombatantWeaponCount(const Combatant *c);
 // Equip a weapon into an empty move slot. Returns true if added.
 // If slots are full (CREATURE_MAX_MOVES reached) returns false and leaves c unchanged.
 bool CombatantEquipWeapon(Combatant *c, int moveId, int durability);
+bool CombatantEquipWeaponEx(Combatant *c, int moveId, int durability,
+                            int upgradeLevel);
 
 // Unequip the weapon at moveIds[slot]. Writes the displaced weapon into *out
 // (moveId + remaining durability). Returns false if slot isn't a weapon.
 bool CombatantUnequipWeapon(Combatant *c, int slot, int *outMoveId, int *outDurability);
+bool CombatantUnequipWeaponEx(Combatant *c, int slot, int *outMoveId,
+                              int *outDurability, int *outUpgradeLevel);
 
 // Equip armorId into the combatant's single armor slot. Writes the displaced
 // armor id to *outDisplaced (-1 if slot was empty). Always succeeds.

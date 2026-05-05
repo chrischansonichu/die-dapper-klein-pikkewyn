@@ -32,40 +32,52 @@ static void AddHarborF1Npcs(MapBuildContext *ctx)
 {
     if (*ctx->npcCount + 1 > ctx->npcMax) return;
 
-    // Friendly penguin elder on the dock
+    // Friendly dock-dwelling penguin (no hat — only the village mayor wears one).
     Npc *elder = &ctx->npcs[(*ctx->npcCount)++];
-    NpcInit(elder, 8, 13, 0, NPC_PENGUIN_ELDER);
+    NpcInit(elder, 8, 13, 0, NPC_PENGUIN_VILLAGER);
     NpcAddDialogue(elder, "Jan! The sailors have taken all the fish!");
     NpcAddDialogue(elder, "You must fight them off. Be brave, little one.");
 }
 
 // Happy-harbor crowd — replaces AddHarborF1Npcs + AddHarborF1Enemies once the
 // Captain has fallen. Sailors are gone; penguins reclaim the dock. No combat
-// spawns, no descent warp (BuildHarborFloor1 omits it in this branch).
+// spawns, no descent warp (BuildHarborFloor1 omits it in this branch). All
+// non-mayor penguins use NPC_PENGUIN_VILLAGER (no top hat).
 static void AddHarborF1PostVictoryNpcs(MapBuildContext *ctx)
 {
-    // Elder back on the dock with a celebratory line.
+    // Friendly greeter back on the dock with a celebratory line.
     if (*ctx->npcCount < ctx->npcMax) {
-        Npc *elder = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(elder, 8, 13, 0, NPC_PENGUIN_ELDER);
-        NpcAddDialogue(elder, "Jan! You did it - the sailors are gone!");
-        NpcAddDialogue(elder, "The harbor is ours again. Fish for everyone tonight.");
+        Npc *p = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(p, 8, 13, 0, NPC_PENGUIN_VILLAGER);
+        NpcAddDialogue(p, "Jan! You did it - the sailors are gone!");
+        NpcAddDialogue(p, "The harbor is ours again. Fish for everyone tonight.");
     }
 
     // A handful of cheerful penguins where the patrols used to stand.
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(p, 12, 13, 2, NPC_PENGUIN_ELDER);
+        NpcInit(p, 12, 13, 2, NPC_PENGUIN_VILLAGER);
         NpcAddDialogue(p, "Look at this dock! You can actually walk it end to end.");
     }
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(p, 15, 13, 1, NPC_PENGUIN_ELDER);
+        NpcInit(p, 15, 13, 1, NPC_PENGUIN_VILLAGER);
         NpcAddDialogue(p, "Captain's cache fed the whole village. Bless you, Jan.");
     }
-    if (*ctx->npcCount < ctx->npcMax) {
+
+    // If the player won the dungeon without freeing the seal, drop him on the
+    // dock as a recruitable NPC — the boss kept him locked up below until the
+    // Captain fell. Only spawn if he's not already in the party (the
+    // captive-rescue path would have set sealAlreadyRecruited).
+    if (!ctx->sealAlreadyRecruited && *ctx->npcCount < ctx->npcMax) {
+        Npc *seal = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(seal, 14, 15, 3, NPC_SEAL);
+        NpcAddDialogue(seal,
+            "Arf! Thanks for cracking the Captain - he kept me chained below.");
+        NpcAddDialogue(seal, "Mind if I tag along now? I've got scores to settle.");
+    } else if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(p, 14, 15, 3, NPC_PENGUIN_ELDER);
+        NpcInit(p, 14, 15, 3, NPC_PENGUIN_VILLAGER);
         NpcAddDialogue(p, "Arf! (A seal waddles past, belly full of sardines.)");
     }
 
@@ -73,22 +85,22 @@ static void AddHarborF1PostVictoryNpcs(MapBuildContext *ctx)
     // over the water tile reads as swimming without needing a new sprite.
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(p, 5, 6, 2, NPC_PENGUIN_ELDER);
+        NpcInit(p, 5, 6, 2, NPC_PENGUIN_VILLAGER);
         NpcAddDialogue(p, "Ahh! The water's perfect.");
     }
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(p, 10, 8, 0, NPC_PENGUIN_ELDER);
+        NpcInit(p, 10, 8, 0, NPC_PENGUIN_VILLAGER);
         NpcAddDialogue(p, "First swim since the sailors came. Feels like home.");
     }
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(p, 17, 10, 1, NPC_PENGUIN_ELDER);
+        NpcInit(p, 17, 10, 1, NPC_PENGUIN_VILLAGER);
         NpcAddDialogue(p, "Caught a sardine with my bare flippers! Ha!");
     }
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(p, 13, 11, 3, NPC_PENGUIN_ELDER);
+        NpcInit(p, 13, 11, 3, NPC_PENGUIN_VILLAGER);
         NpcAddDialogue(p, "Chk-chk-chk! (A chick dives under and comes back up giggling.)");
     }
 }

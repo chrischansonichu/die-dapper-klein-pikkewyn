@@ -144,7 +144,8 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
         return 1;
     }
 
-    if (n->type == NPC_PENGUIN_ELDER && AllEnemiesDefeated(ow)) {
+    if ((n->type == NPC_PENGUIN_ELDER || n->type == NPC_PENGUIN_VILLAGER)
+        && AllEnemiesDefeated(ow)) {
         snprintf(scratch[0], NPC_DIALOGUE_LEN,
                  "The dock is clear! You've done well, Jan.");
         snprintf(scratch[1], NPC_DIALOGUE_LEN,
@@ -598,6 +599,7 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
     ctx->preemptiveMoveSlot   = preemptiveMoveSlot;
     ctx->preemptiveTargetIdx  = -1; // filled in below once we know the cluster index
     ctx->difficulty           = ow->gs ? ow->gs->difficulty : 0;
+    ctx->godMode              = ow->gs ? ow->gs->devGodMode : false;
 
     // Aggro cluster into battle enemy slots. CombatantInit copies stats from
     // the creature def; tile position comes from the FieldEnemy.
@@ -785,7 +787,8 @@ static int RollEnemyDrops(FieldEnemy *e, Party *party, DiscardUI *discard,
                 // "Refused..."), and a pre-queued "your bag is full" page
                 // would still play *after* a successful swap, contradicting
                 // the player's actual choice.
-                DiscardUIOpen(discard, party, e->dropWeaponId, mv->defaultDurability);
+                DiscardUIOpen(discard, party, e->dropWeaponId,
+                              mv->defaultDurability, 0);
             }
         }
     }
@@ -1324,7 +1327,8 @@ void FieldUpdate(FieldState *ow, float dt)
     // below when an UPGRADE overflows the bag, which is handled next.
     if (ow->blacksmithUi.active) {
         BlacksmithUIUpdate(&ow->blacksmithUi, &ow->gs->party,
-                           &ow->gs->villageReputation, &ow->discardUi);
+                           &ow->gs->villageReputation,
+                           &ow->gs->blacksmithScrap);
         return;
     }
     // Bag-full discard prompt takes priority — the player's mid-transaction
@@ -1892,7 +1896,8 @@ void FieldDraw(const FieldState *ow)
 
     if (ow->blacksmithUi.active) {
         BlacksmithUIDraw(&ow->blacksmithUi, &ow->gs->party,
-                         ow->gs->villageReputation);
+                         ow->gs->villageReputation,
+                         ow->gs->blacksmithScrap);
     }
 
     if (ow->discardUi.active) {
@@ -1901,7 +1906,7 @@ void FieldDraw(const FieldState *ow)
 
 #ifdef DEV_BUILD
     if (ow->devWarpUi.active) {
-        DevWarpUIDraw(&ow->devWarpUi);
+        DevWarpUIDraw(&ow->devWarpUi, ow->gs);
     }
     if (ow->stylePreview.active) {
         StylePreviewDraw(&ow->stylePreview);

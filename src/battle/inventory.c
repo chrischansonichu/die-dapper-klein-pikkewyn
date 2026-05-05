@@ -38,9 +38,16 @@ void InventoryConsumeItem(Inventory *inv, int slotIdx)
 
 bool InventoryAddWeapon(Inventory *inv, int moveId, int durability)
 {
+    return InventoryAddWeaponEx(inv, moveId, durability, 0);
+}
+
+bool InventoryAddWeaponEx(Inventory *inv, int moveId, int durability,
+                          int upgradeLevel)
+{
     if (inv->weaponCount >= INVENTORY_MAX_WEAPONS) return false;
-    inv->weapons[inv->weaponCount].moveId     = moveId;
-    inv->weapons[inv->weaponCount].durability = durability;
+    inv->weapons[inv->weaponCount].moveId       = moveId;
+    inv->weapons[inv->weaponCount].durability   = durability;
+    inv->weapons[inv->weaponCount].upgradeLevel = upgradeLevel;
     inv->weaponCount++;
     return true;
 }

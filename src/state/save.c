@@ -19,7 +19,9 @@
 #define SAVE_MAGIC   0x504B5044u  // 'D','P','K','P' little-endian
 // Bumped 3 → 4 (2026-05-04): SaveData now carries the `difficulty` field.
 // Bumped 4 → 5 (2026-05-05): added `rescueResumeFloor` for easy-mode dungeon resume.
-#define SAVE_VERSION 5u
+// Bumped 5 → 6 (2026-05-05): WeaponStack gained `upgradeLevel`, Combatant
+//   gained `moveUpgradeLevel[]`, GameState gained `blacksmithScrap`.
+#define SAVE_VERSION 6u
 
 // Flat per-combatant record. creatureId lets us re-resolve the CreatureDef
 // pointer on load. We snapshot effective stats rather than re-deriving them
@@ -34,6 +36,7 @@ typedef struct CombatantSave {
     int32_t statusFlags;
     int32_t moveIds[CREATURE_MAX_MOVES];
     int32_t moveDurability[CREATURE_MAX_MOVES];
+    int32_t moveUpgradeLevel[CREATURE_MAX_MOVES];
     int32_t alive;
 } CombatantSave;
 
@@ -55,6 +58,7 @@ typedef struct SaveData {
     int32_t  keeperQuestIdx;
     int32_t  difficulty;
     int32_t  rescueResumeFloor;
+    int32_t  blacksmithScrap;
 
     int32_t       partyCount;
     CombatantSave members[PARTY_MAX];
@@ -82,8 +86,9 @@ static void PackCombatant(CombatantSave *out, const Combatant *c)
     out->statusFlags = c->statusFlags;
     out->alive       = c->alive ? 1 : 0;
     for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
-        out->moveIds[i]        = c->moveIds[i];
-        out->moveDurability[i] = c->moveDurability[i];
+        out->moveIds[i]          = c->moveIds[i];
+        out->moveDurability[i]   = c->moveDurability[i];
+        out->moveUpgradeLevel[i] = c->moveUpgradeLevel[i];
     }
 }
 
@@ -108,8 +113,9 @@ static void UnpackCombatant(Combatant *c, const CombatantSave *in)
     c->statusFlags = in->statusFlags;
     c->alive       = in->alive != 0;
     for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
-        c->moveIds[i]        = in->moveIds[i];
-        c->moveDurability[i] = in->moveDurability[i];
+        c->moveIds[i]          = in->moveIds[i];
+        c->moveDurability[i]   = in->moveDurability[i];
+        c->moveUpgradeLevel[i] = in->moveUpgradeLevel[i];
     }
 }
 
@@ -130,6 +136,7 @@ bool SaveGame(const GameState *gs, int playerTileX, int playerTileY, int playerD
     s.keeperQuestIdx    = gs->keeperQuestIdx;
     s.difficulty        = gs->difficulty;
     s.rescueResumeFloor = gs->rescueResumeFloor;
+    s.blacksmithScrap   = gs->blacksmithScrap;
 
     s.partyCount = gs->party.count;
     for (int i = 0; i < gs->party.count && i < PARTY_MAX; i++) {
@@ -182,6 +189,7 @@ bool LoadGame(GameState *gs, int *outPlayerX, int *outPlayerY, int *outPlayerDir
     gs->keeperQuestIdx    = s.keeperQuestIdx;
     gs->difficulty        = s.difficulty;
     gs->rescueResumeFloor = s.rescueResumeFloor;
+    gs->blacksmithScrap   = s.blacksmithScrap;
 
     PartyInit(&gs->party);
     int n = s.partyCount;
