@@ -760,11 +760,9 @@ static int RollEnemyDrops(FieldEnemy *e, Party *party, DiscardUI *discard,
 {
     Inventory *inv = &party->inventory;
     int pages = startPage;
-    // Per-enemy 50% gate — half the time an enemy yields nothing at all.
-    // Per-category percentages on the FieldEnemy still apply *inside* this
-    // gate so enemies remain individually weighted (rare-drop weapons stay
-    // rare), but the floor is now "two of every four enemies are silent."
-    if (GetRandomValue(1, 100) > 50) return pages;
+    // No per-enemy silence gate — the per-category percentages already gate
+    // each drop independently, and stacking a 50% gate on top made the early
+    // game feel barren (long stretches of zero-drop kills).
     if (e->dropItemId >= 0 && GetRandomValue(1, 100) <= e->dropItemPct
         && pages < DROP_MSG_PAGES) {
         const ItemDef *it = GetItemDef(e->dropItemId);
