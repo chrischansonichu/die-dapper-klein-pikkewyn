@@ -30,7 +30,7 @@ The ships progressively get harder (more sailors, more advanced weaponry, etc.)
 
 #### Technical:
 
-I'm going to attempt to program this in C, using the raylib library.
+This is a raylib-API game on top of SDL3, focusing on iOS and Android targets.
 
 -------
 
