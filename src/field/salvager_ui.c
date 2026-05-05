@@ -29,6 +29,7 @@ static struct SalLayoutShared {
     int       visibleCount;
     int       rowEntry[SALVAGER_MAX_ENTRIES];  // maps visible slot → entry idx
     Rectangle rowRect[SALVAGER_MAX_ENTRIES];
+    Rectangle stripRect;        // populated by Draw, read by Update next frame
     Rectangle confirmBtn;
     bool      confirmIsCommit;  // true when total>0 (label is "Hand Over")
 } sL;
@@ -104,30 +105,16 @@ void SalvagerUIUpdate(SalvagerUI *s, Party *party)
 {
     if (!s->active) return;
 
-    // Apply horizontal scroll on the bag strip BEFORE consuming the gesture
-    // so finger-drag actually moves the strip. The strip's rect is computed
-    // here to match the draw side; precise pixel match isn't required since
-    // TouchGestureStartedIn just needs the gesture to start somewhere in the
-    // strip's vertical band.
-    {
-        Rectangle p = SalPanelRect();
-        int x = (int)p.x + 20;
-        int contentW_s = (int)p.width - 40;
-        // Approximate strip y — the salvager's preamble height varies with
-        // wrap, but the strip always sits well below the title. Using a
-        // generous band keeps horizontal swipes in the lower half of the
-        // panel routed to scroll.
-        Rectangle stripBand = { (float)x, p.y + 120,
-                                (float)(contentW_s - 10), 100.0f };
-        if (TouchGestureStartedIn(stripBand)) {
-            float dx = TouchScrollDeltaX(stripBand);
-            s->scrollX -= dx;
-        }
+    // Horizontal scroll on the bag strip — uses the exact strip rect captured
+    // by Draw last frame so the touch band always tracks the rendered strip.
+    // No TouchConsumeGesture(): consume() clears the direction lock every
+    // frame, which kills TouchScrollDeltaX after frame 1 (the strip would
+    // jiggle a pixel and stop). FieldUpdate already gates field input behind
+    // `salvagerUi.active`, so leaking gestures isn't a concern here.
+    if (sL.stripRect.width > 0.0f && TouchGestureStartedIn(sL.stripRect)) {
+        float dx = TouchScrollDeltaX(sL.stripRect);
+        s->scrollX -= dx;
     }
-
-    // Claim any gesture that started inside the panel so a tap doesn't leak
-    // into the field walker after the dialog closes.
-    if (TouchGestureStartedIn(SalPanelRect())) TouchConsumeGesture();
 
     if (s->phase == SAL_PHASE_RESULT) {
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
@@ -291,6 +278,7 @@ void SalvagerUIDraw(const SalvagerUI *s, const Party *party)
         int stripY   = y;
         Rectangle viewport = { (float)stripX, (float)stripY,
                                (float)stripW, (float)tileSz };
+        sL.stripRect = viewport;
         int totalW   = s->entryCount * (tileSz + tileGap) - tileGap;
         float maxScroll = (float)(totalW > stripW ? totalW - stripW : 0);
         if (((SalvagerUI *)s)->scrollX < 0.0f) ((SalvagerUI *)s)->scrollX = 0.0f;

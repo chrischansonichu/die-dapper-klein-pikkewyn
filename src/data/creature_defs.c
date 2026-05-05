@@ -12,11 +12,11 @@ const CreatureDef gCreatureDefs[CREATURE_DEF_COUNT] = {
     // WaveCall was removed from move_defs as never useful; both creatures
     // now leave that special slot empty. IDs 5/6/7 (ColonyRoar / Harpoon /
     // CrashingTide) shifted down to 4/5/6 after the deletion.
-    { CREATURE_JAN,          "Jan",             CLASS_PENGUIN, 10, 3,  2,  6,  2,   {   0,    1,   -1,   -1,   -1,  -1}, 1.0f, false },
+    { CREATURE_JAN,          "Jan",             CLASS_PENGUIN, 10, 3,  2,  6,  3,   {   0,    1,   -1,   -1,   -1,  -1}, 1.0f, false },
     { CREATURE_DECKHAND,     "Deckhand",        CLASS_HUMAN,    8, 2,  2,  3,  1,   {   0,    1,   -1,   -1,   -1,  -1}, 1.0f, false },
     { CREATURE_BOSUN,        "Bosun",           CLASS_HUMAN,   20, 4,  4,  2,  1,   {   0,    1,    2,   -1,   -1,  -1}, 1.0f, false },
     { CREATURE_CAPTAIN,      "Captain",         CLASS_HUMAN,   45, 8,  6,  2,  1,   {   0,    2,    3,   -1,    4,  -1}, 1.0f, false },
-    { CREATURE_SEAL,         "Seal",            CLASS_PINNIPED,24, 7,  5,  3,  1,   {   0,    2,   -1,   -1,   -1,  -1}, 1.0f, false },
+    { CREATURE_SEAL,         "Seal",            CLASS_PINNIPED,24, 7,  5,  3,  2,   {   0,    2,   -1,   -1,   -1,  -1}, 1.0f, false },
     { CREATURE_POACHER,      "Abalone Poacher", CLASS_DIVER,   14, 3,  3,  4,  2,   {   0,    1,   -1,   -1,   -1,  -1}, 1.0f, false },
     // Boss variant. ShellThrow + Harpoon (move id 5) in item-attack slots,
     // ColonyRoar (4) + CrashingTide (6) in specials. canEnrage=true unlocks
@@ -29,7 +29,7 @@ const CreatureDef gCreatureDefs[CREATURE_DEF_COUNT] = {
 static const ClassGrowth gClassGrowth[CLASS_COUNT] = {
     [CLASS_PENGUIN]  = { .hpPerLevel = 3, .atkPerLevel = 1, .defPerLevel = 1, .spdPerLevel = 2, .dexPerLevel = 2 },
     [CLASS_HUMAN]    = { .hpPerLevel = 3, .atkPerLevel = 2, .defPerLevel = 1, .spdPerLevel = 1, .dexPerLevel = 1 },
-    [CLASS_PINNIPED] = { .hpPerLevel = 4, .atkPerLevel = 2, .defPerLevel = 1, .spdPerLevel = 1, .dexPerLevel = 1 },
+    [CLASS_PINNIPED] = { .hpPerLevel = 4, .atkPerLevel = 2, .defPerLevel = 1, .spdPerLevel = 1, .dexPerLevel = 2 },
     [CLASS_DIVER]    = { .hpPerLevel = 3, .atkPerLevel = 2, .defPerLevel = 1, .spdPerLevel = 1, .dexPerLevel = 2 },
 };
 

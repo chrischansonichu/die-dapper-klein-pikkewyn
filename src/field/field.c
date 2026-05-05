@@ -780,11 +780,11 @@ static int RollEnemyDrops(FieldEnemy *e, Party *party, DiscardUI *discard,
                          "Picked up a %s!", mv->name);
                 pages++;
             } else if (discard) {
-                // Bag full — narrate the drop and open the discard modal.
-                snprintf(gDropMsg[pages], DROP_MSG_LEN,
-                         "A %s rolls across the deck - but your bag is full...",
-                         mv->name);
-                pages++;
+                // Bag full — open the discard modal. No queued narration:
+                // the modal narrates its own outcome ("Tossed X. Took Y." or
+                // "Refused..."), and a pre-queued "your bag is full" page
+                // would still play *after* a successful swap, contradicting
+                // the player's actual choice.
                 DiscardUIOpen(discard, party, e->dropWeaponId, mv->defaultDurability);
             }
         }
