@@ -68,6 +68,13 @@ typedef struct GameState {
     // hard (full enemy damage). Persisted in the save; toggled from screen_options.
     int      difficulty;
 
+    // Easy-mode dungeon resume. When the player is defeated on a dungeon floor
+    // in easy mode, this stores the floor they died on. The next hub→harbor
+    // warp redirects to that floor instead of F1, then clears this back to 0.
+    // Hard mode never sets this; F1 deaths set it to 1 (which is a no-op
+    // redirect — they'd land back on F1 anyway).
+    int      rescueResumeFloor;
+
     // Additional persistent state lands here in later phases:
     //   Roster    dismissedMembers;
     //   uint64_t  storyFlags;

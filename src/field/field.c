@@ -168,17 +168,40 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
 static void ApplyWarp(FieldState *ow, int warpIdx)
 {
     const FieldWarp *w = &ow->warps[warpIdx];
+    int     targetMapId    = w->targetMapId;
+    int     targetFloor    = w->targetFloor;
+    int     targetSpawnX   = w->targetSpawnX;
+    int     targetSpawnY   = w->targetSpawnY;
+    int     targetSpawnDir = w->targetSpawnDir;
+
+    // Easy-mode dungeon resume — the hub→harbor entry warp leads to F1, but if
+    // the player died deeper in the dungeon (and we're on easy mode), drop
+    // them on that floor instead. The descent warps already use (2,2,2) for
+    // procedural floors and F9, so reuse that. The slot is consumed after one
+    // redirect; subsequent runs start fresh at F1.
+    if (ow->gs->rescueResumeFloor > 1
+        && targetMapId == MAP_HARBOR_F1
+        && targetFloor == 1) {
+        int resumeFloor = ow->gs->rescueResumeFloor;
+        targetMapId    = (resumeFloor >= 9) ? MAP_HARBOR_F9 : MAP_HARBOR_PROC;
+        targetFloor    = resumeFloor;
+        targetSpawnX   = 2;
+        targetSpawnY   = 2;
+        targetSpawnDir = 2;
+        ow->gs->rescueResumeFloor = 0;
+    }
+
     ow->gs->hasPendingMap   = true;
-    ow->gs->pendingMapId    = w->targetMapId;
-    ow->gs->pendingMapSeed  = (w->targetFloor > 0)
+    ow->gs->pendingMapId    = targetMapId;
+    ow->gs->pendingMapSeed  = (targetFloor > 0)
                                 ? (ow->gs->currentMapSeed
                                      ? ow->gs->currentMapSeed
                                      : (unsigned)GetRandomValue(1, 0x7FFFFFFF))
                                 : 0;
-    ow->gs->pendingFloor    = w->targetFloor;
-    ow->gs->pendingSpawnX   = w->targetSpawnX;
-    ow->gs->pendingSpawnY   = w->targetSpawnY;
-    ow->gs->pendingSpawnDir = w->targetSpawnDir;
+    ow->gs->pendingFloor    = targetFloor;
+    ow->gs->pendingSpawnX   = targetSpawnX;
+    ow->gs->pendingSpawnY   = targetSpawnY;
+    ow->gs->pendingSpawnDir = targetSpawnDir;
 }
 
 // If the tile directly in front of the player is flagged as a warp, open the
@@ -792,12 +815,11 @@ static int RollEnemyDrops(FieldEnemy *e, Party *party, DiscardUI *discard,
 // some of your gear took a beating. For each consumable stack of 2+, loses
 // half (rounded up); singletons are a 50/50 coin flip so the lone Krill
 // Snack you were saving doesn't always evaporate. Unequipped weapons in the
-// bag take a 25% durability hit (rounded up, min 1); they're only removed
-// if that pushes durability to 0. Equipped weapons live on the combatants,
-// not in inv->weapons, so they're untouched by this function — losing your
-// fighting kit in addition to bag loot would make the defeat loop punishing
-// instead of inconvenient. *outWeapons receives the count of weapons that
-// were damaged (not just removed).
+// bag take a 25% durability hit (rounded up, min 1) but never get pulled out
+// of the bag — a weapon that drops to dur 0 enters the broken state and can
+// be salvaged later. Equipped weapons live on the combatants, not in
+// inv->weapons, so they're untouched by this function. *outWeapons receives
+// the count of weapons that were damaged.
 static int DropInventoryOnRescue(Inventory *inv, int *outItems, int *outWeapons)
 {
     int itemsLost = 0;
@@ -820,19 +842,15 @@ static int DropInventoryOnRescue(Inventory *inv, int *outItems, int *outWeapons)
         }
     }
     int weaponsDamaged = 0;
-    for (int i = 0; i < inv->weaponCount; ) {
+    for (int i = 0; i < inv->weaponCount; i++) {
         int dur = inv->weapons[i].durability;
+        if (dur <= 0) continue;  // already broken — don't keep dinging it
         int loss = (dur * 25 + 99) / 100; // ceil(dur * 0.25)
         if (loss < 1) loss = 1;
-        inv->weapons[i].durability = dur - loss;
+        int newDur = dur - loss;
+        if (newDur < 0) newDur = 0;
+        inv->weapons[i].durability = newDur;
         weaponsDamaged++;
-        if (inv->weapons[i].durability <= 0) {
-            for (int j = i; j < inv->weaponCount - 1; j++)
-                inv->weapons[j] = inv->weapons[j + 1];
-            inv->weaponCount--;
-        } else {
-            i++;
-        }
     }
     if (outItems)   *outItems   = itemsLost;
     if (outWeapons) *outWeapons = weaponsDamaged;
@@ -942,6 +960,15 @@ static void ResolveBattleEnd(FieldState *ow, int result)
         // (rescueDialoguePending + rescueLossMsg) because this FieldState is
         // about to be torn down by ApplyPendingMapTransition — calling
         // DialogueBegin on it here would be wiped on the next frame.
+        //
+        // Easy-mode kindness: remember the dungeon floor we died on so the
+        // next hub→harbor warp can drop the player there instead of F1.
+        // Hard mode and non-dungeon defeats clear the slot.
+        if (ow->gs->difficulty == 0 && ow->gs->currentFloor > 0) {
+            ow->gs->rescueResumeFloor = ow->gs->currentFloor;
+        } else {
+            ow->gs->rescueResumeFloor = 0;
+        }
         int itemsLost = 0, weaponsDamaged = 0;
         int totalLost = DropInventoryOnRescue(&ow->gs->party.inventory,
                                               &itemsLost, &weaponsDamaged);

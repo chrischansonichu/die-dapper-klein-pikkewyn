@@ -18,7 +18,8 @@
 #endif
 #define SAVE_MAGIC   0x504B5044u  // 'D','P','K','P' little-endian
 // Bumped 3 → 4 (2026-05-04): SaveData now carries the `difficulty` field.
-#define SAVE_VERSION 4u
+// Bumped 4 → 5 (2026-05-05): added `rescueResumeFloor` for easy-mode dungeon resume.
+#define SAVE_VERSION 5u
 
 // Flat per-combatant record. creatureId lets us re-resolve the CreatureDef
 // pointer on load. We snapshot effective stats rather than re-deriving them
@@ -53,6 +54,7 @@ typedef struct SaveData {
     int32_t  villageReputation;
     int32_t  keeperQuestIdx;
     int32_t  difficulty;
+    int32_t  rescueResumeFloor;
 
     int32_t       partyCount;
     CombatantSave members[PARTY_MAX];
@@ -127,6 +129,7 @@ bool SaveGame(const GameState *gs, int playerTileX, int playerTileY, int playerD
     s.villageReputation = gs->villageReputation;
     s.keeperQuestIdx    = gs->keeperQuestIdx;
     s.difficulty        = gs->difficulty;
+    s.rescueResumeFloor = gs->rescueResumeFloor;
 
     s.partyCount = gs->party.count;
     for (int i = 0; i < gs->party.count && i < PARTY_MAX; i++) {
@@ -178,6 +181,7 @@ bool LoadGame(GameState *gs, int *outPlayerX, int *outPlayerY, int *outPlayerDir
     gs->villageReputation = s.villageReputation;
     gs->keeperQuestIdx    = s.keeperQuestIdx;
     gs->difficulty        = s.difficulty;
+    gs->rescueResumeFloor = s.rescueResumeFloor;
 
     PartyInit(&gs->party);
     int n = s.partyCount;
