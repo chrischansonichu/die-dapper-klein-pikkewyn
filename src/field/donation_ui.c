@@ -20,16 +20,19 @@
 // to the player.
 // ---------------------------------------------------------------------------
 
-#define ROW_H        46
-#define ROW_GAP      8
+#define ROW_H        44
+#define ROW_GAP      6
 #define BTN_SIZE     44   // ≥44 honours Apple HIG touch-target minimum
-#define COUNT_W      48
+#define COUNT_W      56
 #define CTA_H        56
 
+// Tighter margin than the inventory / salvager modals — the food bank
+// stacks 4+ rows vertically and needs the extra height to fit them all
+// alongside the title, quote, totals line, and bottom CTA without overlap.
 static inline Rectangle DonPanelRect(void)
 {
     int W = GetScreenWidth(), H = GetScreenHeight();
-    int margin = SCREEN_PORTRAIT ? 20 : 60;
+    int margin = 30;
     return (Rectangle){ (float)margin, (float)margin,
                         (float)(W - 2 * margin), (float)(H - 2 * margin) };
 }
@@ -39,7 +42,7 @@ static inline int DonContentW(void)    { return (int)DonPanelRect().width - 40; 
 static inline int DonRowTopY(int i)
 {
     Rectangle p = DonPanelRect();
-    int firstY = (int)p.y + 90;     // below header + quotes
+    int firstY = (int)p.y + 78;     // below header + quote
     return firstY + i * (ROW_H + ROW_GAP);
 }
 
@@ -237,18 +240,18 @@ void DonationUIDraw(const DonationUI *d, const Party *party, int rep)
     DrawRectangle(0, 0, W, H, gPH.dimmer);
     PHDrawPanel(p, 0x401);
 
-    int titleF = 22;
-    int repF   = 18;
+    int titleF = 26;
+    int repF   = 20;
     int bodyF  = 18;
-    int quoteF = 16;
-    int rowNameF = 18;
-    int countF   = 22;
-    int ctaF     = 22;
+    int quoteF = 18;
+    int rowNameF = 20;
+    int countF   = 26;
+    int ctaF     = 24;
 
     DrawText("FOOD BANK", contentX, (int)p.y + 14, titleF, gPH.ink);
     const char *repLabel = TextFormat("Rep: %d", rep);
     int repW = MeasureText(repLabel, repF);
-    DrawText(repLabel, (int)p.x + (int)p.width - repW - 50, (int)p.y + 18, repF, gPH.ink);
+    DrawText(repLabel, (int)p.x + (int)p.width - repW - 20, (int)p.y + 18, repF, gPH.ink);
 
     if (d->phase == DON_PHASE_RESULT) {
         int y = (int)p.y + 60;
@@ -264,8 +267,9 @@ void DonationUIDraw(const DonationUI *d, const Party *party, int rep)
         return;
     }
 
-    // Pick-phase header copy.
-    int y = (int)p.y + 50;
+    // Pick-phase header copy. y is sized to land just under the title and to
+    // line up with the first row at p.y + 78.
+    int y = (int)p.y + 52;
     DrawTextWrapped("\"The food bank feeds the young and the displaced.\"",
                     contentX, &y, contentW, quoteF, 3, gPH.inkLight);
 
@@ -296,10 +300,11 @@ void DonationUIDraw(const DonationUI *d, const Party *party, int rep)
 
         char have[32];
         snprintf(have, sizeof(have), "have %d", d->maxCount[i]);
-        int hw = MeasureText(have, 14);
+        int haveF = 16;
+        int hw = MeasureText(have, haveF);
         // Sit "have N" to the right of the name, well clear of the −/count/+ group.
         DrawText(have, (int)DonMinusRect(i).x - hw - 12,
-                 rowY + (ROW_H - 14) / 2, 14, gPH.inkLight);
+                 rowY + (ROW_H - haveF) / 2, haveF, gPH.inkLight);
 
         bool canDec = d->donate[i] > 0;
         bool canInc = d->donate[i] < d->maxCount[i];
