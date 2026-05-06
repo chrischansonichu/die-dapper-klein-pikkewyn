@@ -21,7 +21,11 @@
 // Bumped 4 → 5 (2026-05-05): added `rescueResumeFloor` for easy-mode dungeon resume.
 // Bumped 5 → 6 (2026-05-05): WeaponStack gained `upgradeLevel`, Combatant
 //   gained `moveUpgradeLevel[]`, GameState gained `blacksmithScrap`.
-#define SAVE_VERSION 6u
+// Bumped 6 → 7 (2026-05-06): GameState gained `storyFlags` (lit lanterns, read
+//   logbooks, opened alcove chests). Dungeon 1 was reorganised from 9 floors
+//   to 7 (F6 = docks staging, F7 = captain's ship); old map ids in flight no
+//   longer match anything in MapId, so v6 saves are rejected as stale.
+#define SAVE_VERSION 7u
 
 // Flat per-combatant record. creatureId lets us re-resolve the CreatureDef
 // pointer on load. We snapshot effective stats rather than re-deriving them
@@ -59,6 +63,7 @@ typedef struct SaveData {
     int32_t  difficulty;
     int32_t  rescueResumeFloor;
     int32_t  blacksmithScrap;
+    uint64_t storyFlags;
 
     int32_t       partyCount;
     CombatantSave members[PARTY_MAX];
@@ -137,6 +142,7 @@ bool SaveGame(const GameState *gs, int playerTileX, int playerTileY, int playerD
     s.difficulty        = gs->difficulty;
     s.rescueResumeFloor = gs->rescueResumeFloor;
     s.blacksmithScrap   = gs->blacksmithScrap;
+    s.storyFlags        = gs->storyFlags;
 
     s.partyCount = gs->party.count;
     for (int i = 0; i < gs->party.count && i < PARTY_MAX; i++) {
@@ -190,6 +196,7 @@ bool LoadGame(GameState *gs, int *outPlayerX, int *outPlayerY, int *outPlayerDir
     gs->difficulty        = s.difficulty;
     gs->rescueResumeFloor = s.rescueResumeFloor;
     gs->blacksmithScrap   = s.blacksmithScrap;
+    gs->storyFlags        = s.storyFlags;
 
     PartyInit(&gs->party);
     int n = s.partyCount;

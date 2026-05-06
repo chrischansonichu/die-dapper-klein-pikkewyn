@@ -3,6 +3,8 @@
 #include "../data/creature_defs.h"
 #include "../data/move_defs.h"
 #include "../data/armor_defs.h"
+#include "../data/lore_text.h"
+#include "../state/game_state.h"
 
 // Append a warp and mark its tile as both WARP and SOLID. Warps are now
 // door-like — the player can't walk through them; they have to face the
@@ -390,48 +392,156 @@ void BuildHarborFloor1(MapBuildContext *ctx)
     *ctx->spawnDir   = 3; // facing up, toward the dock
 }
 
-// Harbor floor 9 — the boss floor. A stone chamber with the Captain standing
-// center-back, facing the player's entrance. The return warp is present but
-// gated behind `captainDefeated` — TryInteractWarp narrates a blocker line
-// until the boss is down. The Captain drops the Harpoon (100%) and the
-// Captain's Coat (100%) via EnemySetDrops + EnemySetArmorDrop.
-void BuildHarborFloor9(MapBuildContext *ctx)
+// Harbor floor 6 — the docks staging beat. Wooden dock to the north, shallow
+// water to the south leading to the ship's hull, with three lanterns the
+// player must light to lower the gangplank into F7. No combat. The gangplank
+// warp tile is built solid; field.c clears the SOLID flag once all three
+// lanterns are lit (storyFlags STORY_FLAG_LANTERN_*).
+void BuildHarborFloor6(MapBuildContext *ctx)
 {
     TileMap *m = ctx->map;
-    TileMapInit(m, 16, 14, "harbor-f9");
+    TileMapInit(m, 22, 18, "harbor-f6");
+
+    // Background fill: shallow water everywhere, then we'll paint dock and
+    // ship over the top. Edges stay as deep ocean so the harbour reads as
+    // bounded water rather than an infinite ocean.
+    for (int y = 0; y < m->height; y++) {
+        for (int x = 0; x < m->width; x++) {
+            bool edge = (x == 0 || y == 0 ||
+                         x == m->width - 1 || y == m->height - 1);
+            TileMapSetTile(m, x, y, edge ? TILE_OCEAN : TILE_SHALLOW);
+        }
+    }
+
+    // North dock — a wide wooden platform across the top of the map. The
+    // descent stairs from F5 land at the centre-north sand strip; the dock
+    // proper begins one row below it.
+    for (int y = 1; y <= 2; y++)
+        for (int x = 1; x < m->width - 1; x++)
+            TileMapSetTile(m, x, y, TILE_SAND);
+    for (int y = 3; y <= 6; y++)
+        for (int x = 1; x < m->width - 1; x++)
+            TileMapSetTile(m, x, y, TILE_DOCK);
+
+    // A few crates (rocks visually) tucked at the dock corners for clutter.
+    TileMapSetTile(m, 2, 3, TILE_ROCK);
+    TileMapSetTile(m, 19, 5, TILE_ROCK);
+
+    // Ship hull along the south edge — a band of dock tiles two rows tall
+    // that reads as the side of a moored vessel. The gangplank is a single
+    // tile of dock connecting the hull to the central swim lane.
+    for (int y = m->height - 3; y <= m->height - 2; y++)
+        for (int x = 4; x <= m->width - 5; x++)
+            TileMapSetTile(m, x, y, TILE_DOCK);
+
+    // Gangplank — a single dock tile the player walks onto from the water.
+    // Solid by default until the lanterns are all lit; field.c flips the
+    // flag once the storyFlags bits are set.
+    int gangX = m->width / 2;
+    int gangY = m->height - 4;
+    TileMapSetTile(m, gangX, gangY, TILE_DOCK);
+
+    // Player spawns at the descent landing, facing south toward the water.
+    *ctx->spawnTileX = m->width / 2;
+    *ctx->spawnTileY = 1;
+    *ctx->spawnDir   = 0;
+
+    // Gangplank warp → F7 boss arena. Built solid; if the player has already
+    // lit all three lanterns on a previous visit, clear the SOLID flag now so
+    // the warp is immediately usable on re-entry.
+    AddWarp(ctx, gangX, gangY, MAP_HARBOR_F7, 7, 8, 10, 3);
+    bool allLit = (ctx->storyFlags & STORY_FLAG_LANTERN_ALL)
+                       == STORY_FLAG_LANTERN_ALL;
+    if (allLit) {
+        TileMapClearFlag(m, gangX, gangY, TILE_FLAG_SOLID);
+    }
+
+    // Three lanterns spaced across the dock — west, middle, east. dataId
+    // matches LanternFlagFor() in field.c.
+    static const int kLanternX[3] = { 5, 11, 16 };
+    for (int i = 0; i < 3 && *ctx->objectCount < ctx->objectMax; i++) {
+        FieldObject *lan = &ctx->objects[(*ctx->objectCount)++];
+        FieldObjectInit(lan, kLanternX[i], 4, OBJ_LANTERN, i);
+        // Restore lit state from save: builders are pure data — flag bits
+        // come from gs->storyFlags via the build context.
+        uint64_t bit = (i == 0) ? STORY_FLAG_LANTERN_DOCK_W
+                     : (i == 1) ? STORY_FLAG_LANTERN_DOCK_M
+                                : STORY_FLAG_LANTERN_DOCK_E;
+        if (ctx->storyFlags & bit) lan->consumed = true;
+    }
+
+    // Captain's Log p.3 sits between the middle and east lanterns — first
+    // hint at the boss's motivation. Stays readable; consumed flag tracks
+    // "already read" for cosmetic purposes only.
+    if (*ctx->objectCount < ctx->objectMax) {
+        FieldObject *log = &ctx->objects[(*ctx->objectCount)++];
+        FieldObjectInit(log, 13, 5, OBJ_LOGBOOK, LORE_F6_LOG3);
+        if (ctx->storyFlags & STORY_FLAG_LOGBOOK_F6_LOG3) log->consumed = true;
+    }
+
+    // The salvager sets up on the docks, the last "town" the player meets
+    // before crossing the gangplank. He used to live on F4 (mid-procedural),
+    // moved to F6 (2026-05-06) so the trade stop sits at the staging beat
+    // — players have a clear last chance to convert broken weapons to fish
+    // before the boss fight.
+    if (*ctx->npcCount < ctx->npcMax) {
+        Npc *salvager = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(salvager, 8, 3, 0, NPC_SALVAGER);
+    }
+}
+
+// Harbor floor 7 — the captain's ship deck. Replaces the old F9 stone chamber.
+// The deck is dock-tiled, framed by rock railings, with a single mast pillar
+// off-centre to give Boarding Charge geometry to play against. The Captain
+// stands aft (north); the player spawns at the gangplank landing (south).
+void BuildHarborFloor7(MapBuildContext *ctx)
+{
+    TileMap *m = ctx->map;
+    TileMapInit(m, 16, 12, "harbor-f7");
 
     for (int y = 0; y < m->height; y++) {
         for (int x = 0; x < m->width; x++) {
             bool edge = (x == 0 || y == 0 ||
                          x == m->width - 1 || y == m->height - 1);
-            TileMapSetTile(m, x, y, edge ? TILE_ROCK : TILE_SAND);
+            TileMapSetTile(m, x, y, edge ? TILE_ROCK : TILE_DOCK);
         }
     }
 
-    // A sandstone slab in the middle to break up the empty room.
-    for (int y = 6; y <= 7; y++)
-        for (int x = 7; x <= 8; x++)
-            TileMapSetTile(m, x, y, TILE_ROCK);
+    // Mast — a single solid pillar offset from centre. Gives the player
+    // something to break line-of-sight against when the Captain dashes.
+    TileMapSetTile(m, 6, 6, TILE_ROCK);
+
+    // Stack of cargo on the starboard side — a 1x2 rock strip that funnels
+    // the player toward the centre lane.
+    TileMapSetTile(m, 11, 5, TILE_ROCK);
+    TileMapSetTile(m, 11, 6, TILE_ROCK);
 
     // Return portal — center-bottom wall tile warps back to the hub's south
-    // gate. Sits on the outer wall row so the player walks up and interacts
-    // rather than stepping onto it. Field.c gates this warp behind
-    // gs->captainDefeated.
-    TileMapSetTile(m, m->width / 2, m->height - 1, TILE_SAND);
+    // gate. Field.c gates this warp behind gs->captainDefeated.
+    TileMapSetTile(m, m->width / 2, m->height - 1, TILE_DOCK);
     AddWarp(ctx, m->width / 2, m->height - 1, MAP_OVERWORLD_HUB, 0, 11, 12, 3);
 
-    // The Captain — level-14 boss, stands center-back facing the entrance.
-    // Color is used for the "!" alert bubble and the field fallback; the
-    // actual field sprite comes from enemy_sprites via creatureId.
+    // The Captain — level-11 boss, stands center-aft facing the gangplank.
+    // Lowered from 14 to 11 (2026-05-06) so the Cannon Volley + summon combo
+    // doesn't immediately one-shot the party on phase-2 trigger.
     if (*ctx->enemyCount < ctx->enemyMax) {
         FieldEnemy *cap = &ctx->enemies[(*ctx->enemyCount)++];
-        EnemyInit(cap, 8, 4, 0, BEHAVIOR_STAND, CREATURE_CAPTAIN_BOSS, 14, 4,
+        EnemyInit(cap, 8, 3, 0, BEHAVIOR_STAND, CREATURE_CAPTAIN_BOSS, 11, 4,
                   (Color){120, 30, 30, 255});
         EnemySetDrops(cap, -1, 0, /*Harpoon*/ 5, 100);
         EnemySetArmorDrop(cap, ARMOR_CAPTAINS_COAT, 100);
     }
 
+    // Captain's Log final page — sits forward of the player's spawn so the
+    // player walks past it on their way to the captain. Optional read; the
+    // logbook's consumed flag persists in storyFlags.
+    if (*ctx->objectCount < ctx->objectMax && !ctx->captainDefeated) {
+        FieldObject *log = &ctx->objects[(*ctx->objectCount)++];
+        FieldObjectInit(log, 4, 9, OBJ_LOGBOOK, LORE_F7_LOG4);
+        if (ctx->storyFlags & STORY_FLAG_LOGBOOK_F7_LOG4) log->consumed = true;
+    }
+
     *ctx->spawnTileX = 8;
-    *ctx->spawnTileY = 12;
+    *ctx->spawnTileY = 10;
     *ctx->spawnDir   = 3;
 }

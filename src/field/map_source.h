@@ -2,9 +2,11 @@
 #define MAP_SOURCE_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "tilemap.h"
 #include "npc.h"
 #include "enemy.h"
+#include "field_object.h"
 
 //----------------------------------------------------------------------------------
 // MapSource — dispatch layer that produces map data (tilemap, NPCs, enemies,
@@ -16,8 +18,9 @@
 typedef enum MapId {
     MAP_OVERWORLD_HUB = 0,   // town / hub — shops, recruiter, housing (no enemies)
     MAP_HARBOR_F1,           // dungeon floor 1: dock + shallow water sailors (authored)
-    MAP_HARBOR_PROC,         // dungeon floors 2–8: procedural room-stitched floor
-    MAP_HARBOR_F9,           // dungeon floor 9: authored boss floor (placeholder)
+    MAP_HARBOR_PROC,         // dungeon floors 2–5: procedural room-stitched floor
+    MAP_HARBOR_F6,           // dungeon floor 6: docks + swim staging (authored, no combat)
+    MAP_HARBOR_F7,           // dungeon floor 7: captain's ship — boss arena (authored)
     MAP_COUNT
 } MapId;
 
@@ -50,6 +53,17 @@ typedef struct MapBuildContext {
     FieldWarp  *warps;
     int        *warpCount;
     int         warpMax;
+
+    FieldObject *objects;
+    int         *objectCount;
+    int          objectMax;
+
+    // Persistent story flags (uint64_t mirrored from gs->storyFlags). Builders
+    // read this to restore one-shot object state — e.g., a chest stays
+    // consumed after pickup, a lantern stays lit, a logbook stays readable.
+    // Builders never write to this directly; updates flow through the
+    // interaction handler in field.c, which mutates gs->storyFlags.
+    uint64_t    storyFlags;
 
     int        *spawnTileX;
     int        *spawnTileY;

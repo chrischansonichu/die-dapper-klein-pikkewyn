@@ -7,6 +7,7 @@
 #include "player.h"
 #include "npc.h"
 #include "enemy.h"
+#include "field_object.h"
 #include "map_source.h"
 #include "../systems/camera_system.h"
 #include "../systems/dialogue.h"
@@ -34,6 +35,7 @@ struct GameState;
 #define FIELD_MAX_NPCS    16
 #define FIELD_MAX_ENEMIES 16
 #define FIELD_MAX_WARPS   8
+#define FIELD_MAX_OBJECTS 8
 
 typedef enum FieldMode {
     FIELD_FREE = 0,
@@ -53,6 +55,9 @@ typedef struct FieldState {
 
     FieldWarp     warps[FIELD_MAX_WARPS];
     int           warpCount;
+
+    FieldObject   objects[FIELD_MAX_OBJECTS];
+    int           objectCount;
 
     // Borrowed pointer to the persistent game state (party, inventory, ...).
     struct GameState *gs;

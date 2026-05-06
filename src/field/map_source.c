@@ -2,7 +2,8 @@
 #include "map_dungeon_proc.h"
 
 void BuildHarborFloor1(MapBuildContext *ctx);
-void BuildHarborFloor9(MapBuildContext *ctx);
+void BuildHarborFloor6(MapBuildContext *ctx);
+void BuildHarborFloor7(MapBuildContext *ctx);
 void BuildOverworldHub(MapBuildContext *ctx);
 
 void MapBuild(MapId id, int floor, MapBuildContext *ctx, unsigned seed)
@@ -17,8 +18,11 @@ void MapBuild(MapId id, int floor, MapBuildContext *ctx, unsigned seed)
         case MAP_HARBOR_PROC:
             BuildHarborProcFloor(ctx, floor, seed);
             break;
-        case MAP_HARBOR_F9:
-            BuildHarborFloor9(ctx);
+        case MAP_HARBOR_F6:
+            BuildHarborFloor6(ctx);
+            break;
+        case MAP_HARBOR_F7:
+            BuildHarborFloor7(ctx);
             break;
         default:
             BuildOverworldHub(ctx);

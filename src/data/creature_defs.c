@@ -15,13 +15,16 @@ const CreatureDef gCreatureDefs[CREATURE_DEF_COUNT] = {
     { CREATURE_JAN,          "Jan",             CLASS_PENGUIN, 10, 3,  2,  6,  3,   {   0,    1,   -1,   -1,   -1,  -1}, 1.0f, false },
     { CREATURE_DECKHAND,     "Deckhand",        CLASS_HUMAN,    8, 2,  2,  3,  1,   {   0,    1,   -1,   -1,   -1,  -1}, 1.0f, false },
     { CREATURE_BOSUN,        "Bosun",           CLASS_HUMAN,   20, 4,  4,  2,  1,   {   0,    1,    2,   -1,   -1,  -1}, 1.0f, false },
-    { CREATURE_CAPTAIN,      "Captain",         CLASS_HUMAN,   45, 8,  6,  2,  1,   {   0,    2,    3,   -1,    4,  -1}, 1.0f, false },
+    { CREATURE_FIRST_MATE,   "First Mate",      CLASS_HUMAN,   45, 8,  6,  2,  1,   {   0,    2,    3,   -1,    4,  -1}, 1.0f, false },
     { CREATURE_SEAL,         "Seal",            CLASS_PINNIPED,24, 7,  5,  3,  2,   {   0,    2,   -1,   -1,   -1,  -1}, 1.0f, false },
     { CREATURE_POACHER,      "Abalone Poacher", CLASS_DIVER,   14, 3,  3,  4,  2,   {   0,    1,   -1,   -1,   -1,  -1}, 1.0f, false },
-    // Boss variant. ShellThrow + Harpoon (move id 5) in item-attack slots,
-    // ColonyRoar (4) + CrashingTide (6) in specials. canEnrage=true unlocks
-    // the one-shot phase-2 buff when HP first crosses 50%.
-    { CREATURE_CAPTAIN_BOSS, "Captain",         CLASS_HUMAN,   85, 10, 7,  2,  1,   {   0,    2,    5,   -1,    4,   6}, 1.5f, true  },
+    // Boss variant. Slot 0 holds BoardingCharge (id 7) — a dash-and-strike
+    // melee replacement for Tackle. Item-attack slots: ShellThrow (2),
+    // Harpoon (5), and an empty slot. Specials: ColonyRoar (4) +
+    // CannonVolley (8) — CrashingTide is dropped because the volley fills
+    // the same AOE niche and is force-fired on phase-2 enrage. canEnrage=true
+    // unlocks the one-shot phase-2 buff + summon + telegraph at 50% HP.
+    { CREATURE_CAPTAIN_BOSS, "Captain",         CLASS_HUMAN,   85, 10, 7,  2,  1,   {   7,    2,    5,   -1,    4,   8}, 1.5f, true  },
 };
 
 // Penguins grow nimbly (high DEX, modest power). Humans are bulky and hit hard

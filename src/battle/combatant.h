@@ -68,6 +68,12 @@ typedef struct Combatant {
     // CreatureDef set this to true when HP first crosses 50%; once set, it
     // prevents retriggering.
     bool  enraged;
+    // AI override: when >=0, the next AI turn for this combatant force-uses
+    // this move slot regardless of normal selection. Cleared after one use.
+    // Currently set on the Captain when phase-2 enrage triggers, queueing the
+    // Cannon Volley for the very next turn so the player feels the boss flip
+    // a switch rather than rolling another round of basic attacks.
+    int   forcedMoveSlot;
     // Per-party-slot cumulative damage dealt to this combatant during the
     // current battle. Enemy AI uses this to focus the party member who has
     // hit hardest. Zeroed in CombatantInit so fresh battles start clean.

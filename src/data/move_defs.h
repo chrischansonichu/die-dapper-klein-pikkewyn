@@ -9,7 +9,7 @@
 
 #define MOVE_NAME_LEN  32
 #define MOVE_DESC_LEN  64
-#define MOVE_COUNT     8
+#define MOVE_COUNT     9
 
 typedef enum MoveRange {
     RANGE_MELEE = 0,    // must be in front column, hits adjacent enemy
@@ -60,6 +60,12 @@ typedef struct MoveDef {
     // Melting a weapon at runtime yields (baseWeaponLevel + upgradeLevel) scrap;
     // upgrading costs 2 × current effective level. Non-weapon moves use 0.
     int            baseWeaponLevel;
+    // Pre-strike dash distance for melee moves. 0 = no dash (default for every
+    // existing move). >0 = the actor steps up to N tiles toward the target
+    // before the damage step, stopping early at any solid tile or another
+    // combatant. Used for the Captain's Boarding Charge so the boss can chase
+    // the player into the railing on the F7 ship arena.
+    int            dashTiles;
 } MoveDef;
 
 // Forward declaration - defined in move_defs.c

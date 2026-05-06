@@ -105,6 +105,7 @@ set(GAME_SOURCES
     ../data/creature_defs.c
     ../data/forge_recipes.c
     ../data/item_defs.c
+    ../data/lore_text.c
     ../data/move_defs.c
     ../data/room_templates.c
     ../dev/style_preview.c
@@ -117,6 +118,7 @@ set(GAME_SOURCES
     ../field/enemy.c
     ../field/enemy_sprites.c
     ../field/field.c
+    ../field/field_object.c
     ../field/inventory_ui.c
     ../field/map_authored.c
     ../field/map_dungeon_proc.c

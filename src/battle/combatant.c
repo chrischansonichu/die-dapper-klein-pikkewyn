@@ -41,7 +41,8 @@ void CombatantInit(Combatant *c, int creatureId, int level)
     c->tileX       = 0;
     c->tileY       = 0;
     c->armorItemId = -1;
-    c->enraged     = false;
+    c->enraged        = false;
+    c->forcedMoveSlot = -1;
     for (int i = 0; i < COMBATANT_PARTY_MAX; i++) c->damageTakenFrom[i] = 0;
     c->moveAnim.dx       = 0.0f;
     c->moveAnim.dy       = 0.0f;

@@ -104,7 +104,7 @@ static void DrawBosunSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
 // ----- Captain -----------------------------------------------------------
 static void DrawCaptainSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
 {
-    DrawSailorFromAtlas(CREATURE_CAPTAIN, r, faceLeft, alpha, flash);
+    DrawSailorFromAtlas(CREATURE_FIRST_MATE, r, faceLeft, alpha, flash);
 }
 
 // ----- Seal --------------------------------------------------------------
@@ -195,7 +195,7 @@ void DrawCombatantSprite(int creatureId, Rectangle r, bool isEnemy,
         case CREATURE_JAN:          DrawJanSprite(rr,      faceLeft, alpha, flashWhite); break;
         case CREATURE_DECKHAND:     DrawDeckhandSprite(rr, faceLeft, alpha, flashWhite); break;
         case CREATURE_BOSUN:        DrawBosunSprite(rr,    faceLeft, alpha, flashWhite); break;
-        case CREATURE_CAPTAIN:      DrawCaptainSprite(rr,  faceLeft, alpha, flashWhite); break;
+        case CREATURE_FIRST_MATE:      DrawCaptainSprite(rr,  faceLeft, alpha, flashWhite); break;
         case CREATURE_CAPTAIN_BOSS: DrawCaptainSprite(rr,  faceLeft, alpha, flashWhite); break;
         case CREATURE_SEAL:         DrawSealSprite(rr,     faceLeft, alpha, flashWhite); break;
         default: {

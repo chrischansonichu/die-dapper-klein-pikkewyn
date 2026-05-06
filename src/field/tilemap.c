@@ -74,6 +74,12 @@ void TileMapAddFlag(TileMap *m, int x, int y, unsigned char flag)
     m->flags[y * m->width + x] |= flag;
 }
 
+void TileMapClearFlag(TileMap *m, int x, int y, unsigned char flag)
+{
+    if (x < 0 || x >= m->width || y < 0 || y >= m->height) return;
+    m->flags[y * m->width + x] &= (unsigned char)~flag;
+}
+
 int TileMapGetTile(const TileMap *m, int x, int y)
 {
     if (x < 0 || x >= m->width || y < 0 || y >= m->height) return TILE_OCEAN;

@@ -288,9 +288,20 @@ static void AIStepToward(BattleContext *ctx, const TileMap *m, Combatant *actor,
 // Pick the highest-power reachable move for `actor` against the currently
 // locked party target. Returns the slot index or -1 for "pass". Called after
 // the enemy finishes moving — reach is tested from the post-move tile.
+//
+// forcedMoveSlot override: when the boss has a queued scripted move (set by
+// the phase-2 enrage hook), it always wins over normal selection. The slot
+// is consumed in ExecuteAction's enemy path after firing, so the override
+// only fires once per queue.
 static int AIPickBestMove(const BattleContext *ctx, const TileMap *m,
                           const Combatant *actor, int targetPartyIdx)
 {
+    if (actor->forcedMoveSlot >= 0 &&
+        actor->forcedMoveSlot < CREATURE_MAX_MOVES &&
+        actor->moveIds[actor->forcedMoveSlot] >= 0) {
+        return actor->forcedMoveSlot;
+    }
+
     int bestMove = -1;
     int bestPow  = -1;
     for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
@@ -414,7 +425,15 @@ static void ConsumePlayerWeapon(Combatant *actor, int slot, Inventory *inv)
 
 static void ConsumeMoveUse(BattleContext *ctx, bool actorIsEnemy, int slot)
 {
-    if (actorIsEnemy || slot < 0) return;
+    if (actorIsEnemy) {
+        // Enemy weapon durability isn't tracked, but a forced-move queue is.
+        // Clear the override after the queued slot fires so the next AI turn
+        // returns to normal selection.
+        Combatant *en = GetCurrentActor(ctx);
+        if (en && en->forcedMoveSlot == slot) en->forcedMoveSlot = -1;
+        return;
+    }
+    if (slot < 0) return;
     Combatant *actor = GetCurrentActor(ctx);
     if (!actor) return;
     // Capture state before the consume so we can detect a 1→0 break and
@@ -511,6 +530,105 @@ static void PlayAttackAnimFor(BattleContext *ctx, const MoveDef *mv,
                          targetIsEnemy, targetIdx);
 }
 
+// Pre-strike dash for melee moves with mv->dashTiles > 0. Steps the actor up
+// to dashTiles cells toward `goal` along the cardinal closest to it, stopping
+// at any solid tile, occupied tile, or the cell adjacent to the goal (so the
+// striker doesn't shove into the target). Used by the Captain's BoardingCharge.
+static void ExecuteDash(BattleContext *ctx, const TileMap *m,
+                         Combatant *actor, TilePos goal, int dashTiles)
+{
+    if (dashTiles <= 0) return;
+    for (int step = 0; step < dashTiles; step++) {
+        int dx = goal.x - actor->tileX;
+        int dy = goal.y - actor->tileY;
+        if (dx == 0 && dy == 0) break;
+        // Already adjacent — stop one tile short so the strike lands.
+        if ((dx >= -1 && dx <= 1) && (dy >= -1 && dy <= 1)) break;
+
+        // Pick the dominant axis. Cardinal moves only — diagonals would skip
+        // past the mast/railing the boss is supposed to be funnelled around.
+        int stepX = 0, stepY = 0;
+        int adx = dx < 0 ? -dx : dx;
+        int ady = dy < 0 ? -dy : dy;
+        if (adx >= ady) { stepX = (dx > 0) ? 1 : -1; }
+        else            { stepY = (dy > 0) ? 1 : -1; }
+
+        int nx = actor->tileX + stepX;
+        int ny = actor->tileY + stepY;
+        if (!CombatTileWalkable(m, ctx, actor, nx, ny)) break;
+        actor->tileX = nx;
+        actor->tileY = ny;
+    }
+}
+
+// Spawn a sailor minion mid-fight. Used by the Captain's phase-2 hook to
+// pour reinforcements onto the deck. Returns the new enemy index, or -1 if
+// the battle's enemy slots are full / no open tile near the actor. Caller
+// is responsible for re-running BuildTurnOrder so the spawn participates in
+// turn order on the next round.
+static int BattleSummonEnemy(BattleContext *ctx, const TileMap *m,
+                             const Combatant *near, int creatureId, int level)
+{
+    if (ctx->enemyCount >= BATTLE_MAX_ENEMIES) return -1;
+
+    // Try to land the spawn directly behind the boss first (further from the
+    // player), then orthogonal cells, then any walkable cell within 3 tiles.
+    static const int kRingDx[8] = {  0,  0, -1,  1, -1,  1, -1,  1 };
+    static const int kRingDy[8] = { -1,  1,  0,  0, -1, -1,  1,  1 };
+    int sx = -1, sy = -1;
+    for (int r = 1; r <= 3 && sx < 0; r++) {
+        for (int i = 0; i < 8 && sx < 0; i++) {
+            int tx = near->tileX + kRingDx[i] * r;
+            int ty = near->tileY + kRingDy[i] * r;
+            if (CombatTileWalkable(m, ctx, NULL, tx, ty)) {
+                sx = tx; sy = ty;
+            }
+        }
+    }
+    if (sx < 0) return -1;
+
+    int idx = ctx->enemyCount++;
+    Combatant *e = &ctx->enemies[idx];
+    CombatantInit(e, creatureId, level);
+    e->tileX = sx;
+    e->tileY = sy;
+    ctx->enemyFieldIdx[idx] = -1;  // not tied to a FieldEnemy index — pure summon
+    return idx;
+}
+
+// Apply phase-2 effects after `target` just enraged. The Captain's hit on
+// 50% HP fires summons + queues a force-fired Cannon Volley for next turn.
+// Other enrage-flagged creatures (none today) get the plain ATK buff that
+// TryEnrage already applied.
+static void ApplyEnragePhase2(BattleContext *ctx, const TileMap *m,
+                              Combatant *target)
+{
+    if (!target || !target->def) return;
+    if (target->def->id != CREATURE_CAPTAIN_BOSS) return;
+
+    // Force-fire the Cannon Volley next turn. Locate the captain's slot 5
+    // (the special-1 slot we put CannonVolley into in creature_defs.c) by
+    // scanning move ids — robust against future slot reshuffles.
+    for (int s = 0; s < CREATURE_MAX_MOVES; s++) {
+        if (target->moveIds[s] == 8 /* CannonVolley */) {
+            target->forcedMoveSlot = s;
+            break;
+        }
+    }
+
+    // Spawn 1-2 sailor minions on open deck tiles. Mix of deckhand + bosun
+    // so the player is reading "the captain calls his crew up", not "two
+    // identical mooks." Level matches the captain's tier so they're real
+    // threats, not chip damage.
+    BattleSummonEnemy(ctx, m, target, CREATURE_DECKHAND, 6);
+    BattleSummonEnemy(ctx, m, target, CREATURE_BOSUN,    6);
+    BuildTurnOrder(ctx);
+    // Re-locate the actor on the new turn order — currentTurn became stale
+    // when BuildTurnOrder rebuilt indices. We don't seek to fix it here;
+    // BuildTurnOrder leaves currentTurn unchanged and AdvanceTurn will skip
+    // past dead actors. The summons join from the next round's turn order.
+}
+
 static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
 {
     TurnEntry *te    = &ctx->turnOrder[ctx->currentTurn];
@@ -523,6 +641,13 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
     int  targetIdx;
     Combatant *target = OccupantAtTile(ctx, ctx->targetTile,
                                        &targetIsEnemy, &targetIdx);
+
+    // Boarding Charge / future dash moves: step the actor toward the target
+    // before resolving reach. Dash respects solids and combatants and bails
+    // when adjacent to the goal so the strike still lands.
+    if (mv->dashTiles > 0 && target) {
+        ExecuteDash(ctx, m, actor, TileOf(target), mv->dashTiles);
+    }
 
     if (mv->power == 0) {
         snprintf(ctx->narration, NARRATION_LEN, "%s used %s!", actor->name, mv->name);
@@ -599,6 +724,7 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
         target->damageTakenFrom[te->idx] += dmg;
     }
     bool enraged = TryEnrage(target);
+    if (enraged) ApplyEnragePhase2(ctx, m, target);
 
     if (target->hp <= 0) {
         target->hp    = 0;
@@ -695,7 +821,10 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                     t->damageTakenFrom[te->idx] += dmg;
                 }
                 totalDmg += dmg; hits++; lastIdx = i; lastKilled = (t->hp <= 0);
-                if (!enragedTarget && TryEnrage(t)) enragedTarget = t;
+                if (!enragedTarget && TryEnrage(t)) {
+                    enragedTarget = t;
+                    ApplyEnragePhase2(ctx, m, t);
+                }
                 if (t->hp <= 0) { t->hp = 0; t->alive = false; }
             }
         } else {
@@ -714,7 +843,10 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 if (te->isEnemy && ctx->godMode) dmg = 0;
                 t->hp -= dmg;
                 totalDmg += dmg; hits++; lastIdx = i; lastKilled = (t->hp <= 0);
-                if (!enragedTarget && TryEnrage(t)) enragedTarget = t;
+                if (!enragedTarget && TryEnrage(t)) {
+                    enragedTarget = t;
+                    ApplyEnragePhase2(ctx, m, t);
+                }
                 if (t->hp <= 0) { t->hp = 0; t->alive = false; }
             }
         }

@@ -144,6 +144,25 @@ static inline Rectangle InvTileRect(int gridTop, int index) {
     };
 }
 
+// Armor-bag tiles run smaller than the items-grid tiles. There are at most 8
+// armor entries (INVENTORY_MAX_ARMORS), so the items-tab's 4-col big-tile
+// layout produced one or two oversized icons floating in dead space. 6 cols
+// at <=80px reads tighter and the player can tap individual pieces; the items
+// tab keeps its big tiles because it shows up to 16 stacks.
+static inline Rectangle InvArmorBagTileRect(int gridTop, int index) {
+    int cols = 6;
+    int contentW = InvContentW();
+    int tile = (contentW - (cols - 1) * INV_TILE_GAP) / cols;
+    if (tile > 80) tile = 80;
+    int col = index % cols;
+    int row = index / cols;
+    return (Rectangle){
+        (float)(InvContentX() + col * (tile + INV_TILE_GAP)),
+        (float)(gridTop + row * (tile + INV_TILE_GAP)),
+        (float)tile, (float)tile
+    };
+}
+
 static void LayoutTabs(void)
 {
 #if SCREEN_PORTRAIT
@@ -270,37 +289,25 @@ static void LayoutWeapons(const InventoryUI *ui, const Party *party)
 static void LayoutArmor(const InventoryUI *ui, const Party *party)
 {
     const Inventory *inv = &party->inventory;
-#if SCREEN_PORTRAIT
-    int colX = InvContentX();
-    int rowW = InvContentW();
-    int y    = InvPanelY() + 86;
-#else
-    int colX = InvContentX();
-    int rowW = 340;
-    Rectangle ms_la = MemberStripRect();
-    int y = (int)(ms_la.y + ms_la.height) + 14;
-#endif
     sL.memberSwitcher = MemberStripRect();
-    y += 26;  // "XX's Armor" header
-    sL.equippedArmorRow = (Rectangle){ (float)(colX - 6), (float)(y - 2),
-                                       (float)rowW, 22.0f };
 
-#if SCREEN_PORTRAIT
-    int bagX = colX, bagRowW = rowW;
-    y += 36;
-#else
-    int bagX = 420, bagRowW = 320;
-    {
-        Rectangle ms_lab = MemberStripRect();
-        y = (int)(ms_lab.y + ms_lab.height) + 14;
-    }
-#endif
-    y += 26;  // "Armor Bag" header
+    // Mirror DrawArmorTab's geometry exactly — equipped armor sits in a
+    // single centred tile under the member strip; the bag opens beneath at
+    // a fixed offset. Hit rects must match the draw rects or taps miss.
+    Rectangle ms = MemberStripRect();
+    int gridTop = (int)(ms.y + ms.height) + 14;
+
+    int eqTile = InvTileSize();
+    if (eqTile > 110) eqTile = 110;
+    sL.equippedArmorRow = (Rectangle){
+        (float)(InvContentX() + (InvContentW() - eqTile) / 2),
+        (float)gridTop, (float)eqTile, (float)eqTile,
+    };
+
+    int bagTop = gridTop + eqTile + 16;
     sL.armorBagRowCount = inv->armorCount;
     for (int i = 0; i < inv->armorCount && i < INVENTORY_MAX_ARMORS; i++) {
-        sL.armorBagRows[i] = (Rectangle){ (float)(bagX - 6), (float)(y - 2),
-                                          (float)bagRowW, 22.0f };
-        y += 24;
+        sL.armorBagRows[i] = InvArmorBagTileRect(bagTop, i);
     }
     (void)ui;
 }
@@ -1491,7 +1498,7 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
 
     int popupBag = -1;
     for (int i = 0; i < inv->armorCount; i++) {
-        Rectangle r = InvTileRect(bagTop, i);
+        Rectangle r = InvArmorBagTileRect(bagTop, i);
         const ArmorDef *ad = GetArmorDef(inv->armors[i].armorId);
         char overlay[16];
         snprintf(overlay, sizeof(overlay), "+%d", ad ? ad->defBonus : 0);
@@ -1504,7 +1511,7 @@ static void DrawArmorTab(const InventoryUI *ui, const Party *party)
         if (ad) {
             char body[160];
             snprintf(body, sizeof(body), "%s\n+%d DEF", ad->desc, ad->defBonus);
-            DrawInfoPopup(InvTileRect(bagTop, popupBag), ad->name, body);
+            DrawInfoPopup(InvArmorBagTileRect(bagTop, popupBag), ad->name, body);
         }
     }
     return;

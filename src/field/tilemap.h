@@ -46,6 +46,9 @@ void TileMapSetTile(TileMap *m, int x, int y, int tileId);
 // OR `flag` into the tile's flag byte. TileMapSetTile resets flags to the
 // tile type's defaults, so call this AFTER setting the tile.
 void TileMapAddFlag(TileMap *m, int x, int y, unsigned char flag);
+// Clear specific bits from the tile's flag byte. Useful for unlocking gates
+// (e.g. clearing TILE_FLAG_SOLID on the gangplank once lanterns are lit).
+void TileMapClearFlag(TileMap *m, int x, int y, unsigned char flag);
 int  TileMapGetTile(const TileMap *m, int x, int y);
 unsigned char TileMapGetFlags(const TileMap *m, int x, int y);
 bool TileMapIsSolid(const TileMap *m, int x, int y);

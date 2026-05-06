@@ -87,7 +87,10 @@ const ClassGrowth *GetClassGrowth(CreatureClass cclass);
 #define CREATURE_JAN          0
 #define CREATURE_DECKHAND     1
 #define CREATURE_BOSUN        2
-#define CREATURE_CAPTAIN      3
+// Top-tier rank-and-file sailor — was "Captain" in earlier slices, renamed
+// 2026-05-06 because the Captain Boss is the only "Captain" in fiction; two
+// creatures sharing the name confused players in proc-floor encounters.
+#define CREATURE_FIRST_MATE   3
 #define CREATURE_SEAL         4
 #define CREATURE_POACHER      5
 #define CREATURE_CAPTAIN_BOSS 6

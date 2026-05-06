@@ -7,6 +7,7 @@
 #include "../state/game_state.h"
 #include "../state/save.h"
 #include "../data/item_defs.h"
+#include "../data/lore_text.h"
 #include "../data/move_defs.h"
 #include "../data/creature_defs.h"
 #include "../data/armor_defs.h"
@@ -76,6 +77,13 @@ bool FieldIsTileOccupied(const FieldState *ow, int x, int y, int ignoreEnemyIdx)
         if (!e->active) continue;
         if (e->tileX == x && e->tileY == y) return true;
         if (e->moving && e->targetTileX == x && e->targetTileY == y) return true;
+    }
+    // Field objects — chests, lanterns, logbooks all read as obstacles. Even
+    // a "consumed" lantern still occupies its tile (the post stays standing).
+    for (int i = 0; i < ow->objectCount; i++) {
+        const FieldObject *o = &ow->objects[i];
+        if (!o->active) continue;
+        if (o->tileX == x && o->tileY == y) return true;
     }
     return false;
 }
@@ -178,13 +186,16 @@ static void ApplyWarp(FieldState *ow, int warpIdx)
     // Easy-mode dungeon resume — the hub→harbor entry warp leads to F1, but if
     // the player died deeper in the dungeon (and we're on easy mode), drop
     // them on that floor instead. The descent warps already use (2,2,2) for
-    // procedural floors and F9, so reuse that. The slot is consumed after one
+    // procedural floors, so reuse that. F6 and F7 are authored — the resume
+    // path picks their authored map ids directly. Slot is consumed after one
     // redirect; subsequent runs start fresh at F1.
     if (ow->gs->rescueResumeFloor > 1
         && targetMapId == MAP_HARBOR_F1
         && targetFloor == 1) {
         int resumeFloor = ow->gs->rescueResumeFloor;
-        targetMapId    = (resumeFloor >= 9) ? MAP_HARBOR_F9 : MAP_HARBOR_PROC;
+        if      (resumeFloor >= 7) targetMapId = MAP_HARBOR_F7;
+        else if (resumeFloor == 6) targetMapId = MAP_HARBOR_F6;
+        else                       targetMapId = MAP_HARBOR_PROC;
         targetFloor    = resumeFloor;
         targetSpawnX   = 2;
         targetSpawnY   = 2;
@@ -220,10 +231,10 @@ static bool TryInteractWarp(FieldState *ow, int tx, int ty)
     if (!(TileMapGetFlags(&ow->map, fx, fy) & TILE_FLAG_WARP))           return false;
     for (int i = 0; i < ow->warpCount; i++) {
         if (ow->warps[i].tileX == fx && ow->warps[i].tileY == fy) {
-            // Harbor F9 return warp is gated behind the boss fight — if the
+            // Harbor F7 return warp is gated behind the boss fight — if the
             // Captain is still up, the warp is inactive and we narrate a
             // short blocker line instead of opening the confirmation prompt.
-            if (ow->gs->currentMapId == MAP_HARBOR_F9 &&
+            if (ow->gs->currentMapId == MAP_HARBOR_F7 &&
                 ow->warps[i].targetMapId == MAP_OVERWORLD_HUB &&
                 !ow->gs->captainDefeated) {
                 static const char *kBlockedPages[] = {
@@ -237,6 +248,147 @@ static bool TryInteractWarp(FieldState *ow, int tx, int ty)
         }
     }
     return false;
+}
+
+// Map a lantern dataId (0/1/2 = west/middle/east on F6 dock) to the matching
+// story-flag bit. Returns 0 for unknown ids so callers don't accidentally
+// flip an unrelated flag.
+static uint64_t LanternFlagFor(int dataId)
+{
+    switch (dataId) {
+        case 0: return STORY_FLAG_LANTERN_DOCK_W;
+        case 1: return STORY_FLAG_LANTERN_DOCK_M;
+        case 2: return STORY_FLAG_LANTERN_DOCK_E;
+        default: return 0;
+    }
+}
+
+// Map a logbook dataId (LORE_*) to the matching story-flag bit. Logbooks stay
+// readable after the first read; the bit only gates the "first time" hook
+// and persists in the save file.
+static uint64_t LogbookFlagFor(int loreId)
+{
+    switch (loreId) {
+        case LORE_F2_CAVE:         return STORY_FLAG_LOGBOOK_F2_CAVE;
+        case LORE_F4_TRADER:       return STORY_FLAG_LOGBOOK_F4_TRADER;
+        case LORE_F5_LANTERN_HINT: return STORY_FLAG_LOGBOOK_F5_HINT;
+        case LORE_F6_LOG3:         return STORY_FLAG_LOGBOOK_F6_LOG3;
+        case LORE_F7_LOG4:         return STORY_FLAG_LOGBOOK_F7_LOG4;
+        default: return 0;
+    }
+}
+
+// Recompute the gangplank tile's solid flag on F6 once a lantern is lit. The
+// warp tile starts SOLID; clearing it lets the player step onto / interact
+// with the warp once all three lanterns are lit. We scan warps[] rather than
+// hardcoding the tile so a future map redesign keeps working.
+static void UpdateF6GangplankSolid(FieldState *ow)
+{
+    if (ow->gs->currentMapId != MAP_HARBOR_F6) return;
+    bool allLit = (ow->gs->storyFlags & STORY_FLAG_LANTERN_ALL)
+                       == STORY_FLAG_LANTERN_ALL;
+    if (!allLit) return;
+
+    for (int i = 0; i < ow->warpCount; i++) {
+        const FieldWarp *w = &ow->warps[i];
+        if (w->targetMapId != MAP_HARBOR_F7) continue;
+        TileMapClearFlag(&ow->map, w->tileX, w->tileY, TILE_FLAG_SOLID);
+    }
+}
+
+// Dispatch a FieldObject interaction: logbooks open dialogue, lanterns flip
+// a story bit, chests roll loot. Static text lives in data/lore_text.c.
+static void BeginObjectInteraction(FieldState *ow, int objIdx)
+{
+    FieldObject *o = &ow->objects[objIdx];
+    switch (o->type) {
+        case OBJ_LOGBOOK: {
+            int n = 0;
+            const char *const *pages = GetLoreText(o->dataId, &n);
+            if (!pages || n <= 0) return;
+            // DialogueBegin takes a non-const-pointer-of-pointer because it
+            // memcpys the pages into its own buffer; the cast is safe.
+            DialogueBegin(&ow->dialogue, (const char **)pages, n, 30.0f);
+            o->consumed = true;
+            ow->gs->storyFlags |= LogbookFlagFor(o->dataId);
+            return;
+        }
+        case OBJ_LANTERN: {
+            if (o->consumed) {
+                static const char *kAlreadyLit[] = {
+                    "The lantern is already burning. Its halo wobbles in the wind.",
+                };
+                DialogueBegin(&ow->dialogue, kAlreadyLit, 1, 30.0f);
+                return;
+            }
+            uint64_t bit = LanternFlagFor(o->dataId);
+            ow->gs->storyFlags |= bit;
+            o->consumed = true;
+            UpdateF6GangplankSolid(ow);
+            bool allLit = (ow->gs->storyFlags & STORY_FLAG_LANTERN_ALL)
+                              == STORY_FLAG_LANTERN_ALL;
+            if (allLit) {
+                static const char *kFinal[] = {
+                    "The third lantern catches and steadies. Three flames in a line, paint the dock.",
+                    "Down at the hull, ropes creak. The gangplank lowers itself into place.",
+                };
+                DialogueBegin(&ow->dialogue, kFinal, 2, 30.0f);
+            } else {
+                static const char *kSingle[] = {
+                    "The lantern flickers and steadies. Warm light spills onto the planks.",
+                };
+                DialogueBegin(&ow->dialogue, kSingle, 1, 30.0f);
+            }
+            return;
+        }
+        case OBJ_CHEST: {
+            if (o->consumed) {
+                static const char *kEmpty[] = {
+                    "The chest is empty - you took everything from it last time.",
+                };
+                DialogueBegin(&ow->dialogue, kEmpty, 1, 30.0f);
+                return;
+            }
+            const ChestContents *cc = GetChestContents(o->dataId);
+            if (!cc) return;
+
+            // Stage 2 pages of pickup narration. Page 0 is the flavor; page 1
+            // names what was added (or notes the bag was full).
+            static const char *pages[2];
+            static char addLine[160];
+            int pageCount = 0;
+            if (cc->flavor) pages[pageCount++] = cc->flavor;
+
+            char wMsg[80] = "", iMsg[80] = "";
+            if (cc->weaponMoveId >= 0) {
+                const MoveDef *mv = GetMoveDef(cc->weaponMoveId);
+                int dur = (mv->defaultDurability * cc->weaponDurabilityFraction) / 100;
+                bool ok = InventoryAddWeaponEx(&ow->gs->party.inventory,
+                                               cc->weaponMoveId, dur, 0);
+                snprintf(wMsg, sizeof(wMsg),
+                         "%s the %s.", ok ? "Got" : "Bag full - left",
+                         mv->name);
+            }
+            if (cc->itemId >= 0 && cc->itemCount > 0) {
+                bool ok = InventoryAddItem(&ow->gs->party.inventory,
+                                           cc->itemId, cc->itemCount);
+                snprintf(iMsg, sizeof(iMsg),
+                         "%s %d %s.", ok ? "Got" : "Bag full - left",
+                         cc->itemCount, GetItemDef(cc->itemId)->name);
+            }
+            if (wMsg[0] && iMsg[0]) {
+                snprintf(addLine, sizeof(addLine), "%s %s", wMsg, iMsg);
+            } else {
+                snprintf(addLine, sizeof(addLine), "%s%s", wMsg, iMsg);
+            }
+            if (addLine[0]) pages[pageCount++] = addLine;
+
+            DialogueBegin(&ow->dialogue, pages, pageCount, 30.0f);
+            o->consumed = true;
+            ow->gs->storyFlags |= STORY_FLAG_ALCOVE_CHEST_OPENED;
+            return;
+        }
+    }
 }
 
 // Dispatch an NPC interaction: food bank opens the donation picker; everything
@@ -1055,6 +1207,10 @@ void FieldInit(FieldState *ow, GameState *gs)
         .warps       = ow->warps,
         .warpCount   = &ow->warpCount,
         .warpMax     = FIELD_MAX_WARPS,
+        .objects     = ow->objects,
+        .objectCount = &ow->objectCount,
+        .objectMax   = FIELD_MAX_OBJECTS,
+        .storyFlags  = gs->storyFlags,
         .spawnTileX  = &spawnX,
         .spawnTileY  = &spawnY,
         .spawnDir    = &spawnDir,
@@ -1146,6 +1302,34 @@ void FieldUpdate(FieldState *ow, float dt)
                 pl->animT     = 0.0f;
             }
         }
+        // Mid-fight summons (Captain phase-2 hook calls BattleSummonEnemy)
+        // arrive in ctx->enemies with enemyFieldIdx == -1 because the field
+        // never knew about them. Mint a matching FieldEnemy so the field-side
+        // sprite renderer (EnemyDraw + the sync loop below) sees them. If
+        // we're out of FIELD_MAX_ENEMIES slots the summon stays invisible
+        // — accepted: the design caps at one summon volley + 1-2 minions, so
+        // the slot count is generous in practice.
+        for (int k = 0; k < ow->battle.enemyCount; k++) {
+            if (ow->battle.enemyFieldIdx[k] >= 0) continue;
+            if (ow->enemyCount >= FIELD_MAX_ENEMIES) break;
+            const Combatant *bc = &ow->battle.enemies[k];
+            if (!bc->def) continue;
+            int newIdx = ow->enemyCount++;
+            FieldEnemy *fe = &ow->enemies[newIdx];
+            // Color picks match the proc-floor palette by tier so summoned
+            // sailors read consistently with the rest of the dungeon.
+            Color color = (Color){200, 70, 60, 255};
+            switch (bc->def->id) {
+                case CREATURE_FIRST_MATE: color = (Color){230, 200,  80, 255}; break;
+                case CREATURE_BOSUN:      color = (Color){160,  80, 180, 255}; break;
+                case CREATURE_POACHER:    color = (Color){ 60, 140, 160, 255}; break;
+                default: break;
+            }
+            EnemyInit(fe, bc->tileX, bc->tileY, 1 /* face left */,
+                      BEHAVIOR_STAND, bc->def->id, bc->level, 4, color);
+            ow->battle.enemyFieldIdx[k] = newIdx;
+        }
+
         // While an attack animation is playing, face the actor's field sprite
         for (int k = 0; k < ow->battle.enemyCount; k++) {
             int idx = ow->battle.enemyFieldIdx[k];
@@ -1401,11 +1585,11 @@ void FieldUpdate(FieldState *ow, float dt)
     // Update player movement
     PlayerUpdate(&ow->player, &ow->map, ow);
 
-    // One-shot pre-fight taunt on F9 — fires the first time the player comes
+    // One-shot pre-fight taunt on F7 — fires the first time the player comes
     // within 2 tiles (Chebyshev) of the Captain. Gated by captainTauntShown
     // so it doesn't repeat, and by captainDefeated so a re-visit after the
     // fight stays quiet.
-    if (ow->gs->currentMapId == MAP_HARBOR_F9 &&
+    if (ow->gs->currentMapId == MAP_HARBOR_F7 &&
         !ow->gs->captainTauntShown && !ow->gs->captainDefeated) {
         for (int i = 0; i < ow->enemyCount; i++) {
             const FieldEnemy *e = &ow->enemies[i];
@@ -1484,6 +1668,12 @@ void FieldUpdate(FieldState *ow, float dt)
                 return;
             }
         }
+        for (int i = 0; i < ow->objectCount; i++) {
+            if (FieldObjectIsInteractable(&ow->objects[i], tx, ty, ow->player.dir)) {
+                BeginObjectInteraction(ow, i);
+                return;
+            }
+        }
         if (TryInteractWarp(ow, tx, ty)) return;
     }
 
@@ -1500,6 +1690,12 @@ void FieldUpdate(FieldState *ow, float dt)
                     return;
                 }
                 BeginNpcInteraction(ow, i);
+                return;
+            }
+        }
+        for (int i = 0; i < ow->objectCount; i++) {
+            if (FieldObjectIsInteractable(&ow->objects[i], tx, ty, ow->player.dir)) {
+                BeginObjectInteraction(ow, i);
                 return;
             }
         }
@@ -1714,6 +1910,10 @@ void FieldDraw(const FieldState *ow)
                 NpcDrawCaptiveOverlay(&ow->npcs[i]);
         }
 
+        for (int i = 0; i < ow->objectCount; i++) {
+            FieldObjectDraw(&ow->objects[i], ow->camera);
+        }
+
         PlayerDraw(&ow->player);
         DrawPartyFollowersInBattle(ow);
 
@@ -1727,6 +1927,13 @@ void FieldDraw(const FieldState *ow)
                 if (NpcIsInteractable(&ow->npcs[i], ow->player.tileX, ow->player.tileY, ow->player.dir)) {
                     int px = ow->npcs[i].tileX * tilePixels + tilePixels / 2 - 6;
                     int py = ow->npcs[i].tileY * tilePixels - 18;
+                    DrawText("Z", px, py, 20, YELLOW);
+                }
+            }
+            for (int i = 0; i < ow->objectCount; i++) {
+                if (FieldObjectIsInteractable(&ow->objects[i], ow->player.tileX, ow->player.tileY, ow->player.dir)) {
+                    int px = ow->objects[i].tileX * tilePixels + tilePixels / 2 - 6;
+                    int py = ow->objects[i].tileY * tilePixels - 18;
                     DrawText("Z", px, py, 20, YELLOW);
                 }
             }

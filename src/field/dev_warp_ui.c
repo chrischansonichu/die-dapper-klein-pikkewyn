@@ -29,14 +29,12 @@ typedef struct DevWarpDest {
 static const DevWarpDest gDests[] = {
     { "Hub (Village)",   MAP_OVERWORLD_HUB, 0, 11, 12, 0 },
     { "Harbor F1",       MAP_HARBOR_F1,     1,  8, 12, 3 },
-    { "Harbor F2",       MAP_HARBOR_PROC,   2,  8, 12, 3 },
-    { "Harbor F3",       MAP_HARBOR_PROC,   3,  8, 12, 3 },
-    { "Harbor F4",       MAP_HARBOR_PROC,   4,  8, 12, 3 },
-    { "Harbor F5",       MAP_HARBOR_PROC,   5,  8, 12, 3 },
-    { "Harbor F6",       MAP_HARBOR_PROC,   6,  8, 12, 3 },
-    { "Harbor F7",       MAP_HARBOR_PROC,   7,  8, 12, 3 },
-    { "Harbor F8",       MAP_HARBOR_PROC,   8,  8, 12, 3 },
-    { "Harbor F9 (Boss)",MAP_HARBOR_F9,     9,  8, 12, 3 },
+    { "Harbor F2",       MAP_HARBOR_PROC,   2,  2,  2, 2 },
+    { "Harbor F3",       MAP_HARBOR_PROC,   3,  2,  2, 2 },
+    { "Harbor F4",       MAP_HARBOR_PROC,   4,  2,  2, 2 },
+    { "Harbor F5",       MAP_HARBOR_PROC,   5,  2,  2, 2 },
+    { "Harbor F6 (Dock)",MAP_HARBOR_F6,     6,  2,  2, 0 },
+    { "Harbor F7 (Boss)",MAP_HARBOR_F7,     7,  8, 10, 3 },
 };
 static const int gDestCount = (int)(sizeof(gDests) / sizeof(gDests[0]));
 

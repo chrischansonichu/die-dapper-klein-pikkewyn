@@ -140,18 +140,25 @@ static bool CommitUpgrade(BlacksmithUI *b, Party *party, int *scrap)
     if (*scrap < cost) return false;
 
     *scrap -= cost;
+    int newMaxDur = WeaponMaxDurability(moveId, upg + 1);
     if (e->kind == 0) {
         party->inventory.weapons[e->bagIdx].upgradeLevel = upg + 1;
+        // Reforging restores the weapon: a +1 upgrade lands at full durability
+        // for the new upgrade level. Players were burning a battle's worth of
+        // hits AND a scrap pile to upgrade a near-broken weapon and getting
+        // back something that still snapped on the next swing.
+        if (newMaxDur > 0) party->inventory.weapons[e->bagIdx].durability = newMaxDur;
     } else {
         Combatant *c = &party->members[e->memberIdx];
         c->moveUpgradeLevel[e->slot] = upg + 1;
+        if (newMaxDur > 0) c->moveDurability[e->slot] = newMaxDur;
     }
     snprintf(b->resultLine1, sizeof(b->resultLine1),
              "Upgraded %s%s -> %s%s.",
              MoveName(moveId), PlusSuffix(upg),
              MoveName(moveId), PlusSuffix(upg + 1));
     snprintf(b->resultLine2, sizeof(b->resultLine2),
-             "Spent %d scrap.", cost);
+             "Spent %d scrap. Restored to full durability.", cost);
     return true;
 }
 
@@ -460,9 +467,40 @@ static void DrawWeaponStrip(const BlacksmithUI *b, const Party *party,
         DrawRectangleRounded(r, 0.16f, 6, plate);
         DrawRectangleRoundedLinesEx(r, 0.16f, 6, 2.0f, gPH.ink);
 
-        // Icon
-        Rectangle iconR = { r.x + 6, r.y + 6, r.width - 12, r.height - 30 };
+        // Icon — shrink the bottom slightly to leave room for the durability
+        // bar that sits between the icon and the name.
+        Rectangle iconR = { r.x + 6, r.y + 6, r.width - 12, r.height - 38 };
         DrawMoveIcon(iconR, moveId);
+
+        // Durability bar — green > 60%, amber 30..60%, red < 30%. Skipped for
+        // unlimited-durability moves (defaultDurability < 0). Shown for every
+        // tab so the player can read condition without flipping to REPAIR.
+        int maxDur = WeaponMaxDurability(moveId, upg);
+        if (maxDur > 0) {
+            float frac = (float)dur / (float)maxDur;
+            if (frac < 0.0f) frac = 0.0f;
+            if (frac > 1.0f) frac = 1.0f;
+            float barW   = r.width - 16.0f;
+            float barH   = 5.0f;
+            float barX   = r.x + 8.0f;
+            float barY   = r.y + r.height - 30.0f;
+            Rectangle bg = { barX, barY, barW, barH };
+            DrawRectangleRounded(bg, 0.5f, 4,
+                                 (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 60});
+            Color fill = (frac >= 0.6f)
+                            ? (Color){ 90, 180, 100, 255}
+                            : (frac >= 0.3f)
+                                ? (Color){220, 170,  60, 255}
+                                : (Color){210,  70,  60, 255};
+            if (!eligible) {
+                fill.a = 140;
+            }
+            Rectangle fillR = { barX, barY, barW * frac, barH };
+            if (fillR.width > 1.0f) {
+                DrawRectangleRounded(fillR, 0.5f, 4, fill);
+            }
+            DrawRectangleRoundedLinesEx(bg, 0.5f, 4, 1.0f, gPH.ink);
+        }
 
         // Name + upgrade suffix, centred bottom of tile
         char nameBuf[32];
@@ -547,7 +585,7 @@ static void DrawConfirmPanel(const BlacksmithUI *b, const Party *party,
         int newPow = (mv->power * WeaponPowerBonusPct(upg + 1)) / 100;
         int newDur = WeaponMaxDurability(moveId, upg + 1);
         snprintf(line3, sizeof(line3),
-                 "+10%% power (%d), +10%% max durability (%d)", newPow, newDur);
+                 "+10%% power (%d), full %d/%d durability", newPow, newDur, newDur);
     } else if (b->tab == BS_TAB_MELT) {
         int yield = WeaponMeltScrap(moveId, upg);
         snprintf(title, sizeof(title), "Melt %s%s ?",

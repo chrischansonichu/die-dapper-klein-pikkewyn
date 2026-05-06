@@ -2,7 +2,26 @@
 #define GAME_STATE_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "../battle/party.h"
+
+// Persistent one-bit story flags. Used for one-shot world events (read a
+// logbook, lit a lantern, opened an alcove chest). Bits are stable: never
+// renumber — only add. Reserved upper range for save-format growth.
+#define STORY_FLAG_LANTERN_DOCK_W   (1ull << 0)
+#define STORY_FLAG_LANTERN_DOCK_M   (1ull << 1)
+#define STORY_FLAG_LANTERN_DOCK_E   (1ull << 2)
+#define STORY_FLAG_LANTERN_ALL      (STORY_FLAG_LANTERN_DOCK_W | \
+                                     STORY_FLAG_LANTERN_DOCK_M | \
+                                     STORY_FLAG_LANTERN_DOCK_E)
+
+#define STORY_FLAG_LOGBOOK_F2_CAVE   (1ull << 8)
+#define STORY_FLAG_LOGBOOK_F4_TRADER (1ull << 9)
+#define STORY_FLAG_LOGBOOK_F6_LOG3   (1ull << 10)
+#define STORY_FLAG_LOGBOOK_F7_LOG4   (1ull << 11)
+#define STORY_FLAG_LOGBOOK_F5_HINT   (1ull << 12)
+
+#define STORY_FLAG_ALCOVE_CHEST_OPENED (1ull << 16)
 
 //----------------------------------------------------------------------------------
 // GameState - persistent state that survives map transitions and battles.
@@ -86,9 +105,12 @@ typedef struct GameState {
     // flag has no UI to flip in shipping builds.
     bool     devGodMode;
 
+    // Persistent one-bit world events — see STORY_FLAG_* macros above. Tracks
+    // read logbooks, lit lanterns, opened alcove chests. Survives save/load.
+    uint64_t storyFlags;
+
     // Additional persistent state lands here in later phases:
     //   Roster    dismissedMembers;
-    //   uint64_t  storyFlags;
 } GameState;
 
 // Fresh game: seeds the party with Jan + starter items, lands them in the hub.
