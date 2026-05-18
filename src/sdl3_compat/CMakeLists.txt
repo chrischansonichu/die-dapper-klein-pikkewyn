@@ -40,10 +40,22 @@ if (CMAKE_SYSTEM_NAME STREQUAL "iOS" OR CMAKE_SYSTEM_NAME STREQUAL "Android")
     # bundle without notarization and explicit framework search paths. Pin
     # BUILD_SHARED_LIBS too: SDL3_ttf/SDL3_image read it to decide which
     # variant of the SDL3 target to look for (SDL3::SDL3 vs SDL3::SDL3-shared).
+    # Set Xcode signing attributes BEFORE FetchContent_MakeAvailable so that
+    # vendored targets (png_shared, etc.) pick them up when they are defined.
+    set(CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "WNN7X2QWF4")
+    set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE  "Automatic")
+
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     set(SDL_SHARED        OFF CACHE BOOL "" FORCE)
     set(SDL_STATIC        ON  CACHE BOOL "" FORCE)
     set(SDL_TEST_LIBRARY  OFF CACHE BOOL "" FORCE)
+    # libpng builds png_shared by default. SDL3_image drives it via
+    # SDLIMAGE_PNG_SHARED and line 849 of its CMakeLists.txt does
+    # set(PNG_SHARED "${SDLIMAGE_PNG_SHARED}"), so both must be OFF.
+    # png_shared is a dylib that can't go into an iOS bundle and Xcode refuses
+    # to sign it without a team — just don't build it.
+    set(PNG_SHARED        OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_PNG_SHARED OFF CACHE BOOL "" FORCE)
 
     # SDL3_ttf / SDL3_image vendor their image-codec / font-engine deps
     # (FreeType, libpng, libjpeg, libwebp, etc.) so we don't need system libs.
@@ -210,6 +222,16 @@ if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
             MACOSX_PACKAGE_LOCATION "Assets/${_dir}")
     endforeach()
 
+    # App icon — actool compiles the xcassets into Assets.car inside the bundle.
+    # Use GLOB so the zero-width-space in the directory name doesn't need to be
+    # spelled out literally in this file.
+    # MACOSX_PACKAGE_LOCATION "" is required: without it CMake only adds the
+    # xcassets to the file navigator group, not to any build phase, so actool
+    # never runs and no icon appears.
+    file(GLOB _xcassets "${CMAKE_CURRENT_SOURCE_DIR}/*.xcassets")
+    target_sources(ddkp_sdl3 PRIVATE ${_xcassets})
+    set_source_files_properties(${_xcassets} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+
     set_target_properties(ddkp_sdl3 PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in
@@ -221,14 +243,15 @@ if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
         XCODE_PRODUCT_TYPE "com.apple.product-type.application"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.dapperpenguin.ddkp"
         XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"  # iPhone + iPad
-        # Adhoc sign for simulator. CODE_SIGNING_REQUIRED must be YES for
-        # xcodebuild to run codesign with --generate-entitlement-der (the only
-        # invocation that produces a bundle signature IXPackage will accept).
+        XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
+        # Automatic signing — Xcode manages provisioning profiles.
+        # CODE_SIGNING_REQUIRED must be YES for xcodebuild to run codesign with
+        # --generate-entitlement-der, the only invocation IXPackage accepts.
+        XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "WNN7X2QWF4"
+        "XCODE_ATTRIBUTE_CODE_SIGN_STYLE" "Automatic"
         "XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" "-"
-        "XCODE_ATTRIBUTE_CODE_SIGN_STYLE" "Manual"
         "XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED" "YES"
         "XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED" "YES"
-        "XCODE_ATTRIBUTE_PROVISIONING_PROFILE_SPECIFIER" ""
     )
 
     # No POST_BUILD codesign — Xcode's own sign step (visible in xcodebuild
