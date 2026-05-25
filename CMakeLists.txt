@@ -25,6 +25,7 @@ add_executable(${PROJECT_NAME}
         src/raylib_game.c
         src/raylib_game.c)
 add_subdirectory(src)
+add_subdirectory(tools)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PROJECT_NAME})

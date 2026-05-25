@@ -1,0 +1,50 @@
+{
+    "activeFile": "",
+    "expandedProjectPaths": [
+    ],
+    "file.lastUsedOpenFilter": "All Files (*)",
+    "fileStates": {
+        "Dapper.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 1.5,
+            "scaleInEditor": 4.27
+        },
+        "dapper.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 1,
+            "scaleInEditor": 4.52
+        },
+        "tileset.tsx": {
+            "dynamicWrapping": false
+        },
+        "tutorial.tmx": {
+            "scale": 0.93,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 669.8924731182796,
+                "y": -28.494623655913983
+            }
+        }
+    },
+    "last.imagePath": "/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/tools",
+    "map.fixedSize": true,
+    "map.height": 60,
+    "map.lastUsedFormat": "tmx",
+    "map.tileHeight": 48,
+    "map.tileWidth": 48,
+    "map.width": 35,
+    "openFiles": [
+    ],
+    "project": "dapper-maps.tiled-project",
+    "recentFiles": [
+        "Dapper.tsx",
+        "dapper.tsx",
+        "tutorial.tmx"
+    ],
+    "tileset.lastUsedFormat": "tsx",
+    "tileset.tileSize": {
+        "height": 48,
+        "width": 48
+    },
+    "tileset.type": 0
+}
