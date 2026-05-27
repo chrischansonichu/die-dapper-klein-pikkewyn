@@ -1,6 +1,7 @@
 {
-    "activeFile": "",
+    "activeFile": "tutorial.tmx",
     "expandedProjectPaths": [
+        "."
     ],
     "file.lastUsedOpenFilter": "All Files (*)",
     "fileStates": {
@@ -14,16 +15,26 @@
             "scaleInDock": 1,
             "scaleInEditor": 4.52
         },
+        "terrain.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1.1938
+        },
         "tileset.tsx": {
-            "dynamicWrapping": false
+            "dynamicWrapping": false,
+            "scaleInDock": 1,
+            "scaleInEditor": 2.1839
         },
         "tutorial.tmx": {
-            "scale": 0.93,
+            "scale": 0.5342,
             "selectedLayer": 0,
             "viewCenter": {
-                "x": 669.8924731182796,
-                "y": -28.494623655913983
+                "x": 279.85773118682135,
+                "y": 1140.9584425308872
             }
+        },
+        "water-sand-terrain.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 2.2033
         }
     },
     "last.imagePath": "/Users/benjaminhimes/Git/die-dapper-klein-pikkewyn/tools",
@@ -34,17 +45,23 @@
     "map.tileWidth": 48,
     "map.width": 35,
     "openFiles": [
+        "tutorial.tmx",
+        "terrain.tsx"
     ],
     "project": "dapper-maps.tiled-project",
     "recentFiles": [
+        "terrain.tsx",
+        "tutorial.tmx",
+        "tileset.tsx",
+        "water-sand-terrain.tsx",
         "Dapper.tsx",
-        "dapper.tsx",
-        "tutorial.tmx"
+        "dapper.tsx"
     ],
     "tileset.lastUsedFormat": "tsx",
     "tileset.tileSize": {
         "height": 48,
         "width": 48
     },
+    "tileset.transparentColor": "#ff40ff",
     "tileset.type": 0
 }
