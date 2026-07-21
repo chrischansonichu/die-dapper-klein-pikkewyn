@@ -27,6 +27,7 @@ typedef struct DevWarpDest {
 } DevWarpDest;
 
 static const DevWarpDest gDests[] = {
+    { "Tutorial Island", MAP_TUTORIAL_ISLAND, 0, 10, 51, 0 },
     { "Hub (Village)",   MAP_OVERWORLD_HUB, 0, 11, 12, 0 },
     { "Harbor F1",       MAP_HARBOR_F1,     1,  8, 12, 3 },
     { "Harbor F2",       MAP_HARBOR_PROC,   2,  2,  2, 2 },

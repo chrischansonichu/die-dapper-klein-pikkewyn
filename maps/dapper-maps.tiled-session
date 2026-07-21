@@ -1,5 +1,5 @@
 {
-    "activeFile": "tutorial.tmx",
+    "activeFile": "tileset.tsx",
     "expandedProjectPaths": [
         "."
     ],
@@ -17,7 +17,7 @@
         },
         "terrain.tsx": {
             "scaleInDock": 1,
-            "scaleInEditor": 1.1938
+            "scaleInEditor": 2.24
         },
         "tileset.tsx": {
             "dynamicWrapping": false,
@@ -26,10 +26,10 @@
         },
         "tutorial.tmx": {
             "scale": 0.5342,
-            "selectedLayer": 0,
+            "selectedLayer": 1,
             "viewCenter": {
-                "x": 279.85773118682135,
-                "y": 1140.9584425308872
+                "x": 839.5731935604642,
+                "y": 1429.2399850243355
             }
         },
         "water-sand-terrain.tsx": {
@@ -46,12 +46,13 @@
     "map.width": 35,
     "openFiles": [
         "tutorial.tmx",
-        "terrain.tsx"
+        "terrain.tsx",
+        "tileset.tsx"
     ],
     "project": "dapper-maps.tiled-project",
     "recentFiles": [
-        "terrain.tsx",
         "tutorial.tmx",
+        "terrain.tsx",
         "tileset.tsx",
         "water-sand-terrain.tsx",
         "Dapper.tsx",
@@ -62,6 +63,7 @@
         "height": 48,
         "width": 48
     },
-    "tileset.transparentColor": "#ff40ff",
-    "tileset.type": 0
+    "tileset.transparentColor": "#000000",
+    "tileset.type": 0,
+    "tileset.useTransparentColor": true
 }

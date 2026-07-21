@@ -1428,7 +1428,7 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
 
 // World-space overlays: reachable-tile tint, actor highlight, target cursor.
 // Caller is responsible for wrapping the call in BeginMode2D(camera).
-void BattleDrawWorldOverlay(const BattleContext *ctx)
+void BattleDrawWorldOverlay(const BattleContext *ctx, const TileMap *map)
 {
     int tp = TILE_SIZE * TILE_SCALE;
 
@@ -1475,6 +1475,47 @@ void BattleDrawWorldOverlay(const BattleContext *ctx)
                          (float)(ctx->targetTile.y * tp),
                          (float)tp, (float)tp },
             3, (Color){240, 180, 60, 255});
+
+        // "Tap this" affordance on every enemy the selected move can reach —
+        // a pulsing gold outline plus a bobbing TAP label with a chevron
+        // pointing down at the sprite. Without this, a first-time player has
+        // picked an attack and gets no in-world cue that the enemy itself is
+        // the thing to tap (the top hint strip alone proved easy to miss).
+        const MoveDef *mv = NULL;
+        if (actor && ctx->selectedMove >= 0 &&
+            ctx->selectedMove < CREATURE_MAX_MOVES &&
+            actor->moveIds[ctx->selectedMove] >= 0) {
+            mv = GetMoveDef(actor->moveIds[ctx->selectedMove]);
+        }
+        float pulse = 0.5f + 0.5f * sinf((float)GetTime() * 5.0f);
+        for (int i = 0; i < ctx->enemyCount; i++) {
+            const Combatant *e = &ctx->enemies[i];
+            if (!e->alive) continue;
+            if (map && actor && mv &&
+                !TileMoveReaches(map, TileOf(actor), TileOf(e), mv->range))
+                continue;
+
+            unsigned char ringA = (unsigned char)(140 + 90 * pulse);
+            Color gold = {240, 200, 70, ringA};
+            Rectangle er = { (float)(e->tileX * tp) + 2.0f,
+                             (float)(e->tileY * tp) + 2.0f,
+                             (float)tp - 4.0f, (float)tp - 4.0f };
+            DrawRectangleLinesEx(er, 3.0f, gold);
+
+            const char *lbl = "TAP";
+            int fs = 18;
+            int lw = MeasureText(lbl, fs);
+            int lx = e->tileX * tp + tp / 2 - lw / 2;
+            int ly = e->tileY * tp - 28
+                     + (int)(sinf((float)GetTime() * 3.0f) * 2.0f);
+            DrawText(lbl, lx + 1, ly + 1, fs, (Color){40, 25, 8, 220});
+            DrawText(lbl, lx, ly, fs, (Color){255, 220, 110, 255});
+            float axc = (float)(e->tileX * tp) + tp * 0.5f;
+            float ay  = (float)(ly + fs + 2);
+            DrawTriangle((Vector2){axc - 6.0f, ay},
+                         (Vector2){axc + 6.0f, ay},
+                         (Vector2){axc, ay + 7.0f}, gold);
+        }
     }
 
     // Attack effect (slash / projectile / ring) — drawn on top of tile
@@ -1659,9 +1700,7 @@ void BattleDrawUI(const BattleContext *ctx)
         int th = SCREEN_PORTRAIT ? 44 : 22;
         int fontSize = SCREEN_PORTRAIT ? 20 : 16;
         DrawRectangle(0, 0, sw, th, (Color){0x3C, 0x28, 0x14, 220});
-        const char *hint = SCREEN_PORTRAIT
-            ? "Tap target to confirm"
-            : "Tap a target to confirm";
+        const char *hint = "Tap an enemy to attack";
         DrawText(hint, 10, (th - fontSize) / 2, fontSize,
                  (Color){0xF7, 0xEF, 0xD9, 240});
         DrawBackIconButton(TargetBackRect());

@@ -12,7 +12,10 @@ const CreatureDef gCreatureDefs[CREATURE_DEF_COUNT] = {
     // WaveCall was removed from move_defs as never useful; both creatures
     // now leave that special slot empty. IDs 5/6/7 (ColonyRoar / Harpoon /
     // CrashingTide) shifted down to 4/5/6 after the deletion.
-    { CREATURE_JAN,          "Jan",             CLASS_PENGUIN, 10, 3,  2,  6,  3,   {   0,    1,   -1,   -1,   -1,  -1}, 1.0f, false },
+    // Jan's item slots start empty — the tutorial hands him the FishingHook
+    // (Ryno's gift) and ShellThrow (ruin cache) in-fiction. Saves restore
+    // equipped moves from the save record, so this only shapes new games.
+    { CREATURE_JAN,          "Jan",             CLASS_PENGUIN, 10, 3,  2,  6,  3,   {   0,   -1,   -1,   -1,   -1,  -1}, 1.0f, false },
     { CREATURE_DECKHAND,     "Deckhand",        CLASS_HUMAN,    8, 2,  2,  3,  1,   {   0,    1,   -1,   -1,   -1,  -1}, 1.0f, false },
     { CREATURE_BOSUN,        "Bosun",           CLASS_HUMAN,   20, 4,  4,  2,  1,   {   0,    1,    2,   -1,   -1,  -1}, 1.0f, false },
     { CREATURE_FIRST_MATE,   "First Mate",      CLASS_HUMAN,   45, 8,  6,  2,  1,   {   0,    2,    3,   -1,    4,  -1}, 1.0f, false },
@@ -25,6 +28,10 @@ const CreatureDef gCreatureDefs[CREATURE_DEF_COUNT] = {
     // the same AOE niche and is force-fired on phase-2 enrage. canEnrage=true
     // unlocks the one-shot phase-2 buff + summon + telegraph at 50% HP.
     { CREATURE_CAPTAIN_BOSS, "Captain",         CLASS_HUMAN,   85, 10, 7,  2,  1,   {   7,    2,    5,   -1,    4,   8}, 1.5f, true  },
+    // Tutorial practice fight. Quick but fragile — it usually gets the first
+    // peck in (SPD 7 beats Jan's 6) so the player sees damage taken once,
+    // then folds in two hits. Penguin growth curve: it's a seabird.
+    { CREATURE_KELP_GULL,    "Kelp Gull",       CLASS_PENGUIN,  7, 2,  1,  7,  2,   {   0,   -1,   -1,   -1,   -1,  -1}, 1.0f, false },
 };
 
 // Penguins grow nimbly (high DEX, modest power). Humans are bulky and hit hard

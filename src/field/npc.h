@@ -22,6 +22,8 @@ typedef enum NpcType {
     NPC_SCRIBE,      // hub save NPC — writes the player's progress to disk
     NPC_SALVAGER,    // roaming scrap-picker; trades broken weapons for fish
     NPC_BLACKSMITH,  // hub forge NPC — repairs/upgrades weapons for Reputation
+    NPC_CORMORANT,   // Jan's adoptive family on the tutorial island
+    NPC_RYNO,        // traveling penguin — tutorial guide; dialogue scripted in field.c
 } NpcType;
 
 struct FieldEnemy;

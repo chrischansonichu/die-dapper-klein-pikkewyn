@@ -57,7 +57,11 @@ void TileMapInit(TileMap *m, int width, int height, const char *name)
     for (int i = 0; i < m->width * m->height; i++) {
         m->tiles[i] = TILE_OCEAN;
         m->flags[i] = TILE_DEFAULT_FLAGS[TILE_OCEAN];
+        m->gids[i]  = 0;
     }
+    // Procedural until a TMX loader flips it. Textures are NOT touched here —
+    // FieldState is memset before building and TileMapUnload owns teardown.
+    m->authored = false;
 }
 
 void TileMapSetTile(TileMap *m, int x, int y, int tileId)
@@ -184,6 +188,36 @@ static void DrawTileOrnament(int tileId, float tx, float ty, float tp, int col, 
     }
 }
 
+// Authored-map pass: blit each visible gid from its atlas. Gids 1..288 come
+// from terrain.png (24 columns); 289+ from the legacy 6-tile tileset.png.
+// Atlas tiles are 48px — exactly TILE_SIZE * TILE_SCALE — so source rects map
+// 1:1 onto world tiles with no scaling.
+static void DrawAuthoredTiles(const TileMap *m,
+                              int firstCol, int firstRow, int lastCol, int lastRow)
+{
+    const float tp = (float)(TILE_SIZE * TILE_SCALE);
+    for (int row = firstRow; row < lastRow; row++) {
+        for (int col = firstCol; col < lastCol; col++) {
+            int gid = m->gids[row * m->width + col];
+            if (gid <= 0) continue;
+            const Texture2D *atlas;
+            int tileIdx;
+            if (gid >= 289) { atlas = &m->legacyAtlas;  tileIdx = gid - 289; }
+            else            { atlas = &m->terrainAtlas; tileIdx = gid - 1;   }
+            if (atlas->id == 0) continue;
+            int columns = atlas->width / (int)tp;
+            if (columns <= 0) continue;
+            Rectangle src = { (float)((tileIdx % columns) * (int)tp),
+                              (float)((tileIdx / columns) * (int)tp),
+                              tp, tp };
+            Rectangle dst = { col * tp, row * tp, tp, tp };
+            // DrawTexturePro (not DrawTextureRec) — it's the one texture blit
+            // the SDL3 compat shim implements.
+            DrawTexturePro(*atlas, src, dst, (Vector2){0, 0}, 0.0f, WHITE);
+        }
+    }
+}
+
 void TileMapDraw(const TileMap *m, Camera2D cam)
 {
     float screenW = (float)GetScreenWidth();
@@ -204,6 +238,16 @@ void TileMapDraw(const TileMap *m, Camera2D cam)
     if (lastRow  > m->height) lastRow  = m->height;
 
     BeginMode2D(cam);
+
+    // Authored maps sample their Tiled atlases and skip the procedural
+    // ornament/ink passes — edges and detail are baked into the art. Falls
+    // through to the procedural renderer if the atlases failed to load so a
+    // missing PNG degrades to flat classified tiles instead of a black map.
+    if (m->authored && m->terrainAtlas.id != 0) {
+        DrawAuthoredTiles(m, firstCol, firstRow, lastCol, lastRow);
+        EndMode2D();
+        return;
+    }
 
     // Pass 1: flat fills.
     for (int row = firstRow; row < lastRow; row++) {
@@ -267,10 +311,27 @@ void TileMapDraw(const TileMap *m, Camera2D cam)
     EndMode2D();
 }
 
+void TileMapLoadAtlases(TileMap *m)
+{
+    if (!m->authored) return;
+    if (m->terrainAtlas.id != 0) { UnloadTexture(m->terrainAtlas); m->terrainAtlas.id = 0; }
+    if (m->legacyAtlas.id  != 0) { UnloadTexture(m->legacyAtlas);  m->legacyAtlas.id  = 0; }
+    m->terrainAtlas = LoadTexture("resources/terrain.png");
+    m->legacyAtlas  = LoadTexture("resources/tileset.png");
+}
+
 void TileMapUnload(TileMap *m)
 {
     if (m->tileset.id != 0) {
         UnloadTexture(m->tileset);
         m->tileset.id = 0;
+    }
+    if (m->terrainAtlas.id != 0) {
+        UnloadTexture(m->terrainAtlas);
+        m->terrainAtlas.id = 0;
+    }
+    if (m->legacyAtlas.id != 0) {
+        UnloadTexture(m->legacyAtlas);
+        m->legacyAtlas.id = 0;
     }
 }

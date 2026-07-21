@@ -38,7 +38,7 @@ static inline int MoveGroupSlotStart(int group) {
     }
 }
 #define MOVE_GROUP_SLOT(group, n) (MoveGroupSlotStart(group) + (n))
-#define CREATURE_DEF_COUNT 7
+#define CREATURE_DEF_COUNT 8
 
 typedef enum CreatureClass {
     CLASS_PENGUIN = 0,
@@ -94,5 +94,8 @@ const ClassGrowth *GetClassGrowth(CreatureClass cclass);
 #define CREATURE_SEAL         4
 #define CREATURE_POACHER      5
 #define CREATURE_CAPTAIN_BOSS 6
+// Tutorial-island practice foe — a rack-robbing kelp gull. Deliberately the
+// weakest creature in the table so the first fight teaches, not punishes.
+#define CREATURE_KELP_GULL    7
 
 #endif // CREATURE_DEFS_H

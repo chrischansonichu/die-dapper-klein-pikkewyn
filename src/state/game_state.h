@@ -23,6 +23,17 @@
 
 #define STORY_FLAG_ALCOVE_CHEST_OPENED (1ull << 16)
 
+// Tutorial island progression (Jan's hatch-island, new-game starting map).
+// Sequential beats, but stored as independent bits so a mid-tutorial save
+// restores exactly. TUT_INTRO gates the auto-playing opening dialogue only.
+#define STORY_FLAG_TUT_INTRO         (1ull << 24)  // Ma's opening scene shown
+#define STORY_FLAG_TUT_MET_RYNO      (1ull << 25)  // first Ryno talk (the reveal)
+#define STORY_FLAG_TUT_SWIM_TAUGHT   (1ull << 26)  // swim lesson — east cove open
+#define STORY_FLAG_TUT_KELP_CUT      (1ull << 27)  // fish-trap gap slashed open
+#define STORY_FLAG_TUT_SHELLS_TAKEN  (1ull << 28)  // ShellThrow cache looted
+#define STORY_FLAG_TUT_GULL_BEATEN   (1ull << 29)  // practice fight won
+#define STORY_FLAG_TUT_COMPLETE      (1ull << 30)  // finale seen — north channel open
+
 //----------------------------------------------------------------------------------
 // GameState - persistent state that survives map transitions and battles.
 // The FieldState is transient (rebuilt each time the player enters a map), but

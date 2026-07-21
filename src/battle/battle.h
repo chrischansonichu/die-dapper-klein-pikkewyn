@@ -156,7 +156,9 @@ void BattleUpdate(BattleContext *ctx, const struct TileMap *map,
 // camera space, and bottom-panel UI in screen space. Call from FieldDraw
 // after the normal tilemap/entities pass, while still inside BeginMode2D
 // for the world-space helpers; see BattleDrawWorldOverlay / BattleDrawUI.
-void BattleDrawWorldOverlay(const BattleContext *ctx);
+// `map` is used to mark which enemies the selected move can reach during
+// target selection (pulsing TAP affordances); pass the active field map.
+void BattleDrawWorldOverlay(const BattleContext *ctx, const struct TileMap *map);
 void BattleDrawUI(const BattleContext *ctx);
 
 // 0 = ongoing, 1 = victory, 2 = defeat, 3 = fled. Consume the result on a

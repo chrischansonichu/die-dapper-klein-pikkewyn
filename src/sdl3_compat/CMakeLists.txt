@@ -135,6 +135,8 @@ set(GAME_SOURCES
     ../field/map_authored.c
     ../field/map_dungeon_proc.c
     ../field/map_source.c
+    ../field/map_tmx.c
+    ../field/map_tutorial.c
     ../field/npc.c
     ../field/player.c
     ../field/salvager_ui.c

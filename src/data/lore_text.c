@@ -92,6 +92,13 @@ static const ChestContents kChests[CHEST_COUNT] = {
         .itemCount    = 2,
         .flavor       = "Two perlemoen, packed in seaweed. The trader will pay for these.",
     },
+    [CHEST_TUTORIAL_SHELLS] = {
+        .weaponMoveId = 2,             // ShellThrow
+        .weaponDurabilityFraction = 100,
+        .itemId       = 2,             // Sardine
+        .itemCount    = 2,
+        .flavor       = "Half-buried in the ruin's sand: a cache of shell fragments, their edges worn knife-sharp by the tide.",
+    },
 };
 
 const ChestContents *GetChestContents(int chestId)

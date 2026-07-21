@@ -36,6 +36,16 @@ typedef struct TileMap {
     unsigned char flags[MAP_MAX_W * MAP_MAX_H]; // per-tile flags
     Texture2D     tileset;
     char          name[64];
+
+    // Authored (Tiled/TMX) mode. When `authored` is true, `gids[]` holds raw
+    // Tiled global tile ids and TileMapDraw samples the atlas textures below
+    // instead of running the procedural Paper Harbor tile renderer. tiles[]
+    // and flags[] are still populated (best-effort legacy classification) so
+    // collision, water checks, and battle logic work unchanged.
+    bool          authored;
+    int           gids[MAP_MAX_W * MAP_MAX_H];
+    Texture2D     terrainAtlas;   // resources/terrain.png  (gids 1..288)
+    Texture2D     legacyAtlas;    // resources/tileset.png  (gids 289..294)
 } TileMap;
 
 // Build a procedural tileset texture (TILE_COUNT tiles wide, 1 tile tall)
@@ -55,5 +65,10 @@ bool TileMapIsSolid(const TileMap *m, int x, int y);
 bool TileMapIsWater(const TileMap *m, int x, int y);
 void TileMapDraw(const TileMap *m, Camera2D cam);
 void TileMapUnload(TileMap *m);
+
+// Authored-map atlas textures. Load is idempotent (unloads any previous
+// textures first) so FieldReloadResources can call it after a GL context
+// loss. No-op for procedural (non-authored) maps.
+void TileMapLoadAtlases(TileMap *m);
 
 #endif // TILEMAP_H

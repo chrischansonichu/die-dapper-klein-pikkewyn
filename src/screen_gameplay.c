@@ -35,11 +35,17 @@ void GameplayRequestNewGame(int difficulty) {
 }
 void GameplayRequestLoadGame(void) { gEntryMode = ENTRY_LOAD; }
 
-// Rescue dialogue — shown after a battle-defeat hub rescue transition.
+// Rescue dialogue — shown after a battle-defeat rescue transition. The hub
+// version is the default; the tutorial island uses the family instead (there
+// is no village in Jan's world yet at that point).
 #define RESCUE_MSG_PAGES 2
 static const char *gRescueMsg[RESCUE_MSG_PAGES] = {
     "We found you floating in the water and carried you back to the village.",
     "You're safe. Rest up, gather your courage, and head back when you're ready.",
+};
+static const char *gRescueMsgTutorial[RESCUE_MSG_PAGES] = {
+    "Ma Duiker hauls you out of the surf by the scruff of your neck. \"Enough heroics for one tide, my boy.\"",
+    "Catch your breath, then try again. That gull has it coming.",
 };
 
 //----------------------------------------------------------------------------------
@@ -129,10 +135,11 @@ static void ApplyPendingMapTransition(void)
     int mapPixH = gField.map.height * TILE_SIZE * TILE_SCALE;
     gField.camera = CameraCreate(PlayerPixelPos(&gField.player), mapPixW, mapPixH);
 
-    // Village is the safe-rest point: any arrival at the hub fully heals the
-    // party, whether the player walked back through a dungeon-exit warp or
-    // got rescued after a defeat.
-    if (gGameState.currentMapId == MAP_OVERWORLD_HUB) {
+    // Safe-rest points: any arrival at the hub fully heals the party, and so
+    // does a tutorial-island (re)entry — the only ways to arrive there are a
+    // fresh game and the family fishing Jan out after a lost practice fight.
+    if (gGameState.currentMapId == MAP_OVERWORLD_HUB ||
+        gGameState.currentMapId == MAP_TUTORIAL_ISLAND) {
         PartyHealAll(&gGameState.party);
     }
 
@@ -142,9 +149,11 @@ static void ApplyPendingMapTransition(void)
         // lost" page staged by the battle-defeat handler. Pages array must
         // outlive DialogueBegin — dialogue copies text per-page, so static
         // strings + a pointer into gGameState both work.
+        const char **msg = (gGameState.currentMapId == MAP_TUTORIAL_ISLAND)
+                               ? gRescueMsgTutorial : gRescueMsg;
         const char *pages[RESCUE_MSG_PAGES + 1];
         int n = 0;
-        for (int i = 0; i < RESCUE_MSG_PAGES; i++) pages[n++] = gRescueMsg[i];
+        for (int i = 0; i < RESCUE_MSG_PAGES; i++) pages[n++] = msg[i];
         if (gGameState.rescueLossPending) {
             pages[n++] = gGameState.rescueLossMsg;
             gGameState.rescueLossPending = false;

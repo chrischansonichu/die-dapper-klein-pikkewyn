@@ -21,6 +21,7 @@ typedef enum MapId {
     MAP_HARBOR_PROC,         // dungeon floors 2–5: procedural room-stitched floor
     MAP_HARBOR_F6,           // dungeon floor 6: docks + swim staging (authored, no combat)
     MAP_HARBOR_F7,           // dungeon floor 7: captain's ship — boss arena (authored)
+    MAP_TUTORIAL_ISLAND,     // Jan's hatch-island — TMX-authored tutorial (new-game start)
     MAP_COUNT
 } MapId;
 

@@ -3,6 +3,7 @@
 #include "buildings.h"
 #include "enemy_sprites.h"
 #include "map_source.h"
+#include "map_tutorial.h"
 #include "village.h"
 #include "../state/game_state.h"
 #include "../state/save.h"
@@ -152,6 +153,93 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
         return 1;
     }
 
+    // --- Tutorial island: Ryno, the traveling penguin. His conversation is a
+    // stage machine over the STORY_FLAG_TUT_* bits — each beat hands the
+    // player one task, so the tutorial reads as a story, not a manual.
+    // Flags are latched the moment a stage opens (same pattern as the keeper)
+    // so re-talking never replays a beat.
+    if (n->type == NPC_RYNO) {
+        uint64_t fl = ow->gs->storyFlags;
+        if (!(fl & STORY_FLAG_TUT_MET_RYNO)) {
+            ow->gs->storyFlags |= STORY_FLAG_TUT_MET_RYNO;
+            pages[0] = "???: Haai! Another one! I KNEW it - I told the colony I smelled penguin on this wind.";
+            pages[1] = "Jan: Penguin? No, no. I'm a cormorant. A bad one. My wings never dry, I can't fly, and when I dive I just... sink.";
+            pages[2] = "Ryno: Boet. Look at me. Now look at you. Same black back, same white front. That's not sinking - that's a hull. I'm Ryno. And you're a PENGUIN.";
+            pages[3] = "Ryno: Years back a hen from our colony - Annika - swam out past the shipping lane after sardine. A storm rolled in and sat for a week. She never came home.";
+            pages[4] = "Ryno: She was carrying an egg when she left. You have her eyes, boet. I'd swear it on my last pilchard.";
+            pages[5] = "Jan: ...Ma always said the storm brought me in.";
+            pages[6] = "Ryno: Then it's settled. And listen - penguins don't fly. We fly UNDERWATER. Talk to me again when you're ready for your first lesson.";
+            return 7;
+        }
+        if (!(fl & STORY_FLAG_TUT_SWIM_TAUGHT)) {
+            ow->gs->storyFlags |= STORY_FLAG_TUT_SWIM_TAUGHT;
+            TutorialApplyZones(&ow->map, ow->gs->storyFlags);
+            // Ryno's gift: a FishingHook, equipped straight into Jan's first
+            // item-attack slot. Jan starts the game bare-handed, and slotting
+            // it here means the kelp cut works without an equip-menu detour —
+            // the bag/equip lesson waits for the ShellThrow.
+            if (ow->gs->party.count > 0) {
+                Combatant *jan = &ow->gs->party.members[0];
+                int slot = MOVE_GROUP_SLOT(MOVE_GROUP_ITEM_ATTACK, 0);
+                if (jan->moveIds[slot] < 0) {
+                    const MoveDef *hook = GetMoveDef(1);  // FishingHook
+                    jan->moveIds[slot]          = 1;
+                    jan->moveDurability[slot]   = hook->defaultDurability;
+                    jan->moveUpgradeLevel[slot] = 0;
+                }
+            }
+            pages[0] = "Ryno: Lesson one. The water isn't your enemy - it's your sky. Head down, feet back, and POINT yourself somewhere.";
+            pages[1] = "Ryno: And take this - my spare fishing hook. Sailors lose them by the dozen. Hooked under a flipper it cuts kelp, rope, whatever needs cutting.";
+            pages[2] = "(Ryno's FishingHook is now equipped as one of Jan's item attacks.)";
+            pages[3] = "Ryno: See the stone ring off the east shore? An old fish-trap ruin. The cove between here and there is calm - and something glints inside that ring.";
+            pages[4] = "Ryno: Storm-kelp is choking the gap in the ruin's wall. Swim over and cut it loose with the hook.";
+            return 5;
+        }
+        if (!(fl & STORY_FLAG_TUT_SHELLS_TAKEN)) {
+            pages[0] = "Ryno: East shore, boet. Swim the cove, slash the kelp, and see what the sea left you in that ruin.";
+            return 1;
+        }
+        if (!(fl & STORY_FLAG_TUT_GULL_BEATEN)) {
+            pages[0] = "Ryno: Shells! Lekker. Those fling hard enough to crack more than pride.";
+            pages[1] = "Ryno: Put them to work - that fat kelp gull is back at your family's drying racks. It's strutting around the south grass. Chase it off.";
+            pages[2] = "(Equip first: tap the round menu button in the corner, open the bag, and slot the ShellThrow into an item-attack slot.)";
+            pages[3] = "(Then walk up to the gull to start the fight. In battle: pick a move, then a target - Tackle up close, ShellThrow from a distance.)";
+            return 4;
+        }
+        if (!(fl & STORY_FLAG_TUT_COMPLETE)) {
+            ow->gs->storyFlags |= STORY_FLAG_TUT_COMPLETE;
+            TutorialApplyZones(&ow->map, ow->gs->storyFlags);
+            pages[0] = "Jan: Ryno... if I'm a penguin, where is everyone? You're the first one I've ever seen.";
+            pages[1] = "Ryno: That's the sore truth, boet. There isn't enough fish left to keep a colony together. Every season we swim further from home just to eat.";
+            pages[2] = "Ryno: Great steel ships from across the ocean - whole fleets of them - drag nets wider than this island. They scrape the sea bare and haul it all over the horizon.";
+            pages[3] = "Jan: They can't just TAKE the whole sea. Somebody has to fight back.";
+            pages[4] = "Ryno: Ha! Annika's egg, no mistake. There's a village up the coast where the fed-up are gathering - penguins, seals, all of us. They could use a fighter.";
+            pages[5] = "Ryno: The channel north of the island is a short swim for a penguin. Cross it, follow the mainland sand, and you'll find the village. I'll meet you there.";
+            pages[6] = "(The north channel is open. Swim across, then follow the sand to the exit.)";
+            return 7;
+        }
+        pages[0] = "Ryno: North, boet! Across the channel, up the sand. I'll see you at the village.";
+        return 1;
+    }
+
+    // Cormorant family — static basking lines early on, swapped for stage
+    // lines once the tutorial's late beats land.
+    if (n->type == NPC_CORMORANT) {
+        uint64_t fl = ow->gs->storyFlags;
+        if (fl & STORY_FLAG_TUT_COMPLETE) {
+            pages[0] = "Ma Duiker: A whole village of penguins, hey. Go on then, my boy. You were never a bad cormorant - you were always a lekker penguin.";
+            pages[1] = "Pa Duiker: The storm brought you in. Suppose the sea's calling you back. Swim straight, Jan.";
+            pages[2] = "Vlerkie: Bring me something from the mainland! And peck a trawler for me!";
+            return 3;
+        }
+        if (fl & STORY_FLAG_TUT_GULL_BEATEN) {
+            pages[0] = "Ma Duiker: You chased that thieving gull off! Come here, let me look at you. My little fighter.";
+            pages[1] = "Pa Duiker: Racks are safe for the first time in weeks. Well done, my boy.";
+            return 2;
+        }
+        // Fall through to the NPC's authored dialogue below.
+    }
+
     if ((n->type == NPC_PENGUIN_ELDER || n->type == NPC_PENGUIN_VILLAGER)
         && AllEnemiesDefeated(ow)) {
         snprintf(scratch[0], NPC_DIALOGUE_LEN,
@@ -260,6 +348,18 @@ static uint64_t LanternFlagFor(int dataId)
         case 1: return STORY_FLAG_LANTERN_DOCK_M;
         case 2: return STORY_FLAG_LANTERN_DOCK_E;
         default: return 0;
+    }
+}
+
+// Map a chest dataId to its one-shot story-flag bit. The two dungeon alcove
+// chests share the historical ALCOVE bit; new chests get their own.
+static uint64_t ChestFlagFor(int chestId)
+{
+    switch (chestId) {
+        case CHEST_ALCOVE_F3:
+        case CHEST_ALCOVE_F4:       return STORY_FLAG_ALCOVE_CHEST_OPENED;
+        case CHEST_TUTORIAL_SHELLS: return STORY_FLAG_TUT_SHELLS_TAKEN;
+        default:                    return 0;
     }
 }
 
@@ -385,7 +485,36 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
 
             DialogueBegin(&ow->dialogue, pages, pageCount, 30.0f);
             o->consumed = true;
-            ow->gs->storyFlags |= STORY_FLAG_ALCOVE_CHEST_OPENED;
+            ow->gs->storyFlags |= ChestFlagFor(o->dataId);
+            // Looting the tutorial shell cache is what lets the kelp gull
+            // onto the island — it was spawned latent so a brand-new player
+            // can't get ambushed before combat has been taught.
+            if (o->dataId == CHEST_TUTORIAL_SHELLS) {
+                for (int i = 0; i < ow->enemyCount; i++) {
+                    if (ow->enemies[i].creatureId == CREATURE_KELP_GULL)
+                        ow->enemies[i].active = true;
+                }
+            }
+            return;
+        }
+        case OBJ_BLOCKAGE: {
+            // Storm-kelp tangle on the tutorial island's fish-trap gap. Cut
+            // with the FishingHook Ryno hands over at the swim lesson — the
+            // SWIM_TAUGHT flag and the hook arrive together.
+            if (ow->gs->storyFlags & STORY_FLAG_TUT_SWIM_TAUGHT) {
+                static const char *kCut[] = {
+                    "Jan drags Ryno's fishing hook through the tangle - once, twice. The storm-kelp parts like old rope.",
+                    "That felt... natural. Like something a penguin was built to do.",
+                };
+                DialogueBegin(&ow->dialogue, kCut, 2, 30.0f);
+                o->active = false;  // tile is open from here on
+                ow->gs->storyFlags |= STORY_FLAG_TUT_KELP_CUT;
+            } else {
+                static const char *kTooTough[] = {
+                    "A dense tangle of storm-kelp chokes the gap in the old wall. Too tough to pull apart with flippers - something sharp might do it.",
+                };
+                DialogueBegin(&ow->dialogue, kTooTough, 1, 30.0f);
+            }
             return;
         }
     }
@@ -1055,6 +1184,21 @@ static void ResolveBattleEnd(FieldState *ow, int result)
         for (int i = 0; i < dropPages && pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0])); i++) {
             ptrs[pageCount++] = gDropMsg[i];
         }
+        // Tutorial practice fight — beating the kelp gull advances the story
+        // and points the player back at Ryno for the finale.
+        for (int k = 0; k < ctx->enemyCount; k++) {
+            int idx = ctx->enemyFieldIdx[k];
+            if (idx < 0 || idx >= ow->enemyCount) continue;
+            if (ow->enemies[idx].creatureId == CREATURE_KELP_GULL &&
+                !(ow->gs->storyFlags & STORY_FLAG_TUT_GULL_BEATEN)) {
+                ow->gs->storyFlags |= STORY_FLAG_TUT_GULL_BEATEN;
+                if (pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0]))) {
+                    ptrs[pageCount++] =
+                        "The gull flaps off over the water, screeching insults. Ryno will want to hear about this.";
+                }
+                break;
+            }
+        }
         if (bossDown && !ow->gs->captainDefeated) {
             ow->gs->captainDefeated     = true;
             ow->gs->villageReputation  += 100;
@@ -1107,6 +1251,24 @@ static void ResolveBattleEnd(FieldState *ow, int result)
     }
 
     if (result == 2 /* defeat */) {
+        // Tutorial island defeat: the family fishes Jan out. Stay on the
+        // island (there's no village yet in the fiction), skip the inventory
+        // penalty — the first fight should never tax a brand-new player.
+        if (ow->gs->currentMapId == MAP_TUTORIAL_ISLAND) {
+            ow->gs->rescueResumeFloor     = 0;
+            ow->gs->rescueLossPending     = false;
+            ow->gs->rescueDialoguePending = true;
+            ow->gs->hasPendingMap    = true;
+            ow->gs->pendingMapId     = MAP_TUTORIAL_ISLAND;
+            ow->gs->pendingMapSeed   = 0;
+            ow->gs->pendingFloor     = 0;
+            ow->gs->pendingSpawnX    = 12;   // south grass, beside the family
+            ow->gs->pendingSpawnY    = 50;
+            ow->gs->pendingSpawnDir  = 0;
+            ow->mode = FIELD_FREE;
+            memset(&ow->battle, 0, sizeof(ow->battle));
+            return;
+        }
         // Village rescue — kick to the hub with pending dialogue. The party
         // heal happens in ApplyPendingMapTransition, which heals on any hub
         // arrival. The dialogue is staged through GameState
@@ -1220,6 +1382,7 @@ void FieldInit(FieldState *ow, GameState *gs)
     MapBuild((MapId)gs->currentMapId, gs->currentFloor, &ctx, gs->currentMapSeed);
 
     ow->map.tileset = TilesetBuild();
+    TileMapLoadAtlases(&ow->map);   // no-op unless the builder loaded a TMX
     PlayerInit(&ow->player, spawnX, spawnY);
     ow->player.dir = spawnDir;
     InventoryUIInit(&ow->invUi);
@@ -1576,6 +1739,25 @@ void FieldUpdate(FieldState *ow, float dt)
         return;
     }
 
+    // One-shot tutorial opening scene — Ma Duiker sends Jan to the north
+    // beach. Fires on the first free frame of a new game and never again
+    // (the INTRO bit persists in the save).
+    if (ow->gs->currentMapId == MAP_TUTORIAL_ISLAND &&
+        !(ow->gs->storyFlags & STORY_FLAG_TUT_INTRO) &&
+        !ow->dialogue.active) {
+        ow->gs->storyFlags |= STORY_FLAG_TUT_INTRO;
+        static const char *kIntro[] = {
+            "Ma Duiker: Jan! There you are. The morning dive's done - the others are up on the rocks drying their wings.",
+            "Ma Duiker: Ag, don't sulk. So your wings won't dry and you sink like a stone. You're MY stone, and that's the end of it.",
+            "Ma Duiker: Now - something big washed up on the north beach at dawn. Black and white, and it MOVES. Go and see. Careful, hey!",
+            // Touch phrasing only — this is a touch game; on desktop the same
+            // gesture works with a mouse drag.
+            "(Touch the screen and drag - Jan waddles the way you pull. Head north along the beach.)",
+        };
+        DialogueBegin(&ow->dialogue, kIntro, 4, 30.0f);
+        return;
+    }
+
     // If dialogue is active, update it and skip field input
     if (ow->dialogue.active) {
         DialogueUpdate(&ow->dialogue, dt);
@@ -1584,6 +1766,7 @@ void FieldUpdate(FieldState *ow, float dt)
 
     // Update player movement
     PlayerUpdate(&ow->player, &ow->map, ow);
+    if (ow->player.stepCompleted) ow->tutorialSteps++;
 
     // One-shot pre-fight taunt on F7 — fires the first time the player comes
     // within 2 tiles (Chebyshev) of the Captain. Gated by captainTauntShown
@@ -1839,6 +2022,54 @@ static void DrawPartyFollowersInBattle(const FieldState *ow)
     }
 }
 
+// Current tutorial objective, or NULL when no banner should show. Doubles as
+// the touch-controls walkthrough: the very first objective is literally "how
+// to walk", and it retires after a few successful steps.
+static const char *TutorialObjectiveText(const FieldState *ow)
+{
+    if (!ow->gs || ow->gs->currentMapId != MAP_TUTORIAL_ISLAND) return NULL;
+    uint64_t fl = ow->gs->storyFlags;
+    if (!(fl & STORY_FLAG_TUT_INTRO)) return NULL;  // intro scene still pending
+    if (ow->tutorialSteps < 3)
+        return "Touch and drag - Jan waddles the way you pull";
+    if (!(fl & STORY_FLAG_TUT_MET_RYNO))
+        return "Find what washed up on the north beach";
+    if (!(fl & STORY_FLAG_TUT_SWIM_TAUGHT))
+        return "Talk to Ryno again";
+    if (!(fl & STORY_FLAG_TUT_KELP_CUT))
+        return "Swim the east cove and slash the kelp at the ruin";
+    if (!(fl & STORY_FLAG_TUT_SHELLS_TAKEN))
+        return "Search the ruin for what the sea left behind";
+    if (!(fl & STORY_FLAG_TUT_GULL_BEATEN))
+        return "Chase the gull off the drying racks on the south grass";
+    if (!(fl & STORY_FLAG_TUT_COMPLETE))
+        return "Tell Ryno about the gull";
+    return "Swim the north channel and head for the mainland exit";
+}
+
+// Bottom-center objective pill. Sits just above the control-hint line.
+static void DrawTutorialObjective(const FieldState *ow)
+{
+    const char *text = TutorialObjectiveText(ow);
+    if (!text) return;
+
+#if SCREEN_PORTRAIT
+    int fs = 20;
+#else
+    int fs = 16;
+#endif
+    int tw   = MeasureText(text, fs);
+    int padX = 14, padY = 8;
+    int bw   = tw + padX * 2;
+    int bh   = fs + padY * 2;
+    int bx   = (GetScreenWidth() - bw) / 2;
+    int by   = GetScreenHeight() - bh - 34;
+    Rectangle r = { (float)bx, (float)by, (float)bw, (float)bh };
+    DrawRectangleRounded(r, 0.5f, 8, (Color){10, 10, 30, 190});
+    DrawRectangleRoundedLinesEx(r, 0.5f, 8, 2.0f, (Color){80, 80, 140, 255});
+    DrawText(text, bx + padX, by + padY, fs, (Color){235, 225, 200, 255});
+}
+
 void FieldDraw(const FieldState *ow)
 {
     TileMapDraw(&ow->map, ow->camera);
@@ -1918,23 +2149,26 @@ void FieldDraw(const FieldState *ow)
         DrawPartyFollowersInBattle(ow);
 
         if (ow->mode == FIELD_BATTLE) {
-            BattleDrawWorldOverlay(&ow->battle);
+            BattleDrawWorldOverlay(&ow->battle, &ow->map);
         }
 
         if (ow->mode == FIELD_FREE && !ow->player.moving && !ow->dialogue.active) {
             int tilePixels = TILE_SIZE * TILE_SCALE;
+            // Touch-first game: the marker says what to actually do. A mouse
+            // click counts as a tap on desktop (and Z still works silently).
+            const char *interactGlyph = "TAP";
             for (int i = 0; i < ow->npcCount; i++) {
                 if (NpcIsInteractable(&ow->npcs[i], ow->player.tileX, ow->player.tileY, ow->player.dir)) {
                     int px = ow->npcs[i].tileX * tilePixels + tilePixels / 2 - 6;
                     int py = ow->npcs[i].tileY * tilePixels - 18;
-                    DrawText("Z", px, py, 20, YELLOW);
+                    DrawText(interactGlyph, px, py, 20, YELLOW);
                 }
             }
             for (int i = 0; i < ow->objectCount; i++) {
                 if (FieldObjectIsInteractable(&ow->objects[i], ow->player.tileX, ow->player.tileY, ow->player.dir)) {
                     int px = ow->objects[i].tileX * tilePixels + tilePixels / 2 - 6;
                     int py = ow->objects[i].tileY * tilePixels - 18;
-                    DrawText("Z", px, py, 20, YELLOW);
+                    DrawText(interactGlyph, px, py, 20, YELLOW);
                 }
             }
             int surpriseSlot = -1;
@@ -2054,13 +2288,13 @@ void FieldDraw(const FieldState *ow)
     }
 
     if (ow->mode == FIELD_FREE) {
-#if SCREEN_PORTRAIT
+        // Touch-first phrasing on every build — drags/taps work with a mouse
+        // on desktop, and the keyboard shortcuts stay as silent extras.
         DrawText("Swipe to move   Tap to interact", 8,
                  GetScreenHeight() - 22, 14, (Color){150, 150, 150, 200});
-#else
-        DrawText("Arrows: Move | Z: Interact | I: Inventory", 8,
-                 GetScreenHeight() - 22, 14, (Color){150, 150, 150, 200});
-#endif
+        if (!ow->dialogue.active) {
+            DrawTutorialObjective(ow);
+        }
     }
 
     // Floating menu button (and its popup, when open). Only in free roam with
@@ -2125,7 +2359,11 @@ void FieldDraw(const FieldState *ow)
         const char *title;
         const char *warn;
         if (w->targetMapId == MAP_OVERWORLD_HUB) {
-            title = "Return to the village?";
+            // From the tutorial island this is Jan's FIRST trip — "return"
+            // would read wrong.
+            title = (ow->gs->currentMapId == MAP_TUTORIAL_ISLAND)
+                        ? "Set out for the village?"
+                        : "Return to the village?";
             warn  = "";
         } else if (w->targetMapId == MAP_HARBOR_F1) {
             title = "Enter the harbor?";
@@ -2172,6 +2410,7 @@ void FieldDraw(const FieldState *ow)
 void FieldReloadResources(FieldState *ow)
 {
     ow->map.tileset  = TilesetBuild();
+    TileMapLoadAtlases(&ow->map);
     EnemySpritesReload();
 
     int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;

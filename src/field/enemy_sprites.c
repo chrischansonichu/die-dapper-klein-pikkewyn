@@ -99,6 +99,64 @@ static SailorStyle StyleForCreature(int creatureId, float alpha, bool flash)
     return s;
 }
 
+// Kelp gull — the tutorial island's rack thief. White head/chest over slate
+// wings, stout yellow bill with the red gonys dot, pink legs. Same rounded
+// shape vocabulary as the rest of the field cast.
+static void DrawKelpGull(Rectangle r, int dir, float alpha, bool flash)
+{
+    Color white = Tint((Color){0xF0, 0xEE, 0xE4, 255}, alpha, flash);
+    Color slate = Tint((Color){0x4A, 0x50, 0x58, 255}, alpha, flash);
+    Color bill  = Tint((Color){0xE0, 0xB8, 0x40, 255}, alpha, flash);
+    Color spot  = Tint((Color){0xC8, 0x50, 0x40, 255}, alpha, flash);
+    Color leg   = Tint((Color){0xD8, 0xA8, 0x88, 255}, alpha, flash);
+    Color eye   = Tint(gPH.inkDark, alpha, flash);
+
+    float sz   = r.height;
+    float cx   = r.x + r.width * 0.5f;
+    float py   = r.y;
+    float side = (dir == 1) ? -1.0f : (dir == 2) ? 1.0f : 0.0f;
+
+    // Plump white body, slate wing mantle folded over the back.
+    Rectangle body = { cx - sz * 0.30f, py + sz * 0.34f, sz * 0.60f, sz * 0.48f };
+    DrawRectangleRounded(body, 0.7f, 12, white);
+    Rectangle mantle = { cx - sz * 0.26f, py + sz * 0.36f, sz * 0.52f, sz * 0.24f };
+    DrawRectangleRounded(mantle, 0.8f, 12, slate);
+    // Wingtips crossed over the tail.
+    DrawTriangle((Vector2){cx - sz * 0.10f, py + sz * 0.62f},
+                 (Vector2){cx + sz * 0.10f, py + sz * 0.62f},
+                 (Vector2){cx,              py + sz * 0.80f}, slate);
+
+    // Head — white circle offset toward the facing.
+    float headCx = cx + sz * 0.12f * side;
+    float headCy = py + sz * 0.26f;
+    DrawCircle((int)headCx, (int)headCy, sz * 0.16f, white);
+
+    // Bill + beady eye. Front/profile only; from behind it's just the head.
+    if (dir != 3) {
+        if (side != 0.0f) {
+            DrawLineEx((Vector2){headCx + sz * 0.10f * side, headCy + sz * 0.02f},
+                       (Vector2){headCx + sz * 0.30f * side, headCy + sz * 0.03f},
+                       sz * 0.055f, bill);
+            DrawCircle((int)(headCx + sz * 0.24f * side),
+                       (int)(headCy + sz * 0.055f), sz * 0.022f, spot);
+            DrawCircle((int)(headCx + sz * 0.02f * side),
+                       (int)(headCy - sz * 0.05f), sz * 0.032f, eye);
+        } else {
+            DrawTriangle((Vector2){headCx - sz * 0.04f, headCy + sz * 0.06f},
+                         (Vector2){headCx,               headCy + sz * 0.20f},
+                         (Vector2){headCx + sz * 0.04f, headCy + sz * 0.06f}, bill);
+            DrawCircle((int)(headCx - sz * 0.06f), (int)(headCy - sz * 0.04f), sz * 0.030f, eye);
+            DrawCircle((int)(headCx + sz * 0.06f), (int)(headCy - sz * 0.04f), sz * 0.030f, eye);
+        }
+    }
+
+    // Pink legs.
+    DrawRectangle((int)(cx - sz * 0.14f), (int)(py + sz * 0.82f),
+                  (int)(sz * 0.07f), (int)(sz * 0.09f), leg);
+    DrawRectangle((int)(cx + sz * 0.07f), (int)(py + sz * 0.82f),
+                  (int)(sz * 0.07f), (int)(sz * 0.09f), leg);
+}
+
 // Paper Harbor sailor — humanoid but simplified to the same shape vocabulary
 // as the F10 preview's `PH_DrawCharacter`: rounded torso rect, sash stripe,
 // yellow head circle, two eye dots, hat. No V-collar, hands, feet, or beard
@@ -109,6 +167,12 @@ void EnemySpritesDrawSailor(int creatureId, Rectangle r, int dir, int frame,
     if (alpha < 0.0f) alpha = 0.0f;
     if (alpha > 1.0f) alpha = 1.0f;
     (void)frame;  // No walk cycle — sailors idle-bob via caller, not here.
+
+    // Non-humanoid field enemies branch off before the sailor template.
+    if (creatureId == CREATURE_KELP_GULL) {
+        DrawKelpGull(r, dir, alpha, flashWhite);
+        return;
+    }
 
     SailorStyle s = StyleForCreature(creatureId, alpha, flashWhite);
 

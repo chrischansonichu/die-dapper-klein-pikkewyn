@@ -110,5 +110,35 @@ void FieldObjectDraw(const FieldObject *o, Camera2D cam)
                           (int)box.width, 3, gPH.ink);
             break;
         }
+        case OBJ_BLOCKAGE: {
+            // Storm-kelp tangle: a mound of overlapping olive fronds lashed
+            // across the tile, with a couple of bleached driftwood spars.
+            // Deliberately messy — it should read as "in the way".
+            const Color kelp     = (Color){0x5E, 0x74, 0x4A, 255};
+            const Color kelpDark = (Color){0x42, 0x54, 0x36, 255};
+            const Color wood     = (Color){0xC0, 0xA8, 0x84, 255};
+            float tp = (float)(TILE_SIZE * TILE_SCALE);
+
+            DrawEllipse((int)cx, (int)(cy + tp * 0.16f),
+                        tp * 0.42f, tp * 0.20f, kelpDark);
+            // Driftwood spars poking out at angles.
+            DrawLineEx((Vector2){px + tp * 0.10f, cy + tp * 0.24f},
+                       (Vector2){px + tp * 0.86f, cy - tp * 0.10f}, 4.0f, wood);
+            DrawLineEx((Vector2){px + tp * 0.20f, cy - tp * 0.18f},
+                       (Vector2){px + tp * 0.90f, cy + tp * 0.20f}, 3.0f, wood);
+            // Frond loops piled over the wood.
+            DrawEllipse((int)(cx - tp * 0.16f), (int)cy,
+                        tp * 0.22f, tp * 0.14f, kelp);
+            DrawEllipse((int)(cx + tp * 0.14f), (int)(cy + tp * 0.06f),
+                        tp * 0.24f, tp * 0.15f, kelp);
+            DrawEllipse((int)cx, (int)(cy - tp * 0.12f),
+                        tp * 0.20f, tp * 0.12f, kelp);
+            // Trailing strands down the tile edges.
+            DrawLineEx((Vector2){cx - tp * 0.30f, cy + tp * 0.10f},
+                       (Vector2){cx - tp * 0.38f, cy + tp * 0.34f}, 3.0f, kelpDark);
+            DrawLineEx((Vector2){cx + tp * 0.28f, cy + tp * 0.12f},
+                       (Vector2){cx + tp * 0.38f, cy + tp * 0.36f}, 3.0f, kelpDark);
+            break;
+        }
     }
 }

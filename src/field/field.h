@@ -110,6 +110,10 @@ typedef struct FieldState {
     // Mobile/wasm floating menu — tap-in button in the canvas corner that
     // reaches stats, inventory, and save without a keyboard.
     FabMenu       fab;
+
+    // Steps walked since this FieldState was built. Only consumer today is
+    // the tutorial island's "how to walk" hint, which hides after a few steps.
+    int           tutorialSteps;
 } FieldState;
 
 void FieldInit(FieldState *f, struct GameState *gs);

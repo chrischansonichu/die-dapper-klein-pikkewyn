@@ -18,6 +18,7 @@ typedef enum ObjectType {
     OBJ_LOGBOOK = 0,     // dataId → entry in lore_text.c (readable journal)
     OBJ_LANTERN,         // dataId → STORY_FLAG_LANTERN_* bit
     OBJ_CHEST,           // dataId → entry in lore_text.c (chest contents table)
+    OBJ_BLOCKAGE,        // cuttable storm-kelp tangle — blocks its tile until slashed
 } ObjectType;
 
 typedef struct FieldObject {

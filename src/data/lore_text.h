@@ -26,9 +26,10 @@ const char *GetLoreTitle(int loreId);
 // don't use the lore table.
 //----------------------------------------------------------------------------------
 
-#define CHEST_ALCOVE_F3  0
-#define CHEST_ALCOVE_F4  1
-#define CHEST_COUNT      2
+#define CHEST_ALCOVE_F3       0
+#define CHEST_ALCOVE_F4       1
+#define CHEST_TUTORIAL_SHELLS 2   // tutorial island fish-trap ruin — ShellThrow
+#define CHEST_COUNT           3
 
 typedef struct ChestContents {
     // Weapon dropped (move id), or -1 for none.

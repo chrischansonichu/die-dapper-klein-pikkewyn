@@ -163,6 +163,54 @@ static void DrawSealSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
     }
 }
 
+// ----- Kelp gull ---------------------------------------------------------
+// Battle-scaled version of the field gull: side profile driven by faceLeft.
+static void DrawGullSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
+{
+    Color white = Tint((Color){0xF0, 0xEE, 0xE4, 255}, alpha, flash);
+    Color slate = Tint((Color){0x4A, 0x50, 0x58, 255}, alpha, flash);
+    Color bill  = Tint((Color){0xE0, 0xB8, 0x40, 255}, alpha, flash);
+    Color spot  = Tint((Color){0xC8, 0x50, 0x40, 255}, alpha, flash);
+    Color leg   = Tint((Color){0xD8, 0xA8, 0x88, 255}, alpha, flash);
+    Color eye   = Tint(gPH.inkDark, alpha, flash);
+
+    float sz   = r.height;
+    float px   = r.x + (r.width - sz) / 2.0f;
+    float py   = r.y;
+    float cx   = px + sz * 0.5f;
+    float side = faceLeft ? -1.0f : 1.0f;
+
+    // Body with slate mantle; folded wingtip trailing behind.
+    Rectangle body = { cx - sz * 0.32f, py + sz * 0.36f, sz * 0.64f, sz * 0.44f };
+    DrawRectangleRounded(body, 0.7f, 12, white);
+    Rectangle mantle = { cx - sz * 0.28f, py + sz * 0.38f, sz * 0.56f, sz * 0.22f };
+    DrawRectangleRounded(mantle, 0.8f, 12, slate);
+    DrawTriangle(
+        (Vector2){cx + sz * 0.20f * -side, py + sz * 0.44f},
+        (Vector2){cx + sz * 0.48f * -side, py + sz * 0.58f},
+        (Vector2){cx + sz * 0.20f * -side, py + sz * 0.66f}, slate);
+
+    // Head forward of the body.
+    float headCx = cx + sz * 0.18f * side;
+    float headCy = py + sz * 0.26f;
+    DrawCircle((int)headCx, (int)headCy, sz * 0.16f, white);
+
+    // Stout bill with the red gonys spot; beady eye.
+    DrawLineEx((Vector2){headCx + sz * 0.10f * side, headCy + sz * 0.02f},
+               (Vector2){headCx + sz * 0.32f * side, headCy + sz * 0.035f},
+               sz * 0.06f, bill);
+    DrawCircle((int)(headCx + sz * 0.26f * side), (int)(headCy + sz * 0.06f),
+               sz * 0.024f, spot);
+    DrawCircle((int)(headCx + sz * 0.03f * side), (int)(headCy - sz * 0.05f),
+               sz * 0.034f, eye);
+
+    // Legs.
+    DrawRectangle((int)(cx - sz * 0.14f), (int)(py + sz * 0.80f),
+                  (int)(sz * 0.07f), (int)(sz * 0.10f), leg);
+    DrawRectangle((int)(cx + sz * 0.07f), (int)(py + sz * 0.80f),
+                  (int)(sz * 0.07f), (int)(sz * 0.10f), leg);
+}
+
 // ----- Dispatch ----------------------------------------------------------
 void DrawCombatantSprite(int creatureId, Rectangle r, bool isEnemy,
                          float alpha, float slideX, float slideY, bool flashWhite)
@@ -198,6 +246,7 @@ void DrawCombatantSprite(int creatureId, Rectangle r, bool isEnemy,
         case CREATURE_FIRST_MATE:      DrawCaptainSprite(rr,  faceLeft, alpha, flashWhite); break;
         case CREATURE_CAPTAIN_BOSS: DrawCaptainSprite(rr,  faceLeft, alpha, flashWhite); break;
         case CREATURE_SEAL:         DrawSealSprite(rr,     faceLeft, alpha, flashWhite); break;
+        case CREATURE_KELP_GULL:    DrawGullSprite(rr,     faceLeft, alpha, flashWhite); break;
         default: {
             // Fallback: the old colored box, so unknown creatures still render.
             Color c = isEnemy ? (Color){0xA8, 0x50, 0x54, 255} : (Color){0x50, 0x68, 0xA0, 255};

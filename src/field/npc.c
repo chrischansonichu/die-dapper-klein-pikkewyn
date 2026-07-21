@@ -232,6 +232,98 @@ static void DrawBlacksmith(int px, int py, int sz, int dir) {
                       0xC601, false);
 }
 
+// Cape cormorant — sooty charcoal body, long S-neck with a small head, slim
+// hooked beak, turquoise eye. Same rounded-primitive vocabulary as the
+// penguins; the tall neck is the silhouette cue that this is NOT a penguin,
+// which is the whole joke of Jan's childhood.
+static void DrawCormorant(int px, int py, int sz, int dir)
+{
+    const Color body = (Color){0x2E, 0x28, 0x22, 255};   // sooty brown-black
+    const Color neck = (Color){0x3A, 0x32, 0x2A, 255};
+    const Color beak = (Color){0xC8, 0xA0, 0x48, 255};   // dull horn-yellow
+    const Color eye  = (Color){0x4E, 0xC4, 0xC8, 255};   // cape-cormorant teal
+
+    float cx   = px + sz * 0.5f;
+    float side = (dir == 1) ? -1.0f : (dir == 2) ? 1.0f : 0.0f;
+
+    // Low rounded body with a short tail wedge opposite the facing side.
+    Rectangle bodyR = { px + sz * 0.22f, py + sz * 0.42f,
+                        sz * 0.56f, sz * 0.46f };
+    DrawRectangleRounded(bodyR, 0.6f, 12, body);
+    float tailSide = (side != 0.0f) ? -side : -1.0f;
+    DrawTriangle(
+        (Vector2){cx + sz * 0.24f * tailSide, py + sz * 0.58f},
+        (Vector2){cx + sz * 0.44f * tailSide, py + sz * 0.66f},
+        (Vector2){cx + sz * 0.24f * tailSide, py + sz * 0.74f}, body);
+
+    // Neck — a leaning column up from the body; head circle on top.
+    float headCx = cx + sz * 0.14f * side;
+    float headCy = py + sz * 0.22f;
+    DrawLineEx((Vector2){cx, py + sz * 0.50f},
+               (Vector2){headCx, headCy + sz * 0.06f},
+               sz * 0.13f, neck);
+    DrawCircle((int)headCx, (int)headCy, sz * 0.12f, body);
+
+    // Slim hooked beak, pointing with the facing. Down/up faces get a short
+    // centered beak so the sprite still reads.
+    if (dir == 1 || dir == 2) {
+        DrawLineEx((Vector2){headCx + sz * 0.06f * side, headCy},
+                   (Vector2){headCx + sz * 0.26f * side, headCy + sz * 0.02f},
+                   sz * 0.045f, beak);
+        DrawLineEx((Vector2){headCx + sz * 0.26f * side, headCy + sz * 0.02f},
+                   (Vector2){headCx + sz * 0.23f * side, headCy + sz * 0.06f},
+                   sz * 0.035f, beak);
+        DrawCircle((int)(headCx + sz * 0.02f * side), (int)(headCy - sz * 0.03f),
+                   sz * 0.030f, eye);
+    } else if (dir == 0) {
+        DrawTriangle((Vector2){headCx - sz * 0.035f, headCy + sz * 0.04f},
+                     (Vector2){headCx,               headCy + sz * 0.18f},
+                     (Vector2){headCx + sz * 0.035f, headCy + sz * 0.04f}, beak);
+        DrawCircle((int)(headCx - sz * 0.05f), (int)(headCy - sz * 0.02f), sz * 0.028f, eye);
+        DrawCircle((int)(headCx + sz * 0.05f), (int)(headCy - sz * 0.02f), sz * 0.028f, eye);
+    }
+    // dir 3 (up): back of the head — no beak, no eye.
+
+    // Wings held half-open to dry — the classic cormorant pose, and a neat
+    // contrast with penguin flippers. Skipped in profile so the silhouette
+    // stays clean.
+    if (dir == 0 || dir == 3) {
+        DrawEllipse((int)(px + sz * 0.16f), (int)(py + sz * 0.56f),
+                    sz * 0.10f, sz * 0.20f, neck);
+        DrawEllipse((int)(px + sz * 0.84f), (int)(py + sz * 0.56f),
+                    sz * 0.10f, sz * 0.20f, neck);
+    }
+
+    // Dark webbed feet.
+    DrawRectangle((int)(px + sz * 0.30f), (int)(py + sz * 0.88f),
+                  (int)(sz * 0.14f), (int)(sz * 0.08f), neck);
+    DrawRectangle((int)(px + sz * 0.56f), (int)(py + sz * 0.88f),
+                  (int)(sz * 0.14f), (int)(sz * 0.08f), neck);
+}
+
+// Ryno — the traveling penguin who comes ashore in the tutorial. Villager
+// silhouette with a bright storm-bleached belly and a kelp-wrapped travel
+// bundle at his side: he's been at sea a long time looking for fish.
+static void DrawRyno(int px, int py, int sz, int dir)
+{
+    // Bundle first so it sits behind the body (same trick as the salvager).
+    const Color kelpWrap = (Color){0x5E, 0x74, 0x4A, 255};
+    const Color cord     = gPH.dockDark;
+    Rectangle bundle = { px + sz * 0.70f, py + sz * 0.54f, sz * 0.24f, sz * 0.30f };
+    DrawRectangleRounded(bundle, 0.5f, 10, kelpWrap);
+    DrawLineEx((Vector2){bundle.x, bundle.y + bundle.height * 0.35f},
+               (Vector2){bundle.x + bundle.width, bundle.y + bundle.height * 0.30f},
+               2.0f, cord);
+    DrawLineEx((Vector2){bundle.x, bundle.y + bundle.height * 0.70f},
+               (Vector2){bundle.x + bundle.width, bundle.y + bundle.height * 0.65f},
+               2.0f, cord);
+
+    DrawPenguinPerson(px, py, sz, dir,
+                      (Color){0xF4, 0xEE, 0xDE, 255},  // salt-bleached white belly
+                      (Color){0, 0, 0, 0},
+                      0xC701, false);
+}
+
 // Cape fur seal — warm brown with a lighter belly
 static void DrawSeal(int px, int py, int sz, int dir)
 {
@@ -321,6 +413,8 @@ void NpcDraw(const Npc *n, Camera2D cam)
         case NPC_SCRIBE:        DrawScribe(px, py, sz, n->dir);       break;
         case NPC_SALVAGER:      DrawSalvager(px, py, sz, n->dir);     break;
         case NPC_BLACKSMITH:    DrawBlacksmith(px, py, sz, n->dir);   break;
+        case NPC_CORMORANT:     DrawCormorant(px, py, sz, n->dir);    break;
+        case NPC_RYNO:          DrawRyno(px, py, sz, n->dir);         break;
     }
 }
 
