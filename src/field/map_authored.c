@@ -242,6 +242,16 @@ static void AddHubNpcs(MapBuildContext *ctx)
         Npc *smith = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(smith, 4, 12, 3, NPC_BLACKSMITH);
     }
+
+    // Ryno — fresh off the crossing with Jan, loitering by the plaza's west
+    // edge between fishing runs. Post-tutorial only (he arrives WITH Jan);
+    // dialogue is scripted in field.c (first-arrival greet, then a short
+    // between-tides line).
+    if ((ctx->storyFlags & STORY_FLAG_TUT_COMPLETE) &&
+        *ctx->npcCount < ctx->npcMax) {
+        Npc *ryno = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(ryno, 9, 7, 2, NPC_RYNO);
+    }
 }
 
 void BuildOverworldHub(MapBuildContext *ctx)

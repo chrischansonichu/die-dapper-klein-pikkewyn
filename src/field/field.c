@@ -140,6 +140,18 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
     // player one task, so the tutorial reads as a story, not a manual.
     // Flags are latched the moment a stage opens (same pattern as the keeper)
     // so re-talking never replays a beat.
+    // Village Ryno — the cameo between fishing runs. The tutorial stage
+    // machine below is island-only; on any other map he's just Ryno,
+    // announcing he's off to fish the deep water but staying reachable.
+    if (n->type == NPC_RYNO &&
+        ow->gs->currentMapId != MAP_TUTORIAL_ISLAND) {
+        if (!(ow->gs->storyFlags & STORY_FLAG_HUB_RYNO_GREETED)) {
+            ow->gs->storyFlags |= STORY_FLAG_HUB_RYNO_GREETED;
+            return StrPages("hub.ryno.greet", pages, NPC_MAX_DIALOGUE_PAGES);
+        }
+        return StrPages("hub.ryno.later", pages, NPC_MAX_DIALOGUE_PAGES);
+    }
+
     if (n->type == NPC_RYNO) {
         uint64_t fl = ow->gs->storyFlags;
         if (!(fl & STORY_FLAG_TUT_MET_RYNO)) {

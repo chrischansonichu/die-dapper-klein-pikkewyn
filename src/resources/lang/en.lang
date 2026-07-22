@@ -210,6 +210,14 @@ rescue.loss.items = In the swim back, you lost %d item(s) from your bag.
 rescue.loss.weapons = In the swim back, %d weapon(s) in your bag took a beating.
 
 # ---------------------------------------------------------------------------
+# Village hub — Ryno between fishing runs
+# ---------------------------------------------------------------------------
+hub.ryno.greet.1 = Ryno: There he is! Look at this place, boet - huts, a forge, a food bank. Barnacle by barnacle, the fed-up are building something.
+hub.ryno.greet.2 = Ryno: Me? I'm for the deep water. A penguin's got to fish, and the shoals out past the point are still honest. Somebody has to keep this village in sardines.
+hub.ryno.greet.3 = Ryno: Go find the elder - get yourself useful. I'll be around, boet. You can't lose me. Family, remember?
+hub.ryno.later.1 = Ryno: Tide's not right yet, so you're stuck with me a while longer. Go on - this village won't explore itself.
+
+# ---------------------------------------------------------------------------
 # Harbor floor 1
 # ---------------------------------------------------------------------------
 harbor.elder.1 = Jan! The sailors have taken all the fish!
