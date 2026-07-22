@@ -25,21 +25,51 @@ static const ZoneRect kZones[] = {
     {  4,  5, 17,  9, STORY_FLAG_TUT_COMPLETE },
 };
 
+void TutorialRynoPos(uint64_t fl, int *outX, int *outY, int *outDir)
+{
+    if (fl & STORY_FLAG_TUT_COMPLETE) {
+        // Goodbyes done — he swims the channel ahead of Jan and waits at
+        // the mainland exit, facing back down the sand.
+        *outX = 32; *outY = 1; *outDir = 0;
+    } else if (fl & STORY_FLAG_TUT_LEAVE_OFFERED) {
+        // "I'll wait by the water" — the north channel shore.
+        *outX = 10; *outY = 10; *outDir = 3;
+    } else if ((fl & STORY_FLAG_TUT_GULL_BRIEFED) ||
+               (fl & STORY_FLAG_TUT_RANGED_TAUGHT)) {
+        // South dune, overlooking the drying racks for the gull fights.
+        // Gated on the briefing, not the cache: he waits at the cove until
+        // Jan has come back and SHOWN him the shells.
+        *outX = 11; *outY = 41; *outDir = 0;
+    } else if (fl & STORY_FLAG_TUT_SWIM_TAUGHT) {
+        // Cove shore, talking Jan through the kelp cut.
+        *outX = 19; *outY = 31; *outDir = 2;
+    } else {
+        // Where he first flopped ashore, north beach.
+        *outX = 12; *outY = 10; *outDir = 0;
+    }
+}
+
 void TutorialSpawnRaidGulls(FieldEnemy *enemies, int *enemyCount, int enemyMax,
                             bool active)
 {
     // Positions mirror the RaidGull1..3 point objects in tutorial.tmx (same
     // source-of-truth rule as kZones: the C table is gameplay, the tmx
-    // objects are the visual note). Tight cluster on the drying-rack grass
-    // so the aggro sweep pulls all three into one fight — that IS the
-    // ranged-combat lesson.
-    static const struct { int x, y; } kRaid[] = {
-        { 7, 45 }, { 9, 45 }, { 8, 47 },
+    // objects are the visual note). Clustered on the drying-rack grass so
+    // the aggro sweep (radius 5) pulls all three into one fight — that IS
+    // the ranged-combat lesson. The third gull STANDS facing south ("eyes
+    // on the racks"): standing enemies only look the way they face, so its
+    // back is permanently open — the guaranteed sneak-attack target Ryno
+    // points out. It sits east of the wanderers so the tile behind it stays
+    // outside their LOS range (3) and the sneak line-up isn't ambushed.
+    static const struct { int x, y; EnemyBehavior behavior; } kRaid[] = {
+        {  7, 45, BEHAVIOR_WANDER },
+        {  9, 45, BEHAVIOR_WANDER },
+        { 12, 46, BEHAVIOR_STAND  },
     };
     for (size_t i = 0; i < sizeof(kRaid) / sizeof(kRaid[0]); i++) {
         if (*enemyCount >= enemyMax) break;
         FieldEnemy *g = &enemies[(*enemyCount)++];
-        EnemyInit(g, kRaid[i].x, kRaid[i].y, 0, BEHAVIOR_WANDER,
+        EnemyInit(g, kRaid[i].x, kRaid[i].y, 0, kRaid[i].behavior,
                   CREATURE_KELP_GULL, 2, 3, (Color){0xE6, 0xE2, 0xD4, 255});
         g->wanderInterval = 60;
         EnemySetDrops(g, ITEM_SARDINE, 100, -1, 0);  // the stolen fish
@@ -125,13 +155,16 @@ void BuildTutorialIsland(MapBuildContext *ctx)
     *ctx->spawnTileY = y;
     *ctx->spawnDir   = 0;  // facing down, at Ma
 
-    // --- Ryno — the penguin who just came ashore on the north beach. All of
-    // his dialogue is stage-scripted in field.c (BuildNpcInteraction), keyed
-    // off the STORY_FLAG_TUT_* bits, so no static pages here.
+    // --- Ryno — the traveling penguin, and the tutorial's guide. All of his
+    // dialogue is stage-scripted in field.c (BuildNpcInteraction), keyed off
+    // the STORY_FLAG_TUT_* bits, and he waits at a different post per stage
+    // ("follow me") — so the spawn position comes from the story flags, not
+    // a fixed tmx point.
     if (*ctx->npcCount < ctx->npcMax) {
-        ObjTile(objs, objCount, "Ryno", 12, 10, &x, &y);
+        int dir;
+        TutorialRynoPos(ctx->storyFlags, &x, &y, &dir);
         Npc *ryno = &ctx->npcs[(*ctx->npcCount)++];
-        NpcInit(ryno, x, y, 0, NPC_RYNO);
+        NpcInit(ryno, x, y, dir, NPC_RYNO);
     }
 
     // --- The cormorant family, basking on the south rocks. Base dialogue is
@@ -160,6 +193,24 @@ void BuildTutorialIsland(MapBuildContext *ctx)
         sib->personaId = TUT_PERSONA_SIB;
         NpcAddDialogue(sib, Str("tut.sib.base.1"));
         NpcAddDialogue(sib, Str("tut.sib.base.2"));
+    }
+
+    // --- Neighbor cormorants — pure worldbuilding, no story staging
+    // (personaId stays 0 so field.c leaves their authored lines alone).
+    // Oom Karel grumbles about the trawler lights; Tannie Bettie gossips.
+    if (*ctx->npcCount < ctx->npcMax) {
+        ObjTile(objs, objCount, "OomKarel", 7, 50, &x, &y);
+        Npc *karel = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(karel, x, y, 2, NPC_CORMORANT);
+        NpcAddDialogue(karel, Str("tut.karel.base.1"));
+        NpcAddDialogue(karel, Str("tut.karel.base.2"));
+    }
+    if (*ctx->npcCount < ctx->npcMax) {
+        ObjTile(objs, objCount, "TannieBettie", 16, 51, &x, &y);
+        Npc *bettie = &ctx->npcs[(*ctx->npcCount)++];
+        NpcInit(bettie, x, y, 1, NPC_CORMORANT);
+        NpcAddDialogue(bettie, Str("tut.bettie.base.1"));
+        NpcAddDialogue(bettie, Str("tut.bettie.base.2"));
     }
 
     // --- Kelp gull raiding the family's drying racks — the practice fight.
@@ -203,6 +254,39 @@ void BuildTutorialIsland(MapBuildContext *ctx)
         FieldObject *cache = &ctx->objects[(*ctx->objectCount)++];
         FieldObjectInit(cache, x, y, OBJ_CHEST, CHEST_TUTORIAL_SHELLS);
         if (ctx->storyFlags & STORY_FLAG_TUT_SHELLS_TAKEN) cache->consumed = true;
+    }
+
+    // --- Island dressing + side content. Tide pools refill every map build
+    // ("the tide came in"); the buoy is Vlerkie's dare target out in the
+    // cove; the storm-nest keeps its feather until the farewell scene takes
+    // it; the crate and decor are re-readable flavor.
+    static const struct {
+        const char *obj; int fx, fy; ObjectType type; int dataId;
+    } kDressing[] = {
+        { "TidePool1",  7, 20, OBJ_TIDEPOOL, 0 },
+        { "TidePool2", 16, 28, OBJ_TIDEPOOL, 0 },
+        { "TidePool3",  6, 49, OBJ_TIDEPOOL, 0 },
+        // North edge of the cove — NOT on the row-30 channel: (22,30) is the
+        // only tile that can face the kelp blockage, and objects occupy
+        // their tile, so a buoy there walls off the whole ruin.
+        { "Buoy",      21, 28, OBJ_BUOY,     0 },
+        { "StormNest",  5, 26, OBJ_NEST,     0 },
+        { "Crate",      6, 12, OBJ_CRATE,    0 },
+        { "Rack1",      8, 48, OBJ_RACK,     0 },
+        { "Rack2",     11, 48, OBJ_RACK,     0 },
+        { "Driftwood", 10, 22, OBJ_DECOR,    DECOR_DRIFTWOOD },
+        { "ShellPile", 15, 20, OBJ_DECOR,    DECOR_SHELLS    },
+        { "StonePile", 12, 49, OBJ_DECOR,    DECOR_STONES    },
+    };
+    for (size_t i = 0; i < sizeof(kDressing) / sizeof(kDressing[0]); i++) {
+        if (*ctx->objectCount >= ctx->objectMax) break;
+        ObjTile(objs, objCount, kDressing[i].obj,
+                kDressing[i].fx, kDressing[i].fy, &x, &y);
+        FieldObject *d = &ctx->objects[(*ctx->objectCount)++];
+        FieldObjectInit(d, x, y, kDressing[i].type, kDressing[i].dataId);
+        if (kDressing[i].type == OBJ_NEST &&
+            (ctx->storyFlags & STORY_FLAG_TUT_NEST_SEEN))
+            d->consumed = true;  // feather already taken
     }
 
     // --- Mainland exit, top-right sand strip -> village hub south plaza.

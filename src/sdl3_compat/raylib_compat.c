@@ -377,8 +377,18 @@ float GetFrameTime(void) { return g_frame_dt_seconds; }
 double GetTime(void)     { return (double)(SDL_GetTicksNS() - g_init_ns) / 1.0e9; }
 
 void ClearBackground(Color c) {
-    SDL_SetRenderDrawColor(g_renderer, c.r, c.g, c.b, c.a);
+    // SDL_RenderClear ignores the logical-presentation viewport and floods
+    // the whole backbuffer — with LETTERBOX presentation on phones that
+    // painted the side bars the same paper-tan as the game. Clear the full
+    // target to black first, then fill only the logical area with the
+    // requested color, so the letterbox margins stay a neutral black frame.
+    SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 255);
     SDL_RenderClear(g_renderer);
+    if (g_logical_w > 0 && g_logical_h > 0) {
+        SDL_SetRenderDrawColor(g_renderer, c.r, c.g, c.b, c.a);
+        SDL_FRect r = { 0, 0, (float)g_logical_w, (float)g_logical_h };
+        SDL_RenderFillRect(g_renderer, &r);
+    }
 }
 
 // ---------------------------------------------------------------------------

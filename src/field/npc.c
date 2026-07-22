@@ -1,9 +1,11 @@
 #include "npc.h"
 #include "enemy.h"
+#include "field.h"
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
 #include <string.h>
 #include <math.h>
+#include <stdlib.h>
 
 void NpcInit(Npc *n, int tileX, int tileY, int dir, NpcType type)
 {
@@ -19,6 +21,15 @@ void NpcInit(Npc *n, int tileX, int tileY, int dir, NpcType type)
     n->isCaptive   = false;
     n->captorCount = 0;
     n->captorIdxs[0] = -1;
+    n->moving        = false;
+    n->targetTileX   = tileX;
+    n->targetTileY   = tileY;
+    n->moveFrames    = 0;
+    n->guidePathLen  = 0;
+    n->guidePathIdx  = 0;
+    n->guideFinalDir = dir;
+    n->guideWaitForPlayer = true;
+    n->onWater       = false;
     n->captorIdxs[1] = -1;
 }
 
@@ -74,6 +85,79 @@ void NpcTurnToFace(Npc *n, int tileX, int tileY)
     else if (dx < 0) n->dir = 1; // face left
     else if (dy > 0) n->dir = 0; // face down
     else if (dy < 0) n->dir = 3; // face up
+}
+
+void NpcSetGuidePath(Npc *n, const int *xs, const int *ys, int len,
+                     int finalDir, bool waitForPlayer)
+{
+    n->guideWaitForPlayer = waitForPlayer;
+    if (len > NPC_GUIDE_PATH_MAX) len = NPC_GUIDE_PATH_MAX;
+    for (int i = 0; i < len; i++) {
+        n->guidePathX[i] = xs[i];
+        n->guidePathY[i] = ys[i];
+    }
+    n->guidePathLen  = len;
+    n->guidePathIdx  = 0;
+    n->guideFinalDir = finalDir;
+}
+
+bool NpcGuideActive(const Npc *n)
+{
+    return n->moving || n->guidePathIdx < n->guidePathLen;
+}
+
+void NpcWalkUpdate(Npc *n, const TileMap *map, const struct FieldState *f,
+                   int playerTileX, int playerTileY)
+{
+    if (!n->active) return;
+
+    // Finish the in-flight tile step first.
+    if (n->moving) {
+        n->moveFrames++;
+        if (n->moveFrames >= NPC_MOVE_FRAMES) {
+            n->tileX   = n->targetTileX;
+            n->tileY   = n->targetTileY;
+            n->moving  = false;
+            n->onWater = TileMapIsWater(map, n->tileX, n->tileY);
+            // Route done — settle into the arrival facing.
+            if (n->guidePathIdx >= n->guidePathLen)
+                n->dir = n->guideFinalDir;
+        }
+        return;
+    }
+    if (n->guidePathIdx >= n->guidePathLen) return;
+
+    // A guide leads, it doesn't leave: if the player has fallen behind,
+    // stop and look back at them until they close the gap.
+    if (n->guideWaitForPlayer) {
+        int ddx = abs(playerTileX - n->tileX);
+        int ddy = abs(playerTileY - n->tileY);
+        int dist = ddx > ddy ? ddx : ddy;
+        if (dist > NPC_GUIDE_FOLLOW_RANGE) {
+            NpcTurnToFace(n, playerTileX, playerTileY);
+            return;
+        }
+    }
+
+    int nx = n->guidePathX[n->guidePathIdx];
+    int ny = n->guidePathY[n->guidePathIdx];
+    if (nx == n->tileX && ny == n->tileY) {  // degenerate waypoint
+        n->guidePathIdx++;
+        if (n->guidePathIdx >= n->guidePathLen) n->dir = n->guideFinalDir;
+        return;
+    }
+    // Blocked (player standing in the path, a wandering gull, ...) — just
+    // retry next frame; dynamic blockers move on.
+    if (TileMapIsSolid(map, nx, ny) ||
+        FieldIsTileOccupied(f, nx, ny, -1))
+        return;
+
+    NpcTurnToFace(n, nx, ny);
+    n->targetTileX = nx;
+    n->targetTileY = ny;
+    n->moving      = true;
+    n->moveFrames  = 0;
+    n->guidePathIdx++;
 }
 
 // Cream-bellied penguin. `hasHat` draws the top hat (Mayor only); others
@@ -387,21 +471,37 @@ void NpcDraw(const Npc *n, Camera2D cam)
     if (!n->active) return;
 
     int tilePixels = TILE_SIZE * TILE_SCALE;
-    int px = n->tileX * tilePixels;
-    int py = n->tileY * tilePixels;
+    // Interpolate mid-step positions (guide walking) the same way enemies do.
+    float t   = n->moving ? (float)n->moveFrames / (float)NPC_MOVE_FRAMES : 1.0f;
+    float fpx = (float)(n->tileX * tilePixels) +
+                (float)((n->targetTileX - n->tileX) * tilePixels) * t;
+    float fpy = (float)(n->tileY * tilePixels) +
+                (float)((n->targetTileY - n->tileY) * tilePixels) * t;
+    int px = (int)fpx;
+    int py = (int)fpy;
     int sz = NPC_SPRITE_SIZE * TILE_SCALE;
 
-    // Idle bob so NPCs don't look frozen. Phase is per-tile so a row of NPCs
-    // (keeper, scribe, food bank stall) doesn't breathe in unison.
-    float phase = (float)GetTime() * 2.0f +
-                  (float)n->tileX * 0.7f + (float)n->tileY * 1.3f;
-    py += (int)(sinf(phase) * 1.0f);
+    if (n->onWater) {
+        // Swimming: sit lower in the water behind a ripple; no hop.
+        py += 4;
+        DrawEllipse((int)(fpx + sz * 0.5f), (int)(fpy + sz * 0.86f),
+                    sz * 0.38f, sz * 0.10f, (Color){0xEE, 0xF4, 0xEE, 80});
+    } else if (n->moving) {
+        // Waddle-hop: one little bounce per tile step.
+        py -= (int)(sinf(t * 3.14159f) * 2.0f);
+    } else {
+        // Idle bob so NPCs don't look frozen. Phase is per-tile so a row of
+        // NPCs (keeper, scribe, food bank stall) doesn't breathe in unison.
+        float phase = (float)GetTime() * 2.0f +
+                      (float)n->tileX * 0.7f + (float)n->tileY * 1.3f;
+        py += (int)(sinf(phase) * 1.0f);
+    }
 
     // Contact shadow under the feet — drawn before the sprite so it sits
     // behind the body. The bob moves the sprite but not the shadow, which
     // reads as the character lifting off the ground.
-    float shCx = (float)(n->tileX * tilePixels) + (float)sz * 0.5f;
-    float shY  = (float)(n->tileY * tilePixels) + (float)sz * 0.94f;
+    float shCx = fpx + (float)sz * 0.5f;
+    float shY  = fpy + (float)sz * 0.94f;
     DrawEllipse((int)shCx, (int)shY, sz * 0.30f, sz * 0.09f,
                 (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 90});
 

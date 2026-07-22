@@ -35,7 +35,7 @@ struct GameState;
 #define FIELD_MAX_NPCS    16
 #define FIELD_MAX_ENEMIES 16
 #define FIELD_MAX_WARPS   8
-#define FIELD_MAX_OBJECTS 8
+#define FIELD_MAX_OBJECTS 16
 
 typedef enum FieldMode {
     FIELD_FREE = 0,

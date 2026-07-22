@@ -66,11 +66,13 @@ bool FieldIsTileOccupied(const FieldState *ow, int x, int y, int ignoreEnemyIdx)
     if (ow->player.tileX == x && ow->player.tileY == y) return true;
     if (ow->player.moving && ow->player.targetTileX == x && ow->player.targetTileY == y)
         return true;
-    // NPCs
+    // NPCs — including the tile a walking guide is stepping into.
     for (int i = 0; i < ow->npcCount; i++) {
         const Npc *n = &ow->npcs[i];
         if (!n->active) continue;
         if (n->tileX == x && n->tileY == y) return true;
+        if (n->moving && n->targetTileX == x && n->targetTileY == y)
+            return true;
     }
     // Enemies
     for (int i = 0; i < ow->enemyCount; i++) {
@@ -165,8 +167,12 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
         }
         if (!(fl & STORY_FLAG_TUT_SHELLS_TAKEN))
             return StrPages("tut.ryno.remind", pages, NPC_MAX_DIALOGUE_PAGES);
-        if (!(fl & STORY_FLAG_TUT_GULL_BEATEN))
+        if (!(fl & STORY_FLAG_TUT_GULL_BEATEN)) {
+            // Latching this is what releases Ryno from the cove — he waits
+            // until Jan has shown him the shells before heading south.
+            ow->gs->storyFlags |= STORY_FLAG_TUT_GULL_BRIEFED;
             return StrPages("tut.ryno.gull", pages, NPC_MAX_DIALOGUE_PAGES);
+        }
         if (!(fl & STORY_FLAG_TUT_RANGED_TAUGHT)) {
             // Ranged lesson — and the moment it lands, the beaten gull's
             // cousins hit the drying racks. Compact away any kelp gulls
@@ -200,6 +206,10 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
         }
         if ((fl & STORY_FLAG_TUT_FAREWELL_ALL) != STORY_FLAG_TUT_FAREWELL_ALL)
             return StrPages("tut.ryno.waitfam", pages, NPC_MAX_DIALOGUE_PAGES);
+        // Ma's farewell points Jan at the west point nest — Ryno holds the
+        // crossing until that's been stood in once.
+        if (!(fl & STORY_FLAG_TUT_NEST_SEEN))
+            return StrPages("tut.ryno.waitnest", pages, NPC_MAX_DIALOGUE_PAGES);
         if (!(fl & STORY_FLAG_TUT_COMPLETE)) {
             ow->gs->storyFlags |= STORY_FLAG_TUT_COMPLETE;
             TutorialApplyZones(&ow->map, ow->gs->storyFlags);
@@ -240,14 +250,40 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
                 return StrPages("tut.sib.after", pages, NPC_MAX_DIALOGUE_PAGES);
             }
         }
-        // Gull mob on the racks — the whole family is in alarm mode.
-        if ((fl & STORY_FLAG_TUT_RANGED_TAUGHT) &&
-            !(fl & STORY_FLAG_TUT_RAID_BEATEN))
-            return StrPages("tut.family.raid", pages, NPC_MAX_DIALOGUE_PAGES);
-        if (fl & STORY_FLAG_TUT_RAID_BEATEN)
-            return StrPages("tut.family.proud2", pages, NPC_MAX_DIALOGUE_PAGES);
-        if (fl & STORY_FLAG_TUT_GULL_BEATEN)
-            return StrPages("tut.family.proud", pages, NPC_MAX_DIALOGUE_PAGES);
+        // Neighbor cormorants (personaId 0) never join the family staging —
+        // their authored gossip plays as-is through the fallthrough below.
+        if (n->personaId != 0) {
+            bool raidActive = (fl & STORY_FLAG_TUT_RANGED_TAUGHT) &&
+                              !(fl & STORY_FLAG_TUT_RAID_BEATEN);
+            // Vlerkie's buoy dare — a side quest that opens with the swim
+            // lesson. Paused while the raid alarm is up (priorities), gone
+            // once the farewells start (the branch above returns first).
+            if (n->personaId == TUT_PERSONA_SIB && !raidActive) {
+                if ((fl & STORY_FLAG_TUT_DARE_DONE) &&
+                    !(fl & STORY_FLAG_TUT_DARE_PAID)) {
+                    ow->gs->storyFlags |= STORY_FLAG_TUT_DARE_PAID;
+                    // "Two sardines from my secret stash" — the payout and
+                    // the line arrive together.
+                    InventoryAddItem(&ow->gs->party.inventory, ITEM_SARDINE, 2);
+                    return StrPages("tut.sib.darewin", pages, NPC_MAX_DIALOGUE_PAGES);
+                }
+                if ((fl & STORY_FLAG_TUT_DARE_ACCEPTED) &&
+                    !(fl & STORY_FLAG_TUT_DARE_DONE))
+                    return StrPages("tut.sib.remind", pages, NPC_MAX_DIALOGUE_PAGES);
+                if ((fl & STORY_FLAG_TUT_SWIM_TAUGHT) &&
+                    !(fl & STORY_FLAG_TUT_DARE_ACCEPTED)) {
+                    ow->gs->storyFlags |= STORY_FLAG_TUT_DARE_ACCEPTED;
+                    return StrPages("tut.sib.dare", pages, NPC_MAX_DIALOGUE_PAGES);
+                }
+            }
+            // Gull mob on the racks — the whole family is in alarm mode.
+            if (raidActive)
+                return StrPages("tut.family.raid", pages, NPC_MAX_DIALOGUE_PAGES);
+            if (fl & STORY_FLAG_TUT_RAID_BEATEN)
+                return StrPages("tut.family.proud2", pages, NPC_MAX_DIALOGUE_PAGES);
+            if (fl & STORY_FLAG_TUT_GULL_BEATEN)
+                return StrPages("tut.family.proud", pages, NPC_MAX_DIALOGUE_PAGES);
+        }
         // Fall through to the NPC's authored dialogue below.
     }
 
@@ -444,10 +480,11 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
             const ChestContents *cc = GetChestContents(o->dataId);
             if (!cc) return;
 
-            // Stage 2 pages of pickup narration. Page 0 is the flavor; page 1
-            // names what was added (or notes the bag was full). flavorKey is
-            // a string-table key, resolved here.
-            static const char *pages[2];
+            // Stage the pickup narration. Page 0 is the flavor; page 1
+            // names what was added (or notes the bag was full); the tutorial
+            // shell cache appends an equip tip. flavorKey is a string-table
+            // key, resolved here.
+            static const char *pages[3];
             static char addLine[160];
             int pageCount = 0;
             if (cc->flavorKey) pages[pageCount++] = Str(cc->flavorKey);
@@ -476,6 +513,11 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
             }
             if (addLine[0]) pages[pageCount++] = addLine;
 
+            // Tutorial shells: a weapon in the bag does nothing — nudge the
+            // equip step right at the pickup, before the walk back to Ryno.
+            if (o->dataId == CHEST_TUTORIAL_SHELLS)
+                pages[pageCount++] = Str("tut.shells.equip");
+
             DialogueBegin(&ow->dialogue, pages, pageCount, 30.0f);
             o->consumed = true;
             ow->gs->storyFlags |= ChestFlagFor(o->dataId);
@@ -488,6 +530,95 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
                         ow->enemies[i].active = true;
                 }
             }
+            return;
+        }
+        case OBJ_TIDEPOOL: {
+            // Forage pool — one sardine per map build; consumed pools sit
+            // empty until the next rebuild ("the tide came in"). The first
+            // catch ever appends the food-heals tip.
+            if (o->consumed) {
+                const char *empty[1] = { Str("tut.pool.empty") };
+                DialogueBegin(&ow->dialogue, empty, 1, 30.0f);
+                return;
+            }
+            if (!InventoryAddItem(&ow->gs->party.inventory, ITEM_SARDINE, 1)) {
+                const char *full[1] = { Str("tut.pool.full") };
+                DialogueBegin(&ow->dialogue, full, 1, 30.0f);
+                return;  // not consumed — come back with bag space
+            }
+            o->consumed = true;
+            const char *pages[2];
+            int n = 0;
+            pages[n++] = Str("tut.pool.catch");
+            if (!(ow->gs->storyFlags & STORY_FLAG_TUT_POOL_HINT)) {
+                ow->gs->storyFlags |= STORY_FLAG_TUT_POOL_HINT;
+                pages[n++] = Str("tut.pool.hint");
+            }
+            DialogueBegin(&ow->dialogue, pages, n, 30.0f);
+            return;
+        }
+        case OBJ_BUOY: {
+            // Vlerkie's dare target. The clong only "counts" once the dare
+            // has been taken — before that it's scenery.
+            uint64_t fl = ow->gs->storyFlags;
+            const char *key;
+            if ((fl & STORY_FLAG_TUT_DARE_ACCEPTED) &&
+                !(fl & STORY_FLAG_TUT_DARE_DONE)) {
+                ow->gs->storyFlags |= STORY_FLAG_TUT_DARE_DONE;
+                key = "tut.buoy.clong";
+            } else if (fl & STORY_FLAG_TUT_DARE_DONE) {
+                key = "tut.buoy.again";
+            } else {
+                key = "tut.buoy.early";
+            }
+            const char *page[1] = { Str(key) };
+            DialogueBegin(&ow->dialogue, page, 1, 30.0f);
+            return;
+        }
+        case OBJ_NEST: {
+            // Annika's storm-nest on the west point. A quiet mystery until
+            // Ma's farewell points Jan here; then the full scene plays once
+            // and the feather leaves with him.
+            uint64_t fl = ow->gs->storyFlags;
+            if (!(fl & STORY_FLAG_TUT_FAREWELL_MA)) {
+                const char *early[1] = { Str("tut.nest.early") };
+                DialogueBegin(&ow->dialogue, early, 1, 30.0f);
+                return;
+            }
+            if (!(fl & STORY_FLAG_TUT_NEST_SEEN)) {
+                ow->gs->storyFlags |= STORY_FLAG_TUT_NEST_SEEN;
+                o->consumed = true;  // the feather is taken
+                const char *scene[STR_MAX_PAGES];
+                int n = StrPages("tut.nest", scene, STR_MAX_PAGES);
+                DialogueBegin(&ow->dialogue, scene, n, 30.0f);
+                return;
+            }
+            const char *after[1] = { Str("tut.nest.after") };
+            DialogueBegin(&ow->dialogue, after, 1, 30.0f);
+            return;
+        }
+        case OBJ_CRATE: {
+            // Washed-up trawler crate — re-readable foreshadowing.
+            const char *pages[STR_MAX_PAGES];
+            int n = StrPages("tut.crate", pages, STR_MAX_PAGES);
+            DialogueBegin(&ow->dialogue, pages, n, 30.0f);
+            return;
+        }
+        case OBJ_DECOR: {
+            const char *key = "tut.decor.driftwood";
+            if (o->dataId == DECOR_SHELLS) key = "tut.decor.shells";
+            if (o->dataId == DECOR_STONES) key = "tut.decor.stones";
+            const char *page[1] = { Str(key) };
+            DialogueBegin(&ow->dialogue, page, 1, 30.0f);
+            return;
+        }
+        case OBJ_RACK: {
+            // The family's winter stores — line reflects whether the gull
+            // raid has been dealt with yet.
+            bool safe = (ow->gs->storyFlags & STORY_FLAG_TUT_RAID_BEATEN) != 0;
+            const char *page[1] = { Str(safe ? "tut.rack.safe"
+                                             : "tut.rack.full") };
+            DialogueBegin(&ow->dialogue, page, 1, 30.0f);
             return;
         }
         case OBJ_BLOCKAGE: {
@@ -515,6 +646,13 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
 static void BeginNpcInteraction(FieldState *ow, int npcIdx)
 {
     Npc *n = &ow->npcs[npcIdx];
+    // A walking guide caught mid-step: land the step before talking, so the
+    // sprite doesn't hang between tiles for the whole conversation.
+    if (n->moving) {
+        n->tileX  = n->targetTileX;
+        n->tileY  = n->targetTileY;
+        n->moving = false;
+    }
     if (n->type == NPC_FOOD_BANK) {
         DonationUIOpen(&ow->donationUi, &ow->gs->party);
         return;
@@ -544,6 +682,62 @@ static void BeginNpcInteraction(FieldState *ow, int npcIdx)
 // Direction vectors: 0=down, 1=left, 2=right, 3=up.
 static const int FIELD_DIR_DX[4] = {  0, -1,  1,  0 };
 static const int FIELD_DIR_DY[4] = {  1,  0,  0, -1 };
+
+// BFS shortest path over walkable tiles from (sx,sy) to (tx,ty). Land only
+// by default; allowWater additionally admits non-solid water (open swim
+// zones) — used for Ryno's final leg, where he swims the channel ahead of
+// Jan. Writes up to maxLen waypoints (excluding the start, including the
+// target) and returns the count; 0 = no route / route too long. Dynamic
+// blockers (player, gulls) are NOT considered — the walker sidesteps those
+// per-step by waiting.
+#define FIELD_PATH_GRID_MAX 4096
+static int FieldFindLandPath(const TileMap *m, int sx, int sy, int tx, int ty,
+                             int *outX, int *outY, int maxLen, bool allowWater)
+{
+    int w = m->width, h = m->height;
+    if (w * h > FIELD_PATH_GRID_MAX) return 0;
+    if (sx == tx && sy == ty) return 0;
+
+    static int16_t prev[FIELD_PATH_GRID_MAX];
+    static int16_t queue[FIELD_PATH_GRID_MAX];
+    for (int i = 0; i < w * h; i++) prev[i] = -1;
+
+    int head = 0, tail = 0;
+    prev[sy * w + sx] = (int16_t)(sy * w + sx);
+    queue[tail++] = (int16_t)(sy * w + sx);
+
+    while (head < tail) {
+        int cur = queue[head++];
+        int cx = cur % w, cy = cur / w;
+        if (cx == tx && cy == ty) break;
+        for (int d = 0; d < 4; d++) {
+            int nx = cx + FIELD_DIR_DX[d];
+            int ny = cy + FIELD_DIR_DY[d];
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+            int ni = ny * w + nx;
+            if (prev[ni] != -1) continue;
+            if (TileMapIsSolid(m, nx, ny)) continue;
+            if (!allowWater && TileMapIsWater(m, nx, ny)) continue;
+            prev[ni] = (int16_t)cur;
+            queue[tail++] = (int16_t)ni;
+        }
+    }
+
+    int ti = ty * w + tx;
+    if (prev[ti] == -1) return 0;
+
+    // Walk back to count, then fill front-to-back.
+    int len = 0;
+    for (int i = ti; i != sy * w + sx; i = prev[i]) len++;
+    if (len > maxLen) return 0;
+    int idx = len;
+    for (int i = ti; i != sy * w + sx; i = prev[i]) {
+        idx--;
+        outX[idx] = i % w;
+        outY[idx] = i / w;
+    }
+    return len;
+}
 
 // Find a sneak-attack target. The adjacent-behind case is the classic melee
 // sneak and falls back to slot 0 (Tackle) so it always works. If the player
@@ -1752,15 +1946,81 @@ void FieldUpdate(FieldState *ow, float dt)
         return;
     }
 
+    // First hub arrival after the tutorial: the journey montage. Days of
+    // swimming north with Ryno — the colony must not read as "the next
+    // island over". One-shot via the ARRIVED bit.
+    if (ow->gs->currentMapId == MAP_OVERWORLD_HUB &&
+        (ow->gs->storyFlags & STORY_FLAG_TUT_COMPLETE) &&
+        !(ow->gs->storyFlags & STORY_FLAG_TUT_ARRIVED) &&
+        !ow->dialogue.active) {
+        ow->gs->storyFlags |= STORY_FLAG_TUT_ARRIVED;
+        const char *journey[STR_MAX_PAGES];
+        int n = StrPages("tut.journey", journey, STR_MAX_PAGES);
+        DialogueBegin(&ow->dialogue, journey, n, 30.0f);
+        return;
+    }
+
     // If dialogue is active, update it and skip field input
     if (ow->dialogue.active) {
         DialogueUpdate(&ow->dialogue, dt);
+        // Guide departure — the moment a conversation ends on the tutorial
+        // island, Ryno starts WALKING to his post for the current stage
+        // ("follow me"): BFS a land route and hand it to the NPC walker.
+        // If he's already en route to the right place, leave him be.
+        if (!ow->dialogue.active &&
+            ow->gs->currentMapId == MAP_TUTORIAL_ISLAND) {
+            for (int i = 0; i < ow->npcCount; i++) {
+                Npc *n = &ow->npcs[i];
+                if (n->type != NPC_RYNO) continue;
+                int gx, gy, gdir;
+                TutorialRynoPos(ow->gs->storyFlags, &gx, &gy, &gdir);
+                bool enRoute = NpcGuideActive(n) && n->guidePathLen > 0 &&
+                               n->guidePathX[n->guidePathLen - 1] == gx &&
+                               n->guidePathY[n->guidePathLen - 1] == gy;
+                bool there = !NpcGuideActive(n) &&
+                             n->tileX == gx && n->tileY == gy;
+                if (!enRoute && !there) {
+                    // Route from where he'll stand once any in-flight step
+                    // lands (walk pauses during dialogue, so a step may
+                    // still be mid-air here).
+                    int fromX = n->moving ? n->targetTileX : n->tileX;
+                    int fromY = n->moving ? n->targetTileY : n->tileY;
+                    int pathX[NPC_GUIDE_PATH_MAX];
+                    int pathY[NPC_GUIDE_PATH_MAX];
+                    // The final leg crosses the (now-open) channel — Ryno
+                    // swims it ahead of Jan.
+                    bool water = (ow->gs->storyFlags &
+                                  STORY_FLAG_TUT_COMPLETE) != 0;
+                    int len = FieldFindLandPath(&ow->map, fromX, fromY,
+                                                gx, gy, pathX, pathY,
+                                                NPC_GUIDE_PATH_MAX, water);
+                    if (len > 0) {
+                        // The channel leg is announced, not led — Jan has
+                        // goodbyes to make first, so Ryno walks off alone.
+                        bool wait = !(ow->gs->storyFlags &
+                                      STORY_FLAG_TUT_LEAVE_OFFERED);
+                        NpcSetGuidePath(n, pathX, pathY, len, gdir, wait);
+                    }
+                }
+                break;
+            }
+        }
         return;
     }
 
     // Update player movement
     PlayerUpdate(&ow->player, &ow->map, ow);
     if (ow->player.stepCompleted) ow->tutorialSteps++;
+
+    // Walk any guide NPC along its route (Ryno leading the player between
+    // tutorial posts). Paused implicitly during dialogue/battle — those
+    // paths return before reaching here.
+    for (int i = 0; i < ow->npcCount; i++) {
+        Npc *n = &ow->npcs[i];
+        if (n->active && (n->moving || NpcGuideActive(n)))
+            NpcWalkUpdate(n, &ow->map, ow,
+                          ow->player.tileX, ow->player.tileY);
+    }
 
     // One-shot pre-fight taunt on F7 — fires the first time the player comes
     // within 2 tiles (Chebyshev) of the Captain. Gated by captainTauntShown
@@ -2027,12 +2287,15 @@ static const char *TutorialObjectiveText(const FieldState *ow)
     if (!(fl & STORY_FLAG_TUT_SWIM_TAUGHT))         return Str("tut.obj.talk");
     if (!(fl & STORY_FLAG_TUT_KELP_CUT))            return Str("tut.obj.kelp");
     if (!(fl & STORY_FLAG_TUT_SHELLS_TAKEN))        return Str("tut.obj.cache");
+    if (!(fl & STORY_FLAG_TUT_GULL_BRIEFED) &&
+        !(fl & STORY_FLAG_TUT_GULL_BEATEN))         return Str("tut.obj.shells");
     if (!(fl & STORY_FLAG_TUT_GULL_BEATEN))         return Str("tut.obj.gull");
     if (!(fl & STORY_FLAG_TUT_RANGED_TAUGHT))       return Str("tut.obj.report");
     if (!(fl & STORY_FLAG_TUT_RAID_BEATEN))         return Str("tut.obj.raid");
     if (!(fl & STORY_FLAG_TUT_LEAVE_OFFERED))       return Str("tut.obj.report2");
     if ((fl & STORY_FLAG_TUT_FAREWELL_ALL) != STORY_FLAG_TUT_FAREWELL_ALL)
         return Str("tut.obj.farewell");
+    if (!(fl & STORY_FLAG_TUT_NEST_SEEN))           return Str("tut.obj.nest");
     if (!(fl & STORY_FLAG_TUT_COMPLETE))            return Str("tut.obj.ready");
     return Str("tut.obj.leave");
 }

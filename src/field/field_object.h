@@ -19,7 +19,18 @@ typedef enum ObjectType {
     OBJ_LANTERN,         // dataId → STORY_FLAG_LANTERN_* bit
     OBJ_CHEST,           // dataId → entry in lore_text.c (chest contents table)
     OBJ_BLOCKAGE,        // cuttable storm-kelp tangle — blocks its tile until slashed
+    OBJ_TIDEPOOL,        // forage pool — one sardine per map build ("the tide refills it")
+    OBJ_BUOY,            // old bell buoy in open water — Vlerkie's dare target
+    OBJ_NEST,            // Annika's storm-nest — consumed once the feather is taken
+    OBJ_CRATE,           // washed-up trawler crate — re-readable foreshadowing
+    OBJ_DECOR,           // tap-for-flavor dressing; dataId = DECOR_* variant
+    OBJ_RACK,            // the family's fish-drying racks — the raid's target
 } ObjectType;
+
+// OBJ_DECOR variants (dataId).
+#define DECOR_DRIFTWOOD 0
+#define DECOR_SHELLS    1
+#define DECOR_STONES    2
 
 typedef struct FieldObject {
     int        tileX;

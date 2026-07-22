@@ -29,19 +29,20 @@ tut.intro.4 = (Touch the screen and drag - Jan waddles the way you pull. Head no
 # ---------------------------------------------------------------------------
 tut.ryno.meet.1 = ???: Haai! Another one! I KNEW it - I told the colony I smelled penguin on this wind.
 tut.ryno.meet.2 = Jan: Penguin? No, no. I'm a cormorant. A bad one. My wings never dry, I can't fly, and when I dive I just... sink.
-tut.ryno.meet.3 = Ryno: Boet. Look at me. Now look at you. Same black back, same white front. That's not sinking - that's a hull. I'm Ryno. And you're a PENGUIN.
-tut.ryno.meet.4 = Ryno: Years back a hen from our colony - Annika - swam out past the shipping lane after sardine. A storm rolled in and sat for a week. She never came home.
+tut.ryno.meet.3 = Ryno: Boet. Look at me. Now look at you. Now look at your family. You and I are penguins.
+tut.ryno.meet.4 = Ryno: Years back a hen from our colony, Annika, swam out past the shipping lane after sardine. A storm rolled in and sat for a week. She never came home.
 tut.ryno.meet.5 = Ryno: She was carrying an egg when she left. You have her eyes, boet. I'd swear it on my last pilchard.
 tut.ryno.meet.6 = Jan: ...Ma always said the storm brought me in.
-tut.ryno.meet.7 = Ryno: Then it's settled. And listen - penguins don't fly. We fly UNDERWATER. Talk to me again when you're ready for your first lesson.
+tut.ryno.meet.7 = Ryno: Then it's settled. And listen: penguins don't fly through the air. We fly UNDERWATER. Talk to me again when you're ready for your first lesson.
 
 tut.ryno.swim.1 = Ryno: Lesson one. The water isn't your enemy - it's your sky. Head down, feet back, and POINT yourself somewhere.
 tut.ryno.swim.2 = Ryno: And take this - my spare fishing hook. Sailors lose them by the dozen. Hooked under a flipper it cuts kelp, rope, whatever needs cutting.
 tut.ryno.swim.3 = (Ryno's FishingHook is now equipped as one of Jan's item attacks.)
 tut.ryno.swim.4 = Ryno: See the stone ring off the east shore? An old fish-trap ruin. The cove between here and there is calm - and something glints inside that ring.
 tut.ryno.swim.5 = Ryno: Storm-kelp is choking the gap in the ruin's wall. Swim over and cut it loose with the hook.
+tut.ryno.swim.6 = Ryno: Follow me, boet - it's a waddle down the shore to the cove. Keep up with a penguin on a mission!
 
-tut.ryno.remind.1 = Ryno: East shore, boet. Swim the cove, slash the kelp, and see what the sea left you in that ruin.
+tut.ryno.remind.1 = Ryno: In you go, boet - the water's right here. Slash the kelp, and see what the sea left you in that ring.
 
 tut.ryno.gull.1 = Ryno: Shells! Lekker. Those fling hard enough to crack more than pride.
 tut.ryno.gull.2 = Ryno: Put them to work - that fat kelp gull is back at your family's drying racks. It's strutting around the south grass. Chase it off.
@@ -49,13 +50,16 @@ tut.ryno.gull.3 = Ryno: One more trick. A thief that's busy thieving never watch
 tut.ryno.gull.4 = (Sneak attack: stand directly behind an unaware enemy and a mark pulses on it - tap to strike first. Works up close with melee, or from a few tiles back with a ranged weapon.)
 tut.ryno.gull.5 = (Equip first: tap the round menu button in the corner, open the bag, and slot the ShellThrow into an item-attack slot.)
 tut.ryno.gull.6 = (Then walk up to the gull - or sneak in behind it - to start the fight. In battle: pick a move, then a target - Tackle up close, ShellThrow from a distance.)
+tut.ryno.gull.7 = Ryno: Follow me south, boet - stay close now. I'll take the dune above the racks. Quiet feet, remember.
 
 tut.ryno.ranged.1 = Ryno: You klapped it! Ha! But listen, boet - a kelp gull never loses alone. It sulks on the water a while, then comes back with cousins. They ALWAYS come back with cousins.
 tut.ryno.ranged.2 = Ryno: So, next lesson. When a mob lands on you, don't waddle into the middle of it. A Tackle only reaches the one right at your beak.
 tut.ryno.ranged.3 = (Melee moves like Tackle and FishingHook only hit an enemy directly ahead of you. Ranged moves like ShellThrow can hit ANY enemy, wherever they stand.)
 tut.ryno.ranged.4 = Ryno: Knock the far ones down with shells, and Tackle whatever's rude enough to get close. Fight the whole flock, boet, not one bird at a time.
 tut.ryno.ranged.5 = Ryno: And don't forget your quiet trick - it works with shells too. Line one up from BEHIND, two or three paces back, and the first bird's down before the brawl even starts.
-tut.ryno.ranged.6 = Ryno: ...You hear that skreeing? South side. THE RACKS, BOET! GO!
+tut.ryno.ranged.6 = Ryno: Look for the fat one standing dead still, eyes locked on the racks. Too greedy to watch its own tail. Creep in behind THAT one first, hey.
+tut.ryno.ranged.7 = Ryno: And if they spot you and give chase - don't be proud, boet. RUN. Gulls are greedy but lazy: lure one away from its cousins, then turn and klap it on its own.
+tut.ryno.ranged.8 = Ryno: ...You hear that skreeing? South side. THE RACKS, BOET! GO!
 
 tut.ryno.raidremind.1 = Ryno: The racks, boet! Three of them! Shells for the far ones, Tackle for the brave ones - GO!
 
@@ -69,11 +73,14 @@ tut.ryno.finale.7 = Ryno: But family is family. Go say your goodbyes properly - 
 
 tut.ryno.waitfam.1 = Ryno: No rush, boet. Goodbyes are a thing you only get one of. Ma, Pa, the little one - then come find me.
 
-tut.ryno.leave.1 = Ryno: Goodbyes said? Good man. Then it's time - the colony's waiting, and so is your fight.
-tut.ryno.leave.2 = Ryno: Stay close to my wake and swim steady. The channel's calm today - the sea knows a big day when it sees one.
-tut.ryno.leave.3 = (The north channel is open. Swim across, then follow the sand to the exit.)
+tut.ryno.waitnest.1 = Ryno: Something still pulling at you, boet? Ja - the west point, Ma said. Go stand in it once. We leave when your heart's packed, not just your bag.
 
-tut.ryno.done.1 = Ryno: North, boet - across the channel, up the sand. I'm right behind you.
+tut.ryno.leave.1 = Ryno: Goodbyes said? Good man. Then it's time - the colony's waiting, and so is your fight.
+tut.ryno.leave.2 = Ryno: ...What's that under your wing? ...Ja, boet. That's hers. That's Annika's. Bring it home.
+tut.ryno.leave.3 = Ryno: Stay close to my wake and swim steady. The channel's calm today - the sea knows a big day when it sees one.
+tut.ryno.leave.4 = (Ryno dives in and arrows north under the water. The channel is open - follow him across, then up the sand to the exit.)
+
+tut.ryno.done.1 = Ryno: Through here, boet. The colony's a long way up the coast - days of swimming. Good thing you've got a guide, hey?
 
 # ---------------------------------------------------------------------------
 # Tutorial island — the cormorant family
@@ -100,6 +107,7 @@ tut.family.proud2.2 = Pa Duiker: First quiet the racks have had all season. That
 tut.ma.farewell.1 = Ma Duiker: A whole village of penguins, hey. So the sea sent you, and now the sea wants you back.
 tut.ma.farewell.2 = Ma Duiker: You listen to me, Jan Duiker. You were never a bad cormorant. You were always a lekker penguin. MY penguin. That doesn't stop at the waterline.
 tut.ma.farewell.3 = Ma Duiker: Here - sardines for the crossing. Don't argue with your mother. (Ma tucks three sardines under your wing.)
+tut.ma.farewell.4 = Ma Duiker: And Jan... before you cross, go up the west point rock. Where the tide first gave you to me. There's something up there that's yours.
 tut.ma.after.1 = Ma Duiker: Go on now, before I change my mind and sit on you like an egg.
 
 tut.pa.farewell.1 = Pa Duiker: The storm brought you in. Suppose the sea's calling you back. That's the way of tides.
@@ -119,24 +127,78 @@ tut.kelp.cut.1 = Jan drags Ryno's fishing hook through the tangle - once, twice.
 tut.kelp.cut.2 = That felt... natural. Like something a penguin was built to do.
 tut.kelp.blocked.1 = A dense tangle of storm-kelp chokes the gap in the old wall. Too tough to pull apart with flippers - something sharp might do it.
 
+tut.shells.equip = (Equip them before the fight: tap the round menu button in the corner, open the bag, and slot the ShellThrow into an item-attack slot.)
+
 tut.gull.victory = The gull flaps off over the water, screeching insults. Ryno will want to hear about this.
 tut.raid.victory = The mob scatters over the swells, screeching. The drying racks - and the winter's fish - are safe.
 
 tut.rescue.1 = Ma Duiker hauls you out of the surf by the scruff of your neck. "Enough heroics for one tide, my boy."
 tut.rescue.2 = Catch your breath, then try again. That gull has it coming.
 
+# ---------------------------------------------------------------------------
+# Tutorial island — dressing: tide pools, buoy dare, storm-nest, crate, decor
+# ---------------------------------------------------------------------------
+tut.pool.catch = A sardine, stranded by the ebbing tide, flicks in the shallow pool. Jan tips it into his bag before it can argue.
+tut.pool.hint = (Food heals. Open the bag from the round corner button and eat a sardine when your health runs low - in battle it costs a turn, so snack smart.)
+tut.pool.empty = The pool is empty. The next tide will bring something new.
+tut.pool.full = Jan's food bag is full. The sardine flips back into the pool, looking smug about it.
+
+tut.buoy.early = An old bell buoy, rust-streaked and listing, moored out in the cove. It clongs softly with the swell.
+tut.buoy.clong = Jan slaps a flipper against the old buoy. CLONG. The sound rolls across the whole cove. Vlerkie definitely heard that.
+tut.buoy.again = Jan pats the buoy. Clong. Old friends now.
+
+tut.sib.dare.1 = Vlerkie: So the penguin man taught you to swim, hey? Then prove it. The old bell buoy out in the east cove - touch it and come tell me. I dare you.
+tut.sib.dare.2 = Vlerkie: What? I'd do it myself, obviously. I'm just... busy. Drying my wings. GO ON then.
+tut.sib.remind.1 = Vlerkie: The bell buoy, Jan! East cove! Touched it yet, or are you scared of a floating pot?
+tut.sib.darewin.1 = Vlerkie: You ACTUALLY touched it?! I heard the clong from HERE! Okay. Okay okay okay. Here - two sardines from my secret stash. A deal's a deal.
+tut.sib.darewin.2 = Vlerkie: (Don't tell Ma about the secret stash.)
+
+tut.nest.early = An old ring of driftwood on the high rock, silvered by storms. Something about it makes Jan's chest go tight. Ma would know.
+tut.nest.1 = A ring of storm-driftwood, packed tight with old feathers, high above the water. This is where Ma found you - the nest the sea built out of a wreck and a gale.
+tut.nest.2 = Wedged deep in the weave, kept dry by seventeen winters: one long feather. Black above, white below. Penguin.
+tut.nest.3 = Jan tucks Annika's feather under his wing, next to Ma's sardines. Somewhere north, a colony is waiting for both of them.
+tut.nest.after = The empty nest holds the shape of the wind. Jan carries the rest of it with him now.
+
+tut.crate.1 = A splintered crate, half-buried in the sand. The boards are stamped with letters from no alphabet Jan knows.
+tut.crate.2 = Inside: a torn scrap of netting, mesh fine as feathers. Whatever this net was made to catch, it wasn't made to let anything go.
+
+tut.rack.full = Sardines and harders hang in tidy rows, drying in the salt wind. A whole winter's insurance. The gulls know it too.
+tut.rack.safe = The racks sway in the wind, rows unbroken. Safe - for now, and thanks to Jan.
+
+tut.decor.driftwood = A silver-grey driftwood log, sanded smooth by a hundred tides. Warm from the sun. A very good log.
+tut.decor.shells = A drift of broken shells, heaped up by the last spring tide. None of them the right shape for throwing.
+tut.decor.stones = Someone has stacked five flat stones, biggest to smallest. Vlerkie's work. He calls it "art".
+
+# ---------------------------------------------------------------------------
+# Tutorial island — neighbors
+# ---------------------------------------------------------------------------
+tut.karel.base.1 = Oom Karel: In my day the shoals ran so thick you could walk to the mainland on their backs. Now? Lights on the horizon every night, and every morning the sea's a little emptier.
+tut.karel.base.2 = Oom Karel: Big steel boats, boy. They don't fish. They HARVEST. You mark old Karel's words.
+tut.bettie.base.1 = Tannie Bettie: That black-and-white fellow on the north beach has been asking after you, skattie. Handsome, in a round sort of way.
+tut.bettie.base.2 = Tannie Bettie: Your ma hasn't stopped watching the water since you started swimming. Don't you dare make her regret it.
+
 tut.obj.move = Touch and drag - Jan waddles the way you pull
 tut.obj.find = Find what washed up on the north beach
 tut.obj.talk = Talk to Ryno again
 tut.obj.kelp = Swim the east cove and slash the kelp at the ruin
 tut.obj.cache = Search the ruin for what the sea left behind
+tut.obj.shells = Show Ryno what the sea left you in the ruin
 tut.obj.gull = Chase the gull off the drying racks on the south grass
 tut.obj.report = Tell Ryno about the gull
 tut.obj.raid = Drive the gull mob off the drying racks
 tut.obj.report2 = Tell Ryno the racks are safe
 tut.obj.farewell = Say goodbye to Ma, Pa, and Vlerkie
+tut.obj.nest = Visit the west point rock before you leave
 tut.obj.ready = Tell Ryno you're ready to go
 tut.obj.leave = Swim the north channel and head for the mainland exit
+
+# ---------------------------------------------------------------------------
+# The journey north — plays once, on first arrival at the village hub
+# ---------------------------------------------------------------------------
+tut.journey.1 = They swim north until the cormorant island is a smudge, then a memory. Strange beaches. Cold currents. Ryno knows every one by name.
+tut.journey.2 = Days pass. Past headlands, past the hulks of old wrecks, sleeping in kelp so the current can't steal them. Jan's flippers ache, then harden.
+tut.journey.3 = "Now you're swimming like a penguin," Ryno says one grey morning. And then: woodsmoke. Dock-creak. Voices. The village.
+tut.journey.4 = Ryno: Told you I'd get you here, boet. Come - there's a whole harbor of the fed-up waiting to meet Annika's seun.
 
 # ---------------------------------------------------------------------------
 # Defeat rescue — village

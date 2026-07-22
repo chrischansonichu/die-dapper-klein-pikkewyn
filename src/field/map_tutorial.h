@@ -25,6 +25,13 @@ void BuildTutorialIsland(MapBuildContext *ctx);
 // on (re)entry and by field.c the moment a gate flag flips mid-play.
 void TutorialApplyZones(TileMap *m, uint64_t storyFlags);
 
+// Ryno is a guide NPC: he waits at a different post per story stage (north
+// beach → cove shore → south dune → channel shore). The builder spawns him
+// there, and field.c snaps him to the current post whenever a dialogue
+// closes — the "follow me" relocation. Positions are C-canonical (tmx
+// RynoCove/RynoSouth/RynoChannel points are visual notes only).
+void TutorialRynoPos(uint64_t storyFlags, int *outX, int *outY, int *outDir);
+
 // Append the drying-rack gull mob to `enemies` (latent unless `active`).
 // Called by the map builder on rebuilds that land mid-raid, and by field.c
 // live when Ryno's ranged lesson lands — the field persists across battles,

@@ -1,5 +1,5 @@
 {
-    "activeFile": "tileset.tsx",
+    "activeFile": "tutorial.tmx",
     "expandedProjectPaths": [
         "."
     ],
@@ -26,10 +26,10 @@
         },
         "tutorial.tmx": {
             "scale": 0.5342,
-            "selectedLayer": 1,
+            "selectedLayer": 0,
             "viewCenter": {
-                "x": 839.5731935604642,
-                "y": 1429.2399850243355
+                "x": 859.2287532759266,
+                "y": 790.902283788843
             }
         },
         "water-sand-terrain.tsx": {
@@ -51,9 +51,9 @@
     ],
     "project": "dapper-maps.tiled-project",
     "recentFiles": [
-        "tutorial.tmx",
-        "terrain.tsx",
         "tileset.tsx",
+        "terrain.tsx",
+        "tutorial.tmx",
         "water-sand-terrain.tsx",
         "Dapper.tsx",
         "dapper.tsx"

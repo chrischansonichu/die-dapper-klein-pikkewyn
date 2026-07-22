@@ -47,6 +47,12 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
+    <!-- Landscape-only game: without this, iPad multitasking (Split View /
+         Slide Over) is assumed, Xcode then requires ALL orientations, and
+         installs fail validation — which is why it kept being hand-edited
+         into the built app after every cmake regen. -->
+    <key>UIRequiresFullScreen</key>
+    <true/>
     <key>UIStatusBarHidden</key>
     <true/>
     <key>UIViewControllerBasedStatusBarAppearance</key>

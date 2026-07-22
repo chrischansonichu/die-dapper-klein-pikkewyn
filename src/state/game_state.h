@@ -42,6 +42,13 @@
 #define STORY_FLAG_TUT_FAREWELL_ALL  (STORY_FLAG_TUT_FAREWELL_MA | \
                                       STORY_FLAG_TUT_FAREWELL_PA | \
                                       STORY_FLAG_TUT_FAREWELL_SIB)
+#define STORY_FLAG_TUT_NEST_SEEN     (1ull << 37)  // Annika's storm-nest visited
+#define STORY_FLAG_TUT_DARE_ACCEPTED (1ull << 38)  // Vlerkie's buoy dare taken
+#define STORY_FLAG_TUT_DARE_DONE     (1ull << 39)  // buoy touched
+#define STORY_FLAG_TUT_DARE_PAID     (1ull << 40)  // Vlerkie paid out his stash
+#define STORY_FLAG_TUT_POOL_HINT     (1ull << 41)  // first tide-pool heal tip shown
+#define STORY_FLAG_TUT_GULL_BRIEFED  (1ull << 42)  // shells shown to Ryno — he heads south
+#define STORY_FLAG_TUT_ARRIVED       (1ull << 43)  // hub journey montage shown
 
 //----------------------------------------------------------------------------------
 // GameState - persistent state that survives map transitions and battles.
