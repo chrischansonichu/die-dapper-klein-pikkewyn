@@ -20,9 +20,32 @@ typedef struct ZoneRect { int x0, y0, x1, y1; uint64_t flag; } ZoneRect;
 static const ZoneRect kZones[] = {
     // East cove: island shore -> fish-trap ruin gap. Opens with the swim lesson.
     { 19, 28, 26, 32, STORY_FLAG_TUT_SWIM_TAUGHT },
-    // North channel: island -> mainland strip. Opens with the finale.
+    // North channel: island -> mainland strip. Opens once the goodbyes are
+    // said and Ryno gives the word.
     {  4,  5, 17,  9, STORY_FLAG_TUT_COMPLETE },
 };
+
+void TutorialSpawnRaidGulls(FieldEnemy *enemies, int *enemyCount, int enemyMax,
+                            bool active)
+{
+    // Positions mirror the RaidGull1..3 point objects in tutorial.tmx (same
+    // source-of-truth rule as kZones: the C table is gameplay, the tmx
+    // objects are the visual note). Tight cluster on the drying-rack grass
+    // so the aggro sweep pulls all three into one fight — that IS the
+    // ranged-combat lesson.
+    static const struct { int x, y; } kRaid[] = {
+        { 7, 45 }, { 9, 45 }, { 8, 47 },
+    };
+    for (size_t i = 0; i < sizeof(kRaid) / sizeof(kRaid[0]); i++) {
+        if (*enemyCount >= enemyMax) break;
+        FieldEnemy *g = &enemies[(*enemyCount)++];
+        EnemyInit(g, kRaid[i].x, kRaid[i].y, 0, BEHAVIOR_WANDER,
+                  CREATURE_KELP_GULL, 2, 3, (Color){0xE6, 0xE2, 0xD4, 255});
+        g->wanderInterval = 60;
+        EnemySetDrops(g, ITEM_SARDINE, 100, -1, 0);  // the stolen fish
+        g->active = active;
+    }
+}
 
 void TutorialApplyZones(TileMap *m, uint64_t storyFlags)
 {
@@ -118,6 +141,7 @@ void BuildTutorialIsland(MapBuildContext *ctx)
         ObjTile(objs, objCount, "CormorantMa", 10, 52, &x, &y);
         Npc *ma = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(ma, x, y, 3, NPC_CORMORANT);  // facing up, at Jan's spawn
+        ma->personaId = TUT_PERSONA_MA;
         NpcAddDialogue(ma, Str("tut.ma.base.1"));
         NpcAddDialogue(ma, Str("tut.ma.base.2"));
     }
@@ -125,6 +149,7 @@ void BuildTutorialIsland(MapBuildContext *ctx)
         ObjTile(objs, objCount, "CormorantPa", 12, 52, &x, &y);
         Npc *pa = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(pa, x, y, 1, NPC_CORMORANT);
+        pa->personaId = TUT_PERSONA_PA;
         NpcAddDialogue(pa, Str("tut.pa.base.1"));
         NpcAddDialogue(pa, Str("tut.pa.base.2"));
     }
@@ -132,6 +157,7 @@ void BuildTutorialIsland(MapBuildContext *ctx)
         ObjTile(objs, objCount, "CormorantSib", 14, 51, &x, &y);
         Npc *sib = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(sib, x, y, 0, NPC_CORMORANT);
+        sib->personaId = TUT_PERSONA_SIB;
         NpcAddDialogue(sib, Str("tut.sib.base.1"));
         NpcAddDialogue(sib, Str("tut.sib.base.2"));
     }
@@ -149,6 +175,17 @@ void BuildTutorialIsland(MapBuildContext *ctx)
         gull->wanderInterval = 80;
         EnemySetDrops(gull, ITEM_SARDINE, 100, -1, 0);  // drops the stolen sardine
         gull->active = (ctx->storyFlags & STORY_FLAG_TUT_SHELLS_TAKEN) != 0;
+    }
+
+    // --- The gull mob — three cousins raiding the drying racks together.
+    // Only on rebuilds (save/load, map re-entry) that land mid-raid; the
+    // first-play spawn happens live in field.c when Ryno's ranged lesson
+    // lands, because the field is NOT rebuilt around battles and the mob
+    // must appear the moment the lesson ends.
+    if ((ctx->storyFlags & STORY_FLAG_TUT_GULL_BEATEN) &&
+        !(ctx->storyFlags & STORY_FLAG_TUT_RAID_BEATEN)) {
+        TutorialSpawnRaidGulls(ctx->enemies, ctx->enemyCount, ctx->enemyMax,
+                               (ctx->storyFlags & STORY_FLAG_TUT_RANGED_TAUGHT) != 0);
     }
 
     // --- Storm-kelp tangle choking the fish-trap ruin's wall gap. Blocks the

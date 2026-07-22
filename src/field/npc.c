@@ -11,6 +11,7 @@ void NpcInit(Npc *n, int tileX, int tileY, int dir, NpcType type)
     n->tileY         = tileY;
     n->dir           = dir;
     n->type          = type;
+    n->personaId     = 0;
     n->active        = true;
     n->dialogueCount = 0;
     for (int i = 0; i < NPC_MAX_DIALOGUE_PAGES; i++)

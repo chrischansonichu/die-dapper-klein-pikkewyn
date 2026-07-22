@@ -33,6 +33,9 @@ typedef struct Npc {
     int     tileY;
     int     dir;     // 0=down 1=left 2=right 3=up
     NpcType type;
+    // Distinguishes individuals that share an NpcType (the cormorant family:
+    // Ma/Pa/Vlerkie each get scripted farewells). 0 = anonymous.
+    int     personaId;
     bool    active;
     char    dialogue[NPC_MAX_DIALOGUE_PAGES][NPC_DIALOGUE_LEN];
     int     dialogueCount;

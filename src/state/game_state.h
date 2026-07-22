@@ -32,7 +32,16 @@
 #define STORY_FLAG_TUT_KELP_CUT      (1ull << 27)  // fish-trap gap slashed open
 #define STORY_FLAG_TUT_SHELLS_TAKEN  (1ull << 28)  // ShellThrow cache looted
 #define STORY_FLAG_TUT_GULL_BEATEN   (1ull << 29)  // practice fight won
-#define STORY_FLAG_TUT_COMPLETE      (1ull << 30)  // finale seen — north channel open
+#define STORY_FLAG_TUT_COMPLETE      (1ull << 30)  // goodbyes done — north channel open
+#define STORY_FLAG_TUT_RANGED_TAUGHT (1ull << 31)  // ranged lesson — gull mob active
+#define STORY_FLAG_TUT_RAID_BEATEN   (1ull << 32)  // drying-rack raid repelled
+#define STORY_FLAG_TUT_LEAVE_OFFERED (1ull << 33)  // Ryno's offer — farewells unlocked
+#define STORY_FLAG_TUT_FAREWELL_MA   (1ull << 34)  // said goodbye to Ma
+#define STORY_FLAG_TUT_FAREWELL_PA   (1ull << 35)  // said goodbye to Pa
+#define STORY_FLAG_TUT_FAREWELL_SIB  (1ull << 36)  // said goodbye to Vlerkie
+#define STORY_FLAG_TUT_FAREWELL_ALL  (STORY_FLAG_TUT_FAREWELL_MA | \
+                                      STORY_FLAG_TUT_FAREWELL_PA | \
+                                      STORY_FLAG_TUT_FAREWELL_SIB)
 
 //----------------------------------------------------------------------------------
 // GameState - persistent state that survives map transitions and battles.

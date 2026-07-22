@@ -167,10 +167,43 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
             return StrPages("tut.ryno.remind", pages, NPC_MAX_DIALOGUE_PAGES);
         if (!(fl & STORY_FLAG_TUT_GULL_BEATEN))
             return StrPages("tut.ryno.gull", pages, NPC_MAX_DIALOGUE_PAGES);
+        if (!(fl & STORY_FLAG_TUT_RANGED_TAUGHT)) {
+            // Ranged lesson — and the moment it lands, the beaten gull's
+            // cousins hit the drying racks. Compact away any kelp gulls
+            // already in the list (the beaten first gull on a live field,
+            // or the latent mob on a save/reloaded one — the field is not
+            // rebuilt around battles, so both states reach here), then
+            // spawn the raid fresh: one code path for both. No captives or
+            // battles are live during dialogue, so reindexing is safe.
+            ow->gs->storyFlags |= STORY_FLAG_TUT_RANGED_TAUGHT;
+            {
+                int w = 0;
+                for (int i = 0; i < ow->enemyCount; i++) {
+                    if (ow->enemies[i].creatureId == CREATURE_KELP_GULL)
+                        continue;
+                    if (w != i) ow->enemies[w] = ow->enemies[i];
+                    w++;
+                }
+                ow->enemyCount = w;
+                TutorialSpawnRaidGulls(ow->enemies, &ow->enemyCount,
+                                       FIELD_MAX_ENEMIES, true);
+            }
+            return StrPages("tut.ryno.ranged", pages, NPC_MAX_DIALOGUE_PAGES);
+        }
+        if (!(fl & STORY_FLAG_TUT_RAID_BEATEN))
+            return StrPages("tut.ryno.raidremind", pages, NPC_MAX_DIALOGUE_PAGES);
+        if (!(fl & STORY_FLAG_TUT_LEAVE_OFFERED)) {
+            // The reveal + the offer: Ryno will take Jan to the colony
+            // himself — once the goodbyes are said. No channel yet.
+            ow->gs->storyFlags |= STORY_FLAG_TUT_LEAVE_OFFERED;
+            return StrPages("tut.ryno.finale", pages, NPC_MAX_DIALOGUE_PAGES);
+        }
+        if ((fl & STORY_FLAG_TUT_FAREWELL_ALL) != STORY_FLAG_TUT_FAREWELL_ALL)
+            return StrPages("tut.ryno.waitfam", pages, NPC_MAX_DIALOGUE_PAGES);
         if (!(fl & STORY_FLAG_TUT_COMPLETE)) {
             ow->gs->storyFlags |= STORY_FLAG_TUT_COMPLETE;
             TutorialApplyZones(&ow->map, ow->gs->storyFlags);
-            return StrPages("tut.ryno.finale", pages, NPC_MAX_DIALOGUE_PAGES);
+            return StrPages("tut.ryno.leave", pages, NPC_MAX_DIALOGUE_PAGES);
         }
         return StrPages("tut.ryno.done", pages, NPC_MAX_DIALOGUE_PAGES);
     }
@@ -179,8 +212,40 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
     // lines once the tutorial's late beats land.
     if (n->type == NPC_CORMORANT) {
         uint64_t fl = ow->gs->storyFlags;
-        if (fl & STORY_FLAG_TUT_COMPLETE)
-            return StrPages("tut.family.farewell", pages, NPC_MAX_DIALOGUE_PAGES);
+        // Once Ryno has made his offer, each family member gets one scripted
+        // goodbye (latched individually — Ryno won't open the channel until
+        // all three flags are in). Re-talking gets a short send-off line.
+        if (fl & STORY_FLAG_TUT_LEAVE_OFFERED) {
+            switch (n->personaId) {
+            case TUT_PERSONA_MA:
+                if (!(fl & STORY_FLAG_TUT_FAREWELL_MA)) {
+                    ow->gs->storyFlags |= STORY_FLAG_TUT_FAREWELL_MA;
+                    // Ma packs food for the crossing — the farewell text
+                    // narrates the gift, so grant and lines stay in step.
+                    InventoryAddItem(&ow->gs->party.inventory, ITEM_SARDINE, 3);
+                    return StrPages("tut.ma.farewell", pages, NPC_MAX_DIALOGUE_PAGES);
+                }
+                return StrPages("tut.ma.after", pages, NPC_MAX_DIALOGUE_PAGES);
+            case TUT_PERSONA_PA:
+                if (!(fl & STORY_FLAG_TUT_FAREWELL_PA)) {
+                    ow->gs->storyFlags |= STORY_FLAG_TUT_FAREWELL_PA;
+                    return StrPages("tut.pa.farewell", pages, NPC_MAX_DIALOGUE_PAGES);
+                }
+                return StrPages("tut.pa.after", pages, NPC_MAX_DIALOGUE_PAGES);
+            case TUT_PERSONA_SIB:
+                if (!(fl & STORY_FLAG_TUT_FAREWELL_SIB)) {
+                    ow->gs->storyFlags |= STORY_FLAG_TUT_FAREWELL_SIB;
+                    return StrPages("tut.sib.farewell", pages, NPC_MAX_DIALOGUE_PAGES);
+                }
+                return StrPages("tut.sib.after", pages, NPC_MAX_DIALOGUE_PAGES);
+            }
+        }
+        // Gull mob on the racks — the whole family is in alarm mode.
+        if ((fl & STORY_FLAG_TUT_RANGED_TAUGHT) &&
+            !(fl & STORY_FLAG_TUT_RAID_BEATEN))
+            return StrPages("tut.family.raid", pages, NPC_MAX_DIALOGUE_PAGES);
+        if (fl & STORY_FLAG_TUT_RAID_BEATEN)
+            return StrPages("tut.family.proud2", pages, NPC_MAX_DIALOGUE_PAGES);
         if (fl & STORY_FLAG_TUT_GULL_BEATEN)
             return StrPages("tut.family.proud", pages, NPC_MAX_DIALOGUE_PAGES);
         // Fall through to the NPC's authored dialogue below.
@@ -1106,19 +1171,37 @@ static void ResolveBattleEnd(FieldState *ow, int result)
         for (int i = 0; i < dropPages && pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0])); i++) {
             ptrs[pageCount++] = gDropMsg[i];
         }
-        // Tutorial practice fight — beating the kelp gull advances the story
-        // and points the player back at Ryno for the finale.
+        // Tutorial fights — beating the first kelp gull advances the story
+        // toward Ryno's ranged lesson; clearing the whole mob (no gull left
+        // active anywhere on the field, in case aggro geometry ever split
+        // the raid into two fights) wraps the drying-rack raid.
         for (int k = 0; k < ctx->enemyCount; k++) {
             int idx = ctx->enemyFieldIdx[k];
             if (idx < 0 || idx >= ow->enemyCount) continue;
-            if (ow->enemies[idx].creatureId == CREATURE_KELP_GULL &&
-                !(ow->gs->storyFlags & STORY_FLAG_TUT_GULL_BEATEN)) {
+            if (ow->enemies[idx].creatureId != CREATURE_KELP_GULL) continue;
+            if (!(ow->gs->storyFlags & STORY_FLAG_TUT_GULL_BEATEN)) {
                 ow->gs->storyFlags |= STORY_FLAG_TUT_GULL_BEATEN;
                 if (pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0]))) {
                     ptrs[pageCount++] = Str("tut.gull.victory");
                 }
-                break;
+            } else if ((ow->gs->storyFlags & STORY_FLAG_TUT_RANGED_TAUGHT) &&
+                       !(ow->gs->storyFlags & STORY_FLAG_TUT_RAID_BEATEN)) {
+                bool gullsLeft = false;
+                for (int i = 0; i < ow->enemyCount; i++) {
+                    if (ow->enemies[i].active &&
+                        ow->enemies[i].creatureId == CREATURE_KELP_GULL) {
+                        gullsLeft = true;
+                        break;
+                    }
+                }
+                if (!gullsLeft) {
+                    ow->gs->storyFlags |= STORY_FLAG_TUT_RAID_BEATEN;
+                    if (pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0]))) {
+                        ptrs[pageCount++] = Str("tut.raid.victory");
+                    }
+                }
             }
+            break;
         }
         if (bossDown && !ow->gs->captainDefeated) {
             ow->gs->captainDefeated     = true;
@@ -1945,7 +2028,12 @@ static const char *TutorialObjectiveText(const FieldState *ow)
     if (!(fl & STORY_FLAG_TUT_KELP_CUT))            return Str("tut.obj.kelp");
     if (!(fl & STORY_FLAG_TUT_SHELLS_TAKEN))        return Str("tut.obj.cache");
     if (!(fl & STORY_FLAG_TUT_GULL_BEATEN))         return Str("tut.obj.gull");
-    if (!(fl & STORY_FLAG_TUT_COMPLETE))            return Str("tut.obj.report");
+    if (!(fl & STORY_FLAG_TUT_RANGED_TAUGHT))       return Str("tut.obj.report");
+    if (!(fl & STORY_FLAG_TUT_RAID_BEATEN))         return Str("tut.obj.raid");
+    if (!(fl & STORY_FLAG_TUT_LEAVE_OFFERED))       return Str("tut.obj.report2");
+    if ((fl & STORY_FLAG_TUT_FAREWELL_ALL) != STORY_FLAG_TUT_FAREWELL_ALL)
+        return Str("tut.obj.farewell");
+    if (!(fl & STORY_FLAG_TUT_COMPLETE))            return Str("tut.obj.ready");
     return Str("tut.obj.leave");
 }
 
