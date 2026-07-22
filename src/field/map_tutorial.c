@@ -4,6 +4,7 @@
 #include "../data/creature_defs.h"
 #include "../data/lore_text.h"
 #include "../state/game_state.h"
+#include "../systems/strings.h"
 #include <string.h>
 
 //----------------------------------------------------------------------------------
@@ -117,22 +118,22 @@ void BuildTutorialIsland(MapBuildContext *ctx)
         ObjTile(objs, objCount, "CormorantMa", 10, 52, &x, &y);
         Npc *ma = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(ma, x, y, 3, NPC_CORMORANT);  // facing up, at Jan's spawn
-        NpcAddDialogue(ma, "Ma Duiker: North beach, love. Big black-and-white thing, flopped up with the tide. Probably harmless. Probably.");
-        NpcAddDialogue(ma, "Ma Duiker: And stay off the deep water. You know how you get.");
+        NpcAddDialogue(ma, Str("tut.ma.base.1"));
+        NpcAddDialogue(ma, Str("tut.ma.base.2"));
     }
     if (*ctx->npcCount < ctx->npcMax) {
         ObjTile(objs, objCount, "CormorantPa", 12, 52, &x, &y);
         Npc *pa = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(pa, x, y, 1, NPC_CORMORANT);
-        NpcAddDialogue(pa, "Pa Duiker: Wind's from the west again. Fish are thin this season.");
-        NpcAddDialogue(pa, "Pa Duiker: Thinner every year, if you ask me. Nobody asks me.");
+        NpcAddDialogue(pa, Str("tut.pa.base.1"));
+        NpcAddDialogue(pa, Str("tut.pa.base.2"));
     }
     if (*ctx->npcCount < ctx->npcMax) {
         ObjTile(objs, objCount, "CormorantSib", 14, 51, &x, &y);
         Npc *sib = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(sib, x, y, 0, NPC_CORMORANT);
-        NpcAddDialogue(sib, "Vlerkie: I dove twelve fathoms today! Bet you ca- oh. Sorry, Jan.");
-        NpcAddDialogue(sib, "Vlerkie: ...I like your waddle, though. It's a good waddle.");
+        NpcAddDialogue(sib, Str("tut.sib.base.1"));
+        NpcAddDialogue(sib, Str("tut.sib.base.2"));
     }
 
     // --- Kelp gull raiding the family's drying racks — the practice fight.

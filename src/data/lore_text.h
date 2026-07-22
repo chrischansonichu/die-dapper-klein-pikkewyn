@@ -38,8 +38,9 @@ typedef struct ChestContents {
     // Item dropped (item id), or -1 for none.
     int itemId;
     int itemCount;
-    // Optional one-shot text shown after pickup. NULL for silent.
-    const char *flavor;
+    // Optional one-shot text shown after pickup — a string-table key (see
+    // resources/lang/en.lang); callers resolve it with Str(). NULL for silent.
+    const char *flavorKey;
 } ChestContents;
 
 const ChestContents *GetChestContents(int chestId);

@@ -1,0 +1,239 @@
+# ============================================================================
+# Die Dapper Klein Pikkewyn — English (canonical string table)
+#
+# TRANSLATING: copy this file to <code>.lang (e.g. af.lang, zh.lang) in this
+# directory, translate the values, and select the language in-game with
+# StringsSetLanguage("<code>"). Any key you leave out falls back to the
+# English line, so partial translations are safe.
+#
+# Format: key = value          (one line per string, UTF-8)
+#   - '#' starts a comment; blank lines are ignored
+#   - '\n' in a value becomes a line break
+#   - %s / %d are runtime placeholders — KEEP them, in the same order
+#   - Numbered keys (.1 .2 .3 ...) are the pages of one conversation; a
+#     translation may use fewer or more pages, numbering must stay contiguous
+#   - Keep each value under ~200 characters — longer text overflows the
+#     dialogue panel
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Tutorial island — opening scene (auto-plays at the family rocks)
+# ---------------------------------------------------------------------------
+tut.intro.1 = Ma Duiker: Jan! There you are. The morning dive's done - the others are up on the rocks drying their wings.
+tut.intro.2 = Ma Duiker: Ag, don't sulk. So your wings won't dry and you sink like a stone. You're MY stone, and that's the end of it.
+tut.intro.3 = Ma Duiker: Now - something big washed up on the north beach at dawn. Black and white, and it MOVES. Go and see. Careful, hey!
+tut.intro.4 = (Touch the screen and drag - Jan waddles the way you pull. Head north along the beach.)
+
+# ---------------------------------------------------------------------------
+# Tutorial island — Ryno's conversation stages
+# ---------------------------------------------------------------------------
+tut.ryno.meet.1 = ???: Haai! Another one! I KNEW it - I told the colony I smelled penguin on this wind.
+tut.ryno.meet.2 = Jan: Penguin? No, no. I'm a cormorant. A bad one. My wings never dry, I can't fly, and when I dive I just... sink.
+tut.ryno.meet.3 = Ryno: Boet. Look at me. Now look at you. Same black back, same white front. That's not sinking - that's a hull. I'm Ryno. And you're a PENGUIN.
+tut.ryno.meet.4 = Ryno: Years back a hen from our colony - Annika - swam out past the shipping lane after sardine. A storm rolled in and sat for a week. She never came home.
+tut.ryno.meet.5 = Ryno: She was carrying an egg when she left. You have her eyes, boet. I'd swear it on my last pilchard.
+tut.ryno.meet.6 = Jan: ...Ma always said the storm brought me in.
+tut.ryno.meet.7 = Ryno: Then it's settled. And listen - penguins don't fly. We fly UNDERWATER. Talk to me again when you're ready for your first lesson.
+
+tut.ryno.swim.1 = Ryno: Lesson one. The water isn't your enemy - it's your sky. Head down, feet back, and POINT yourself somewhere.
+tut.ryno.swim.2 = Ryno: And take this - my spare fishing hook. Sailors lose them by the dozen. Hooked under a flipper it cuts kelp, rope, whatever needs cutting.
+tut.ryno.swim.3 = (Ryno's FishingHook is now equipped as one of Jan's item attacks.)
+tut.ryno.swim.4 = Ryno: See the stone ring off the east shore? An old fish-trap ruin. The cove between here and there is calm - and something glints inside that ring.
+tut.ryno.swim.5 = Ryno: Storm-kelp is choking the gap in the ruin's wall. Swim over and cut it loose with the hook.
+
+tut.ryno.remind.1 = Ryno: East shore, boet. Swim the cove, slash the kelp, and see what the sea left you in that ruin.
+
+tut.ryno.gull.1 = Ryno: Shells! Lekker. Those fling hard enough to crack more than pride.
+tut.ryno.gull.2 = Ryno: Put them to work - that fat kelp gull is back at your family's drying racks. It's strutting around the south grass. Chase it off.
+tut.ryno.gull.3 = (Equip first: tap the round menu button in the corner, open the bag, and slot the ShellThrow into an item-attack slot.)
+tut.ryno.gull.4 = (Then walk up to the gull to start the fight. In battle: pick a move, then a target - Tackle up close, ShellThrow from a distance.)
+
+tut.ryno.finale.1 = Jan: Ryno... if I'm a penguin, where is everyone? You're the first one I've ever seen.
+tut.ryno.finale.2 = Ryno: That's the sore truth, boet. There isn't enough fish left to keep a colony together. Every season we swim further from home just to eat.
+tut.ryno.finale.3 = Ryno: Great steel ships from across the ocean - whole fleets of them - drag nets wider than this island. They scrape the sea bare and haul it all over the horizon.
+tut.ryno.finale.4 = Jan: They can't just TAKE the whole sea. Somebody has to fight back.
+tut.ryno.finale.5 = Ryno: Ha! Annika's egg, no mistake. There's a village up the coast where the fed-up are gathering - penguins, seals, all of us. They could use a fighter.
+tut.ryno.finale.6 = Ryno: The channel north of the island is a short swim for a penguin. Cross it, follow the mainland sand, and you'll find the village. I'll meet you there.
+tut.ryno.finale.7 = (The north channel is open. Swim across, then follow the sand to the exit.)
+
+tut.ryno.done.1 = Ryno: North, boet! Across the channel, up the sand. I'll see you at the village.
+
+# ---------------------------------------------------------------------------
+# Tutorial island — the cormorant family
+# ---------------------------------------------------------------------------
+tut.ma.base.1 = Ma Duiker: North beach, love. Big black-and-white thing, flopped up with the tide. Probably harmless. Probably.
+tut.ma.base.2 = Ma Duiker: And stay off the deep water. You know how you get.
+tut.pa.base.1 = Pa Duiker: Wind's from the west again. Fish are thin this season.
+tut.pa.base.2 = Pa Duiker: Thinner every year, if you ask me. Nobody asks me.
+tut.sib.base.1 = Vlerkie: I dove twelve fathoms today! Bet you ca- oh. Sorry, Jan.
+tut.sib.base.2 = Vlerkie: ...I like your waddle, though. It's a good waddle.
+
+tut.family.proud.1 = Ma Duiker: You chased that thieving gull off! Come here, let me look at you. My little fighter.
+tut.family.proud.2 = Pa Duiker: Racks are safe for the first time in weeks. Well done, my boy.
+
+tut.family.farewell.1 = Ma Duiker: A whole village of penguins, hey. Go on then, my boy. You were never a bad cormorant - you were always a lekker penguin.
+tut.family.farewell.2 = Pa Duiker: The storm brought you in. Suppose the sea's calling you back. Swim straight, Jan.
+tut.family.farewell.3 = Vlerkie: Bring me something from the mainland! And peck a trawler for me!
+
+# ---------------------------------------------------------------------------
+# Tutorial island — kelp blockage, gull, rescue, objectives
+# ---------------------------------------------------------------------------
+tut.kelp.cut.1 = Jan drags Ryno's fishing hook through the tangle - once, twice. The storm-kelp parts like old rope.
+tut.kelp.cut.2 = That felt... natural. Like something a penguin was built to do.
+tut.kelp.blocked.1 = A dense tangle of storm-kelp chokes the gap in the old wall. Too tough to pull apart with flippers - something sharp might do it.
+
+tut.gull.victory = The gull flaps off over the water, screeching insults. Ryno will want to hear about this.
+
+tut.rescue.1 = Ma Duiker hauls you out of the surf by the scruff of your neck. "Enough heroics for one tide, my boy."
+tut.rescue.2 = Catch your breath, then try again. That gull has it coming.
+
+tut.obj.move = Touch and drag - Jan waddles the way you pull
+tut.obj.find = Find what washed up on the north beach
+tut.obj.talk = Talk to Ryno again
+tut.obj.kelp = Swim the east cove and slash the kelp at the ruin
+tut.obj.cache = Search the ruin for what the sea left behind
+tut.obj.gull = Chase the gull off the drying racks on the south grass
+tut.obj.report = Tell Ryno about the gull
+tut.obj.leave = Swim the north channel and head for the mainland exit
+
+# ---------------------------------------------------------------------------
+# Defeat rescue — village
+# ---------------------------------------------------------------------------
+rescue.village.1 = We found you floating in the water and carried you back to the village.
+rescue.village.2 = You're safe. Rest up, gather your courage, and head back when you're ready.
+rescue.loss.both = In the swim back, you lost %d item(s) from your bag and %d weapon(s) took a beating.
+rescue.loss.items = In the swim back, you lost %d item(s) from your bag.
+rescue.loss.weapons = In the swim back, %d weapon(s) in your bag took a beating.
+
+# ---------------------------------------------------------------------------
+# Harbor floor 1
+# ---------------------------------------------------------------------------
+harbor.elder.1 = Jan! The sailors have taken all the fish!
+harbor.elder.2 = You must fight them off. Be brave, little one.
+
+harbor.clear.1 = The dock is clear! You've done well, Jan.
+harbor.clear.2 = Rumor is more sailors are stalking the tidal pools further up the coast...
+harbor.clear.3 = Don't stop here - press on up the coast. There's more waiting for you.
+
+harbor.post.greet.1 = Jan! You did it - the sailors are gone!
+harbor.post.greet.2 = The harbor is ours again. Fish for everyone tonight.
+harbor.post.dock = Look at this dock! You can actually walk it end to end.
+harbor.post.cache = Captain's cache fed the whole village. Bless you, Jan.
+harbor.post.sealfree.1 = Arf! Thanks for cracking the Captain - he kept me chained below.
+harbor.post.sealfree.2 = Mind if I tag along now? I've got scores to settle.
+harbor.post.sealflavor = Arf! (A seal waddles past, belly full of sardines.)
+harbor.post.swim.1 = Ahh! The water's perfect.
+harbor.post.swim.2 = First swim since the sailors came. Feels like home.
+harbor.post.swim.3 = Caught a sardine with my bare flippers! Ha!
+harbor.post.swim.4 = Chk-chk-chk! (A chick dives under and comes back up giggling.)
+
+# ---------------------------------------------------------------------------
+# Seal (captive rescue + recruitment)
+# ---------------------------------------------------------------------------
+seal.captive = Arf! Let's teach those sailors a lesson together!
+seal.mmph = ...mmph! (He's tied up. Defeat the sailors guarding him!)
+seal.join.1 = Arf! Thanks for the rescue - let's teach them a lesson!
+seal.join.2 = The seal joins your party. (XP is now split evenly.)
+seal.full = Arf! Your party is full already.
+seal.greet = Arf! Thanks for the rescue! %s joins your party.
+
+# ---------------------------------------------------------------------------
+# Village hub NPCs
+# ---------------------------------------------------------------------------
+hub.elder.1 = Welcome to the village, Jan.
+hub.elder.2 = The sailors have moved up the coast. The harbor is through the south gate.
+hub.elder.3 = Rest here whenever you need to. You'll always find your way back.
+
+hub.smith.locked.1 = The blacksmith is hunched over a cold forge, shaping nothing in particular.
+hub.smith.locked.2 = "Forge's cold. Nothing worth shaping 'til the harbor's ours again. Clear it and we'll talk."
+
+scribe.ok.1 = I've recorded your journey in the village log.
+scribe.ok.2 = Rest easy - you can pick up here next time.
+scribe.fail.1 = My quill slipped - the log wouldn't take.
+scribe.fail.2 = Come see me again in a moment.
+
+keeper.ask = I'm collecting %s - bring me %d and I'll trade you something nice.
+keeper.progress = (You have %d of %d.)
+keeper.thanks = Excellent! That's just what I needed.
+keeper.reward = Take this %s and %d %s for your trouble.
+keeper.bagfull_food = (Your food bag is full too - some of the reward couldn't fit.)
+keeper.bagfull = (Your bag was full - some of the reward couldn't fit.)
+
+# ---------------------------------------------------------------------------
+# Lore — logbooks & etchings
+# ---------------------------------------------------------------------------
+lore.f2cave.title = Cave Etching
+lore.f2cave.1 = An etching, scratched into the cave wall.
+lore.f2cave.2 = "In the time before sails, the colony was the harbour. We dove with the seals, and the seals dove with us."
+lore.f2cave.3 = Below the words, a faint outline of a flipper and a fin, side by side.
+
+lore.f4trader.title = Trader's Ledger
+lore.f4trader.1 = A clipped page from a scrap-trader's ledger, tacked to a beam.
+lore.f4trader.2 = "Bring me what the sea coughs up. Hooks, shells, urchin spikes - I will take them off your flippers and call it square."
+lore.f4trader.3 = "Do not bring rust. The forge will not eat rust."
+
+lore.f5tally.title = Tally Mark
+lore.f5tally.1 = A tally mark in damp ink, crossed out and re-drawn three times.
+lore.f5tally.2 = "Three lanterns guide the captain's ship to dock. No light, no plank."
+
+lore.f6log3.title = Captain's Log p.3
+lore.f6log3.1 = A salt-stained page tucked under a crate.
+lore.f6log3.2 = Captain's Log, page 3:
+lore.f6log3.3 = "The penguins watch us from the rocks. They think we cannot see them counting."
+lore.f6log3.4 = "Let them count. The hold is full and the tide is ours."
+
+lore.f7log4.title = Captain's Log (Last)
+lore.f7log4.1 = Captain's Log, final page.
+lore.f7log4.2 = "All three dock lanterns are burning. I did not light them."
+lore.f7log4.3 = "Something is climbing the gangplank."
+lore.f7log4.4 = "If you are reading this and you are not me - leave my ship."
+
+# ---------------------------------------------------------------------------
+# Chests & pickups
+# ---------------------------------------------------------------------------
+chest.alcove_f3.flavor = Inside the chest, a fresh urchin spike, still salt-bright.
+chest.alcove_f4.flavor = Two perlemoen, packed in seaweed. The trader will pay for these.
+chest.shells.flavor = Half-buried in the ruin's sand: a cache of shell fragments, their edges worn knife-sharp by the tide.
+chest.empty = The chest is empty - you took everything from it last time.
+chest.got_weapon = Got the %s.
+chest.left_weapon = Bag full - left the %s.
+chest.got_items = Got %d %s.
+chest.left_items = Bag full - left %d %s.
+
+drop.item = Got %s!
+drop.weapon = Picked up a %s!
+drop.armor = Picked up %s!
+drop.armor_lost = A %s tumbles to the deck - but your armor chest is full. Lost.
+
+# ---------------------------------------------------------------------------
+# Lanterns (Harbor F6)
+# ---------------------------------------------------------------------------
+lantern.already = The lantern is already burning. Its halo wobbles in the wind.
+lantern.single = The lantern flickers and steadies. Warm light spills onto the planks.
+lantern.final.1 = The third lantern catches and steadies. Three flames in a line, paint the dock.
+lantern.final.2 = Down at the hull, ropes creak. The gangplank lowers itself into place.
+
+# ---------------------------------------------------------------------------
+# Boss & victory
+# ---------------------------------------------------------------------------
+boss.taunt = Captain: "So the penguin shows his face. I've been waiting."
+victory.cache = You haul the Captain's cache of stolen fish back to the village. (+100 Rep)
+victory.captain = Captain defeated - the harbor is safe.
+
+# ---------------------------------------------------------------------------
+# Warp prompts
+# ---------------------------------------------------------------------------
+warp.village = Return to the village?
+warp.village_first = Set out for the village?
+warp.harbor = Enter the harbor?
+warp.next = Continue to the next area?
+warp.noreturn = You won't be able to return.
+warp.blocked_captain = The way back is blocked - you can't leave the Captain alive at your back.
+
+# ---------------------------------------------------------------------------
+# Battle & field UI
+# ---------------------------------------------------------------------------
+battle.hint.target = Tap an enemy to attack
+battle.victory = Victory!
+battle.defeat = Defeated...
+hint.field = Swipe to move   Tap to interact

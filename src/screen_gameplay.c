@@ -10,6 +10,7 @@
 #include "field/field.h"
 #include "state/game_state.h"
 #include "state/save.h"
+#include "systems/strings.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -34,19 +35,6 @@ void GameplayRequestNewGame(int difficulty) {
     gPendingDifficulty = difficulty;
 }
 void GameplayRequestLoadGame(void) { gEntryMode = ENTRY_LOAD; }
-
-// Rescue dialogue — shown after a battle-defeat rescue transition. The hub
-// version is the default; the tutorial island uses the family instead (there
-// is no village in Jan's world yet at that point).
-#define RESCUE_MSG_PAGES 2
-static const char *gRescueMsg[RESCUE_MSG_PAGES] = {
-    "We found you floating in the water and carried you back to the village.",
-    "You're safe. Rest up, gather your courage, and head back when you're ready.",
-};
-static const char *gRescueMsgTutorial[RESCUE_MSG_PAGES] = {
-    "Ma Duiker hauls you out of the surf by the scruff of your neck. \"Enough heroics for one tide, my boy.\"",
-    "Catch your breath, then try again. That gull has it coming.",
-};
 
 //----------------------------------------------------------------------------------
 // Gameplay Screen Functions Definition
@@ -146,14 +134,13 @@ static void ApplyPendingMapTransition(void)
     if (gGameState.rescueDialoguePending) {
         gGameState.rescueDialoguePending = false;
         // Combine the rescue flavor pages with an optional trailing "what you
-        // lost" page staged by the battle-defeat handler. Pages array must
-        // outlive DialogueBegin — dialogue copies text per-page, so static
-        // strings + a pointer into gGameState both work.
-        const char **msg = (gGameState.currentMapId == MAP_TUTORIAL_ISLAND)
-                               ? gRescueMsgTutorial : gRescueMsg;
-        const char *pages[RESCUE_MSG_PAGES + 1];
-        int n = 0;
-        for (int i = 0; i < RESCUE_MSG_PAGES; i++) pages[n++] = msg[i];
+        // lost" page staged by the battle-defeat handler. The hub version is
+        // the default; the tutorial island uses the family instead (there is
+        // no village in Jan's world yet at that point).
+        const char *pages[STR_MAX_PAGES + 1];
+        int n = StrPages((gGameState.currentMapId == MAP_TUTORIAL_ISLAND)
+                             ? "tut.rescue" : "rescue.village",
+                         pages, STR_MAX_PAGES);
         if (gGameState.rescueLossPending) {
             pages[n++] = gGameState.rescueLossMsg;
             gGameState.rescueLossPending = false;

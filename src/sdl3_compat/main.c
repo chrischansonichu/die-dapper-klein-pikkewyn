@@ -17,6 +17,7 @@
 #include "../screen_layout.h"
 #include "../render/paper_harbor.h"
 #include "../systems/touch_input.h"
+#include "../systems/strings.h"
 
 #include <stdio.h>
 
@@ -143,6 +144,9 @@ int main(int argc, char *argv[]) {
     InitWindow(SCREEN_W, SCREEN_H, "Die Dapper Klein Pikkewyn (SDL3)");
     InitAudioDevice();
     ChangeDirectory(GetApplicationDirectory());
+
+    // String table must load before any screen Init pulls dialogue via Str().
+    StringsInit();
 
     font = LoadFontEx("resources/EBGaramond-Bold.ttf", 96, 0, 0);
     GenTextureMipmaps(&font.texture);

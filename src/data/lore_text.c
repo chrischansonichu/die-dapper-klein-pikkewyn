@@ -1,73 +1,46 @@
 #include "lore_text.h"
+#include "../systems/strings.h"
 #include <stddef.h>
 
 //----------------------------------------------------------------------------------
-// Logbook entries — short multi-page snippets. Pages are tuned to fit the
-// dialogue panel width without manual line-wrapping (the dialogue system
-// word-wraps at runtime).
+// Logbook entries. The text itself lives in resources/lang/<code>.lang —
+// this table only maps lore ids to string-table key prefixes. Pages are the
+// numbered keys "<prefix>.1", ".2", ... so a translation may change the
+// page count without touching code.
 //----------------------------------------------------------------------------------
 
-static const char *kLore_F2_Cave[] = {
-    "An etching, scratched into the cave wall.",
-    "\"In the time before sails, the colony was the harbour. We dove with the seals, and the seals dove with us.\"",
-    "Below the words, a faint outline of a flipper and a fin, side by side.",
-};
-
-static const char *kLore_F4_Trader[] = {
-    "A clipped page from a scrap-trader's ledger, tacked to a beam.",
-    "\"Bring me what the sea coughs up. Hooks, shells, urchin spikes - I will take them off your flippers and call it square.\"",
-    "\"Do not bring rust. The forge will not eat rust.\"",
-};
-
-static const char *kLore_F5_LanternHint[] = {
-    "A tally mark in damp ink, crossed out and re-drawn three times.",
-    "\"Three lanterns guide the captain's ship to dock. No light, no plank.\"",
-};
-
-static const char *kLore_F6_Log3[] = {
-    "A salt-stained page tucked under a crate.",
-    "Captain's Log, page 3:",
-    "\"The penguins watch us from the rocks. They think we cannot see them counting.\"",
-    "\"Let them count. The hold is full and the tide is ours.\"",
-};
-
-static const char *kLore_F7_Log4[] = {
-    "Captain's Log, final page.",
-    "\"All three dock lanterns are burning. I did not light them.\"",
-    "\"Something is climbing the gangplank.\"",
-    "\"If you are reading this and you are not me - leave my ship.\"",
-};
-
 typedef struct LoreEntry {
-    const char *title;
-    const char *const *pages;
-    int                pageCount;
+    const char *titleKey;
+    const char *pagesPrefix;
 } LoreEntry;
 
-#define LORE_PAGES(arr) (arr), (int)(sizeof(arr) / sizeof((arr)[0]))
-
 static const LoreEntry kLore[LORE_COUNT] = {
-    [LORE_F2_CAVE]         = { "Cave Etching",         LORE_PAGES(kLore_F2_Cave) },
-    [LORE_F4_TRADER]       = { "Trader's Ledger",      LORE_PAGES(kLore_F4_Trader) },
-    [LORE_F5_LANTERN_HINT] = { "Tally Mark",           LORE_PAGES(kLore_F5_LanternHint) },
-    [LORE_F6_LOG3]         = { "Captain's Log p.3",    LORE_PAGES(kLore_F6_Log3) },
-    [LORE_F7_LOG4]         = { "Captain's Log (Last)", LORE_PAGES(kLore_F7_Log4) },
+    [LORE_F2_CAVE]         = { "lore.f2cave.title",   "lore.f2cave"   },
+    [LORE_F4_TRADER]       = { "lore.f4trader.title", "lore.f4trader" },
+    [LORE_F5_LANTERN_HINT] = { "lore.f5tally.title",  "lore.f5tally"  },
+    [LORE_F6_LOG3]         = { "lore.f6log3.title",   "lore.f6log3"   },
+    [LORE_F7_LOG4]         = { "lore.f7log4.title",   "lore.f7log4"   },
 };
 
 const char *const *GetLoreText(int loreId, int *outPageCount)
 {
+    // Static page buffer — pointers land straight into the string table, so
+    // they stay valid; callers copy into the dialogue box immediately anyway.
+    static const char *pages[STR_MAX_PAGES];
+
     if (loreId < 0 || loreId >= LORE_COUNT) {
         if (outPageCount) *outPageCount = 0;
         return NULL;
     }
-    if (outPageCount) *outPageCount = kLore[loreId].pageCount;
-    return kLore[loreId].pages;
+    int n = StrPages(kLore[loreId].pagesPrefix, pages, STR_MAX_PAGES);
+    if (outPageCount) *outPageCount = n;
+    return pages;
 }
 
 const char *GetLoreTitle(int loreId)
 {
     if (loreId < 0 || loreId >= LORE_COUNT) return NULL;
-    return kLore[loreId].title;
+    return Str(kLore[loreId].titleKey);
 }
 
 //----------------------------------------------------------------------------------
@@ -76,28 +49,28 @@ const char *GetLoreTitle(int loreId)
 
 // Move ids are stable; see data/move_defs.c. 1 = FishingHook, 2 = ShellThrow,
 // 3 = SeaUrchinSpike, 5 = Harpoon. Item ids: 0=Krill, 1=FreshFish, 2=Sardine,
-// 3=Perlemoen.
+// 3=Perlemoen. Flavor text is a string-table key.
 static const ChestContents kChests[CHEST_COUNT] = {
     [CHEST_ALCOVE_F3] = {
         .weaponMoveId = 3,             // SeaUrchinSpike
         .weaponDurabilityFraction = 100,
         .itemId       = -1,
         .itemCount    = 0,
-        .flavor       = "Inside the chest, a fresh urchin spike, still salt-bright.",
+        .flavorKey    = "chest.alcove_f3.flavor",
     },
     [CHEST_ALCOVE_F4] = {
         .weaponMoveId = -1,
         .weaponDurabilityFraction = 0,
         .itemId       = 3,             // Perlemoen
         .itemCount    = 2,
-        .flavor       = "Two perlemoen, packed in seaweed. The trader will pay for these.",
+        .flavorKey    = "chest.alcove_f4.flavor",
     },
     [CHEST_TUTORIAL_SHELLS] = {
         .weaponMoveId = 2,             // ShellThrow
         .weaponDurabilityFraction = 100,
         .itemId       = 2,             // Sardine
         .itemCount    = 2,
-        .flavor       = "Half-buried in the ruin's sand: a cache of shell fragments, their edges worn knife-sharp by the tide.",
+        .flavorKey    = "chest.shells.flavor",
     },
 };
 

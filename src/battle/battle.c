@@ -6,6 +6,7 @@
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
 #include "../screen_layout.h"
+#include "../systems/strings.h"
 #include "../systems/touch_input.h"
 #include "../systems/ui_button.h"
 #include <string.h>
@@ -1392,7 +1393,7 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
                 }
 
                 char *buf = ctx->narration;
-                int   off = snprintf(buf, NARRATION_LEN, "Victory!");
+                int   off = snprintf(buf, NARRATION_LEN, "%s", Str("battle.victory"));
                 for (int i = 0; i < ctx->party->count && off < NARRATION_LEN - 1; i++) {
                     const Combatant *m = &ctx->party->members[i];
                     if (memberXp[i] <= 0) continue;
@@ -1700,7 +1701,7 @@ void BattleDrawUI(const BattleContext *ctx)
         int th = SCREEN_PORTRAIT ? 44 : 22;
         int fontSize = SCREEN_PORTRAIT ? 20 : 16;
         DrawRectangle(0, 0, sw, th, (Color){0x3C, 0x28, 0x14, 220});
-        const char *hint = "Tap an enemy to attack";
+        const char *hint = Str("battle.hint.target");
         DrawText(hint, 10, (th - fontSize) / 2, fontSize,
                  (Color){0xF7, 0xEF, 0xD9, 240});
         DrawBackIconButton(TargetBackRect());
@@ -1711,10 +1712,10 @@ void BattleDrawUI(const BattleContext *ctx)
         BattleMenuDrawNarration(ctx->narration);
         break;
     case BS_VICTORY:
-        BattleMenuDrawNarration("Victory!");
+        BattleMenuDrawNarration(Str("battle.victory"));
         break;
     case BS_DEFEAT:
-        BattleMenuDrawNarration("Defeated...");
+        BattleMenuDrawNarration(Str("battle.defeat"));
         break;
     default:
         break;

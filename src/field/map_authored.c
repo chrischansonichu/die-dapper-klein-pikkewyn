@@ -5,6 +5,7 @@
 #include "../data/armor_defs.h"
 #include "../data/lore_text.h"
 #include "../state/game_state.h"
+#include "../systems/strings.h"
 
 // Append a warp and mark its tile as both WARP and SOLID. Warps are now
 // door-like — the player can't walk through them; they have to face the
@@ -37,8 +38,8 @@ static void AddHarborF1Npcs(MapBuildContext *ctx)
     // Friendly dock-dwelling penguin (no hat — only the village mayor wears one).
     Npc *elder = &ctx->npcs[(*ctx->npcCount)++];
     NpcInit(elder, 8, 13, 0, NPC_PENGUIN_VILLAGER);
-    NpcAddDialogue(elder, "Jan! The sailors have taken all the fish!");
-    NpcAddDialogue(elder, "You must fight them off. Be brave, little one.");
+    NpcAddDialogue(elder, Str("harbor.elder.1"));
+    NpcAddDialogue(elder, Str("harbor.elder.2"));
 }
 
 // Happy-harbor crowd — replaces AddHarborF1Npcs + AddHarborF1Enemies once the
@@ -51,20 +52,20 @@ static void AddHarborF1PostVictoryNpcs(MapBuildContext *ctx)
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(p, 8, 13, 0, NPC_PENGUIN_VILLAGER);
-        NpcAddDialogue(p, "Jan! You did it - the sailors are gone!");
-        NpcAddDialogue(p, "The harbor is ours again. Fish for everyone tonight.");
+        NpcAddDialogue(p, Str("harbor.post.greet.1"));
+        NpcAddDialogue(p, Str("harbor.post.greet.2"));
     }
 
     // A handful of cheerful penguins where the patrols used to stand.
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(p, 12, 13, 2, NPC_PENGUIN_VILLAGER);
-        NpcAddDialogue(p, "Look at this dock! You can actually walk it end to end.");
+        NpcAddDialogue(p, Str("harbor.post.dock"));
     }
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(p, 15, 13, 1, NPC_PENGUIN_VILLAGER);
-        NpcAddDialogue(p, "Captain's cache fed the whole village. Bless you, Jan.");
+        NpcAddDialogue(p, Str("harbor.post.cache"));
     }
 
     // If the player won the dungeon without freeing the seal, drop him on the
@@ -74,13 +75,12 @@ static void AddHarborF1PostVictoryNpcs(MapBuildContext *ctx)
     if (!ctx->sealAlreadyRecruited && *ctx->npcCount < ctx->npcMax) {
         Npc *seal = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(seal, 14, 15, 3, NPC_SEAL);
-        NpcAddDialogue(seal,
-            "Arf! Thanks for cracking the Captain - he kept me chained below.");
-        NpcAddDialogue(seal, "Mind if I tag along now? I've got scores to settle.");
+        NpcAddDialogue(seal, Str("harbor.post.sealfree.1"));
+        NpcAddDialogue(seal, Str("harbor.post.sealfree.2"));
     } else if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(p, 14, 15, 3, NPC_PENGUIN_VILLAGER);
-        NpcAddDialogue(p, "Arf! (A seal waddles past, belly full of sardines.)");
+        NpcAddDialogue(p, Str("harbor.post.sealflavor"));
     }
 
     // Penguins out in the shallows — scenery, not reachable. Their idle bob
@@ -88,22 +88,22 @@ static void AddHarborF1PostVictoryNpcs(MapBuildContext *ctx)
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(p, 5, 6, 2, NPC_PENGUIN_VILLAGER);
-        NpcAddDialogue(p, "Ahh! The water's perfect.");
+        NpcAddDialogue(p, Str("harbor.post.swim.1"));
     }
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(p, 10, 8, 0, NPC_PENGUIN_VILLAGER);
-        NpcAddDialogue(p, "First swim since the sailors came. Feels like home.");
+        NpcAddDialogue(p, Str("harbor.post.swim.2"));
     }
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(p, 17, 10, 1, NPC_PENGUIN_VILLAGER);
-        NpcAddDialogue(p, "Caught a sardine with my bare flippers! Ha!");
+        NpcAddDialogue(p, Str("harbor.post.swim.3"));
     }
     if (*ctx->npcCount < ctx->npcMax) {
         Npc *p = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(p, 13, 11, 3, NPC_PENGUIN_VILLAGER);
-        NpcAddDialogue(p, "Chk-chk-chk! (A chick dives under and comes back up giggling.)");
+        NpcAddDialogue(p, Str("harbor.post.swim.4"));
     }
 }
 
@@ -134,7 +134,7 @@ static void AddSealCaptiveScene(MapBuildContext *ctx)
     // Tied-up seal between them, facing up.
     Npc *seal = &ctx->npcs[(*ctx->npcCount)++];
     NpcInit(seal, 14, 15, 3, NPC_SEAL);
-    NpcAddDialogue(seal, "Arf! Let's teach those sailors a lesson together!");
+    NpcAddDialogue(seal, Str("seal.captive"));
     NpcSetCaptors(seal, capAIdx, capBIdx);
 }
 
@@ -204,9 +204,9 @@ static void AddHubNpcs(MapBuildContext *ctx)
     // arriving from the harbor meet him first.
     Npc *elder = &ctx->npcs[(*ctx->npcCount)++];
     NpcInit(elder, 11, 9, 3, NPC_PENGUIN_ELDER);
-    NpcAddDialogue(elder, "Welcome to the village, Jan.");
-    NpcAddDialogue(elder, "The sailors have moved up the coast. The harbor is through the south gate.");
-    NpcAddDialogue(elder, "Rest here whenever you need to. You'll always find your way back.");
+    NpcAddDialogue(elder, Str("hub.elder.1"));
+    NpcAddDialogue(elder, Str("hub.elder.2"));
+    NpcAddDialogue(elder, Str("hub.elder.3"));
 
     // Each shopkeeper stands one tile in front of their hut door (the
     // bottom-centre of the 3x3 footprint), facing up so the player walks

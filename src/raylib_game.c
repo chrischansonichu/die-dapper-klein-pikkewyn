@@ -16,6 +16,7 @@
 #include "screens.h"    // NOTE: Declares global (extern) variables and screens functions
 #include "render/paper_harbor.h"
 #include "screen_layout.h"
+#include "systems/strings.h"
 
 #if defined(PLATFORM_WEB)
     #include <emscripten/emscripten.h>
@@ -74,6 +75,9 @@ int main(void)
     // double-clicking both work. Without this, LoadTexture/LoadFont/LoadSound
     // fail silently whenever the cwd isn't the binary's directory.
     ChangeDirectory(GetApplicationDirectory());
+
+    // String table must load before any screen Init pulls dialogue via Str().
+    StringsInit();
 
     // Load global data (assets that must be available in all screens, i.e. font).
     // EB Garamond loaded at a high baseline (96px) so the atlas glyphs stay

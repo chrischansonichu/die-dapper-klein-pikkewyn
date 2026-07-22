@@ -15,6 +15,7 @@
 #include "../battle/battle_sprites.h"
 #include "../battle/battle_grid.h"
 #include "../render/paper_harbor.h"
+#include "../systems/strings.h"
 #include "../systems/touch_input.h"
 #include "../systems/fab_menu.h"
 #include "../screen_layout.h"
@@ -113,43 +114,22 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
 
     if (n->type == NPC_SCRIBE) {
         bool ok = SaveGame(ow->gs, ow->player.tileX, ow->player.tileY, ow->player.dir);
-        if (ok) {
-            snprintf(scratch[0], NPC_DIALOGUE_LEN,
-                     "I've recorded your journey in the village log.");
-            snprintf(scratch[1], NPC_DIALOGUE_LEN,
-                     "Rest easy - you can pick up here next time.");
-        } else {
-            snprintf(scratch[0], NPC_DIALOGUE_LEN,
-                     "My quill slipped - the log wouldn't take.");
-            snprintf(scratch[1], NPC_DIALOGUE_LEN,
-                     "Come see me again in a moment.");
-        }
-        pages[0] = scratch[0];
-        pages[1] = scratch[1];
-        return 2;
+        return StrPages(ok ? "scribe.ok" : "scribe.fail",
+                        pages, NPC_MAX_DIALOGUE_PAGES);
     }
 
     if (n->type == NPC_SEAL) {
         if (NpcCurrentlyCaptive(n, ow->enemies, ow->enemyCount)) {
-            snprintf(scratch[0], NPC_DIALOGUE_LEN,
-                     "...mmph! (He's tied up. Defeat the sailors guarding him!)");
-            pages[0] = scratch[0];
+            pages[0] = Str("seal.mmph");
             return 1;
         }
         int janLevel = (ow->gs->party.count > 0) ? ow->gs->party.members[0].level : 1;
         if (ow->gs->party.count < PARTY_MAX) {
             PartyAddMember(&ow->gs->party, CREATURE_SEAL, janLevel);
             n->active = false;
-            snprintf(scratch[0], NPC_DIALOGUE_LEN,
-                     "Arf! Thanks for the rescue - let's teach them a lesson!");
-            snprintf(scratch[1], NPC_DIALOGUE_LEN,
-                     "The seal joins your party. (XP is now split evenly.)");
-            pages[0] = scratch[0];
-            pages[1] = scratch[1];
-            return 2;
+            return StrPages("seal.join", pages, NPC_MAX_DIALOGUE_PAGES);
         }
-        snprintf(scratch[0], NPC_DIALOGUE_LEN, "Arf! Your party is full already.");
-        pages[0] = scratch[0];
+        pages[0] = Str("seal.full");
         return 1;
     }
 
@@ -162,14 +142,7 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
         uint64_t fl = ow->gs->storyFlags;
         if (!(fl & STORY_FLAG_TUT_MET_RYNO)) {
             ow->gs->storyFlags |= STORY_FLAG_TUT_MET_RYNO;
-            pages[0] = "???: Haai! Another one! I KNEW it - I told the colony I smelled penguin on this wind.";
-            pages[1] = "Jan: Penguin? No, no. I'm a cormorant. A bad one. My wings never dry, I can't fly, and when I dive I just... sink.";
-            pages[2] = "Ryno: Boet. Look at me. Now look at you. Same black back, same white front. That's not sinking - that's a hull. I'm Ryno. And you're a PENGUIN.";
-            pages[3] = "Ryno: Years back a hen from our colony - Annika - swam out past the shipping lane after sardine. A storm rolled in and sat for a week. She never came home.";
-            pages[4] = "Ryno: She was carrying an egg when she left. You have her eyes, boet. I'd swear it on my last pilchard.";
-            pages[5] = "Jan: ...Ma always said the storm brought me in.";
-            pages[6] = "Ryno: Then it's settled. And listen - penguins don't fly. We fly UNDERWATER. Talk to me again when you're ready for your first lesson.";
-            return 7;
+            return StrPages("tut.ryno.meet", pages, NPC_MAX_DIALOGUE_PAGES);
         }
         if (!(fl & STORY_FLAG_TUT_SWIM_TAUGHT)) {
             ow->gs->storyFlags |= STORY_FLAG_TUT_SWIM_TAUGHT;
@@ -188,70 +161,34 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
                     jan->moveUpgradeLevel[slot] = 0;
                 }
             }
-            pages[0] = "Ryno: Lesson one. The water isn't your enemy - it's your sky. Head down, feet back, and POINT yourself somewhere.";
-            pages[1] = "Ryno: And take this - my spare fishing hook. Sailors lose them by the dozen. Hooked under a flipper it cuts kelp, rope, whatever needs cutting.";
-            pages[2] = "(Ryno's FishingHook is now equipped as one of Jan's item attacks.)";
-            pages[3] = "Ryno: See the stone ring off the east shore? An old fish-trap ruin. The cove between here and there is calm - and something glints inside that ring.";
-            pages[4] = "Ryno: Storm-kelp is choking the gap in the ruin's wall. Swim over and cut it loose with the hook.";
-            return 5;
+            return StrPages("tut.ryno.swim", pages, NPC_MAX_DIALOGUE_PAGES);
         }
-        if (!(fl & STORY_FLAG_TUT_SHELLS_TAKEN)) {
-            pages[0] = "Ryno: East shore, boet. Swim the cove, slash the kelp, and see what the sea left you in that ruin.";
-            return 1;
-        }
-        if (!(fl & STORY_FLAG_TUT_GULL_BEATEN)) {
-            pages[0] = "Ryno: Shells! Lekker. Those fling hard enough to crack more than pride.";
-            pages[1] = "Ryno: Put them to work - that fat kelp gull is back at your family's drying racks. It's strutting around the south grass. Chase it off.";
-            pages[2] = "(Equip first: tap the round menu button in the corner, open the bag, and slot the ShellThrow into an item-attack slot.)";
-            pages[3] = "(Then walk up to the gull to start the fight. In battle: pick a move, then a target - Tackle up close, ShellThrow from a distance.)";
-            return 4;
-        }
+        if (!(fl & STORY_FLAG_TUT_SHELLS_TAKEN))
+            return StrPages("tut.ryno.remind", pages, NPC_MAX_DIALOGUE_PAGES);
+        if (!(fl & STORY_FLAG_TUT_GULL_BEATEN))
+            return StrPages("tut.ryno.gull", pages, NPC_MAX_DIALOGUE_PAGES);
         if (!(fl & STORY_FLAG_TUT_COMPLETE)) {
             ow->gs->storyFlags |= STORY_FLAG_TUT_COMPLETE;
             TutorialApplyZones(&ow->map, ow->gs->storyFlags);
-            pages[0] = "Jan: Ryno... if I'm a penguin, where is everyone? You're the first one I've ever seen.";
-            pages[1] = "Ryno: That's the sore truth, boet. There isn't enough fish left to keep a colony together. Every season we swim further from home just to eat.";
-            pages[2] = "Ryno: Great steel ships from across the ocean - whole fleets of them - drag nets wider than this island. They scrape the sea bare and haul it all over the horizon.";
-            pages[3] = "Jan: They can't just TAKE the whole sea. Somebody has to fight back.";
-            pages[4] = "Ryno: Ha! Annika's egg, no mistake. There's a village up the coast where the fed-up are gathering - penguins, seals, all of us. They could use a fighter.";
-            pages[5] = "Ryno: The channel north of the island is a short swim for a penguin. Cross it, follow the mainland sand, and you'll find the village. I'll meet you there.";
-            pages[6] = "(The north channel is open. Swim across, then follow the sand to the exit.)";
-            return 7;
+            return StrPages("tut.ryno.finale", pages, NPC_MAX_DIALOGUE_PAGES);
         }
-        pages[0] = "Ryno: North, boet! Across the channel, up the sand. I'll see you at the village.";
-        return 1;
+        return StrPages("tut.ryno.done", pages, NPC_MAX_DIALOGUE_PAGES);
     }
 
     // Cormorant family — static basking lines early on, swapped for stage
     // lines once the tutorial's late beats land.
     if (n->type == NPC_CORMORANT) {
         uint64_t fl = ow->gs->storyFlags;
-        if (fl & STORY_FLAG_TUT_COMPLETE) {
-            pages[0] = "Ma Duiker: A whole village of penguins, hey. Go on then, my boy. You were never a bad cormorant - you were always a lekker penguin.";
-            pages[1] = "Pa Duiker: The storm brought you in. Suppose the sea's calling you back. Swim straight, Jan.";
-            pages[2] = "Vlerkie: Bring me something from the mainland! And peck a trawler for me!";
-            return 3;
-        }
-        if (fl & STORY_FLAG_TUT_GULL_BEATEN) {
-            pages[0] = "Ma Duiker: You chased that thieving gull off! Come here, let me look at you. My little fighter.";
-            pages[1] = "Pa Duiker: Racks are safe for the first time in weeks. Well done, my boy.";
-            return 2;
-        }
+        if (fl & STORY_FLAG_TUT_COMPLETE)
+            return StrPages("tut.family.farewell", pages, NPC_MAX_DIALOGUE_PAGES);
+        if (fl & STORY_FLAG_TUT_GULL_BEATEN)
+            return StrPages("tut.family.proud", pages, NPC_MAX_DIALOGUE_PAGES);
         // Fall through to the NPC's authored dialogue below.
     }
 
     if ((n->type == NPC_PENGUIN_ELDER || n->type == NPC_PENGUIN_VILLAGER)
         && AllEnemiesDefeated(ow)) {
-        snprintf(scratch[0], NPC_DIALOGUE_LEN,
-                 "The dock is clear! You've done well, Jan.");
-        snprintf(scratch[1], NPC_DIALOGUE_LEN,
-                 "Rumor is more sailors are stalking the tidal pools further up the coast...");
-        snprintf(scratch[2], NPC_DIALOGUE_LEN,
-                 "Don't stop here - press on up the coast. There's more waiting for you.");
-        pages[0] = scratch[0];
-        pages[1] = scratch[1];
-        pages[2] = scratch[2];
-        return 3;
+        return StrPages("harbor.clear", pages, NPC_MAX_DIALOGUE_PAGES);
     }
 
     int count = n->dialogueCount;
@@ -325,10 +262,8 @@ static bool TryInteractWarp(FieldState *ow, int tx, int ty)
             if (ow->gs->currentMapId == MAP_HARBOR_F7 &&
                 ow->warps[i].targetMapId == MAP_OVERWORLD_HUB &&
                 !ow->gs->captainDefeated) {
-                static const char *kBlockedPages[] = {
-                    "The way back is blocked - you can't leave the Captain alive at your back.",
-                };
-                DialogueBegin(&ow->dialogue, kBlockedPages, 1, 30.0f);
+                const char *blocked[1] = { Str("warp.blocked_captain") };
+                DialogueBegin(&ow->dialogue, blocked, 1, 30.0f);
                 return true;
             }
             ow->warpPromptIdx = i;
@@ -415,10 +350,8 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
         }
         case OBJ_LANTERN: {
             if (o->consumed) {
-                static const char *kAlreadyLit[] = {
-                    "The lantern is already burning. Its halo wobbles in the wind.",
-                };
-                DialogueBegin(&ow->dialogue, kAlreadyLit, 1, 30.0f);
+                const char *already[1] = { Str("lantern.already") };
+                DialogueBegin(&ow->dialogue, already, 1, 30.0f);
                 return;
             }
             uint64_t bit = LanternFlagFor(o->dataId);
@@ -428,36 +361,31 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
             bool allLit = (ow->gs->storyFlags & STORY_FLAG_LANTERN_ALL)
                               == STORY_FLAG_LANTERN_ALL;
             if (allLit) {
-                static const char *kFinal[] = {
-                    "The third lantern catches and steadies. Three flames in a line, paint the dock.",
-                    "Down at the hull, ropes creak. The gangplank lowers itself into place.",
-                };
-                DialogueBegin(&ow->dialogue, kFinal, 2, 30.0f);
+                const char *final[STR_MAX_PAGES];
+                int n = StrPages("lantern.final", final, STR_MAX_PAGES);
+                DialogueBegin(&ow->dialogue, final, n, 30.0f);
             } else {
-                static const char *kSingle[] = {
-                    "The lantern flickers and steadies. Warm light spills onto the planks.",
-                };
-                DialogueBegin(&ow->dialogue, kSingle, 1, 30.0f);
+                const char *single[1] = { Str("lantern.single") };
+                DialogueBegin(&ow->dialogue, single, 1, 30.0f);
             }
             return;
         }
         case OBJ_CHEST: {
             if (o->consumed) {
-                static const char *kEmpty[] = {
-                    "The chest is empty - you took everything from it last time.",
-                };
-                DialogueBegin(&ow->dialogue, kEmpty, 1, 30.0f);
+                const char *empty[1] = { Str("chest.empty") };
+                DialogueBegin(&ow->dialogue, empty, 1, 30.0f);
                 return;
             }
             const ChestContents *cc = GetChestContents(o->dataId);
             if (!cc) return;
 
             // Stage 2 pages of pickup narration. Page 0 is the flavor; page 1
-            // names what was added (or notes the bag was full).
+            // names what was added (or notes the bag was full). flavorKey is
+            // a string-table key, resolved here.
             static const char *pages[2];
             static char addLine[160];
             int pageCount = 0;
-            if (cc->flavor) pages[pageCount++] = cc->flavor;
+            if (cc->flavorKey) pages[pageCount++] = Str(cc->flavorKey);
 
             char wMsg[80] = "", iMsg[80] = "";
             if (cc->weaponMoveId >= 0) {
@@ -466,14 +394,14 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
                 bool ok = InventoryAddWeaponEx(&ow->gs->party.inventory,
                                                cc->weaponMoveId, dur, 0);
                 snprintf(wMsg, sizeof(wMsg),
-                         "%s the %s.", ok ? "Got" : "Bag full - left",
+                         Str(ok ? "chest.got_weapon" : "chest.left_weapon"),
                          mv->name);
             }
             if (cc->itemId >= 0 && cc->itemCount > 0) {
                 bool ok = InventoryAddItem(&ow->gs->party.inventory,
                                            cc->itemId, cc->itemCount);
                 snprintf(iMsg, sizeof(iMsg),
-                         "%s %d %s.", ok ? "Got" : "Bag full - left",
+                         Str(ok ? "chest.got_items" : "chest.left_items"),
                          cc->itemCount, GetItemDef(cc->itemId)->name);
             }
             if (wMsg[0] && iMsg[0]) {
@@ -502,18 +430,15 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
             // with the FishingHook Ryno hands over at the swim lesson — the
             // SWIM_TAUGHT flag and the hook arrive together.
             if (ow->gs->storyFlags & STORY_FLAG_TUT_SWIM_TAUGHT) {
-                static const char *kCut[] = {
-                    "Jan drags Ryno's fishing hook through the tangle - once, twice. The storm-kelp parts like old rope.",
-                    "That felt... natural. Like something a penguin was built to do.",
-                };
-                DialogueBegin(&ow->dialogue, kCut, 2, 30.0f);
+                const char *cut[STR_MAX_PAGES];
+                int n = StrPages("tut.kelp.cut", cut, STR_MAX_PAGES);
+                DialogueBegin(&ow->dialogue, cut, n, 30.0f);
                 o->active = false;  // tile is open from here on
                 ow->gs->storyFlags |= STORY_FLAG_TUT_KELP_CUT;
             } else {
-                static const char *kTooTough[] = {
-                    "A dense tangle of storm-kelp chokes the gap in the old wall. Too tough to pull apart with flippers - something sharp might do it.",
-                };
-                DialogueBegin(&ow->dialogue, kTooTough, 1, 30.0f);
+                const char *blocked[STR_MAX_PAGES];
+                int n = StrPages("tut.kelp.blocked", blocked, STR_MAX_PAGES);
+                DialogueBegin(&ow->dialogue, blocked, n, 30.0f);
             }
             return;
         }
@@ -540,11 +465,9 @@ static void BeginNpcInteraction(FieldState *ow, int npcIdx)
         }
         // Forge is cold until the harbor boss falls. Fall through to a fixed
         // dialogue instead of the modal so the NPC still reads as an NPC.
-        const char *locked[2] = {
-            "The blacksmith is hunched over a cold forge, shaping nothing in particular.",
-            "\"Forge's cold. Nothing worth shaping 'til the harbor's ours again. Clear it and we'll talk.\"",
-        };
-        DialogueBegin(&ow->dialogue, locked, 2, 30.0f);
+        const char *locked[STR_MAX_PAGES];
+        int n = StrPages("hub.smith.locked", locked, STR_MAX_PAGES);
+        DialogueBegin(&ow->dialogue, locked, n, 30.0f);
         return;
     }
     const char *pages[NPC_MAX_DIALOGUE_PAGES];
@@ -1050,7 +973,7 @@ static int RollEnemyDrops(FieldEnemy *e, Party *party, DiscardUI *discard,
         && pages < DROP_MSG_PAGES) {
         const ItemDef *it = GetItemDef(e->dropItemId);
         if (InventoryAddItem(inv, e->dropItemId, 1)) {
-            snprintf(gDropMsg[pages], DROP_MSG_LEN, "Got %s!", it->name);
+            snprintf(gDropMsg[pages], DROP_MSG_LEN, Str("drop.item"), it->name);
             pages++;
         }
     }
@@ -1060,7 +983,7 @@ static int RollEnemyDrops(FieldEnemy *e, Party *party, DiscardUI *discard,
         if (mv->isWeapon) {
             if (InventoryAddWeapon(inv, e->dropWeaponId, mv->defaultDurability)) {
                 snprintf(gDropMsg[pages], DROP_MSG_LEN,
-                         "Picked up a %s!", mv->name);
+                         Str("drop.weapon"), mv->name);
                 pages++;
             } else if (discard) {
                 // Bag full — open the discard modal. No queued narration:
@@ -1078,15 +1001,14 @@ static int RollEnemyDrops(FieldEnemy *e, Party *party, DiscardUI *discard,
         const ArmorDef *ad = GetArmorDef(e->dropArmorId);
         if (InventoryAddArmor(inv, e->dropArmorId)) {
             snprintf(gDropMsg[pages], DROP_MSG_LEN,
-                     "Picked up %s!", ad->name);
+                     Str("drop.armor"), ad->name);
             pages++;
         } else {
             // Armor bag is small but can still overflow — narrate the loss.
             // A full DiscardUI for armor isn't worth the surface area for a
             // single drop this slice; generalize when more armor ships.
             snprintf(gDropMsg[pages], DROP_MSG_LEN,
-                     "A %s tumbles to the deck - but your armor chest is full. Lost.",
-                     ad->name);
+                     Str("drop.armor_lost"), ad->name);
             pages++;
         }
     }
@@ -1193,8 +1115,7 @@ static void ResolveBattleEnd(FieldState *ow, int result)
                 !(ow->gs->storyFlags & STORY_FLAG_TUT_GULL_BEATEN)) {
                 ow->gs->storyFlags |= STORY_FLAG_TUT_GULL_BEATEN;
                 if (pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0]))) {
-                    ptrs[pageCount++] =
-                        "The gull flaps off over the water, screeching insults. Ryno will want to hear about this.";
+                    ptrs[pageCount++] = Str("tut.gull.victory");
                 }
                 break;
             }
@@ -1203,11 +1124,10 @@ static void ResolveBattleEnd(FieldState *ow, int result)
             ow->gs->captainDefeated     = true;
             ow->gs->villageReputation  += 100;
             if (pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0]))) {
-                ptrs[pageCount++] =
-                    "You haul the Captain's cache of stolen fish back to the village. (+100 Rep)";
+                ptrs[pageCount++] = Str("victory.cache");
             }
             if (pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0]))) {
-                ptrs[pageCount++] = "Captain defeated - the harbor is safe.";
+                ptrs[pageCount++] = Str("victory.captain");
             }
         }
     } else if (result == 3 /* fled */) {
@@ -1240,8 +1160,7 @@ static void ResolveBattleEnd(FieldState *ow, int result)
             CombatantClearStatus(ally, STATUS_BOUND);
             ow->npcs[npcIdx].active = false;
             snprintf(gRescueGreet, RESCUE_GREET_LEN,
-                     "Arf! Thanks for the rescue! %s joins your party.",
-                     ally->name);
+                     Str("seal.greet"), ally->name);
             ptrs[pageCount++] = gRescueGreet;
         } else {
             PartyRemoveMember(&ow->gs->party, partyIdx);
@@ -1288,20 +1207,18 @@ static void ResolveBattleEnd(FieldState *ow, int result)
         int totalLost = DropInventoryOnRescue(&ow->gs->party.inventory,
                                               &itemsLost, &weaponsDamaged);
         ow->gs->rescueLossPending = false;
+        // Loss lines use "%d item(s)" phrasing instead of English plural
+        // suffix tricks so the formats survive translation intact.
         if (totalLost > 0) {
             if (itemsLost > 0 && weaponsDamaged > 0) {
                 snprintf(ow->gs->rescueLossMsg, sizeof(ow->gs->rescueLossMsg),
-                         "In the swim back, you lost %d item%s from your bag and %d weapon%s took a beating.",
-                         itemsLost,      itemsLost      == 1 ? "" : "s",
-                         weaponsDamaged, weaponsDamaged == 1 ? "" : "s");
+                         Str("rescue.loss.both"), itemsLost, weaponsDamaged);
             } else if (itemsLost > 0) {
                 snprintf(ow->gs->rescueLossMsg, sizeof(ow->gs->rescueLossMsg),
-                         "In the swim back, you lost %d item%s from your bag.",
-                         itemsLost, itemsLost == 1 ? "" : "s");
+                         Str("rescue.loss.items"), itemsLost);
             } else {
                 snprintf(ow->gs->rescueLossMsg, sizeof(ow->gs->rescueLossMsg),
-                         "In the swim back, %d weapon%s in your bag took a beating.",
-                         weaponsDamaged, weaponsDamaged == 1 ? "" : "s");
+                         Str("rescue.loss.weapons"), weaponsDamaged);
             }
             ow->gs->rescueLossPending = true;
         }
@@ -1746,15 +1663,9 @@ void FieldUpdate(FieldState *ow, float dt)
         !(ow->gs->storyFlags & STORY_FLAG_TUT_INTRO) &&
         !ow->dialogue.active) {
         ow->gs->storyFlags |= STORY_FLAG_TUT_INTRO;
-        static const char *kIntro[] = {
-            "Ma Duiker: Jan! There you are. The morning dive's done - the others are up on the rocks drying their wings.",
-            "Ma Duiker: Ag, don't sulk. So your wings won't dry and you sink like a stone. You're MY stone, and that's the end of it.",
-            "Ma Duiker: Now - something big washed up on the north beach at dawn. Black and white, and it MOVES. Go and see. Careful, hey!",
-            // Touch phrasing only — this is a touch game; on desktop the same
-            // gesture works with a mouse drag.
-            "(Touch the screen and drag - Jan waddles the way you pull. Head north along the beach.)",
-        };
-        DialogueBegin(&ow->dialogue, kIntro, 4, 30.0f);
+        const char *intro[STR_MAX_PAGES];
+        int n = StrPages("tut.intro", intro, STR_MAX_PAGES);
+        DialogueBegin(&ow->dialogue, intro, n, 30.0f);
         return;
     }
 
@@ -1783,10 +1694,8 @@ void FieldUpdate(FieldState *ow, float dt)
             if (dy < 0) dy = -dy;
             int cheb = dx > dy ? dx : dy;
             if (cheb <= 2) {
-                static const char *kTauntPages[] = {
-                    "Captain: \"So the penguin shows his face. I've been waiting.\"",
-                };
-                DialogueBegin(&ow->dialogue, kTauntPages, 1, 30.0f);
+                const char *taunt[1] = { Str("boss.taunt") };
+                DialogueBegin(&ow->dialogue, taunt, 1, 30.0f);
                 ow->gs->captainTauntShown = true;
                 break;
             }
@@ -2030,21 +1939,14 @@ static const char *TutorialObjectiveText(const FieldState *ow)
     if (!ow->gs || ow->gs->currentMapId != MAP_TUTORIAL_ISLAND) return NULL;
     uint64_t fl = ow->gs->storyFlags;
     if (!(fl & STORY_FLAG_TUT_INTRO)) return NULL;  // intro scene still pending
-    if (ow->tutorialSteps < 3)
-        return "Touch and drag - Jan waddles the way you pull";
-    if (!(fl & STORY_FLAG_TUT_MET_RYNO))
-        return "Find what washed up on the north beach";
-    if (!(fl & STORY_FLAG_TUT_SWIM_TAUGHT))
-        return "Talk to Ryno again";
-    if (!(fl & STORY_FLAG_TUT_KELP_CUT))
-        return "Swim the east cove and slash the kelp at the ruin";
-    if (!(fl & STORY_FLAG_TUT_SHELLS_TAKEN))
-        return "Search the ruin for what the sea left behind";
-    if (!(fl & STORY_FLAG_TUT_GULL_BEATEN))
-        return "Chase the gull off the drying racks on the south grass";
-    if (!(fl & STORY_FLAG_TUT_COMPLETE))
-        return "Tell Ryno about the gull";
-    return "Swim the north channel and head for the mainland exit";
+    if (ow->tutorialSteps < 3)                      return Str("tut.obj.move");
+    if (!(fl & STORY_FLAG_TUT_MET_RYNO))            return Str("tut.obj.find");
+    if (!(fl & STORY_FLAG_TUT_SWIM_TAUGHT))         return Str("tut.obj.talk");
+    if (!(fl & STORY_FLAG_TUT_KELP_CUT))            return Str("tut.obj.kelp");
+    if (!(fl & STORY_FLAG_TUT_SHELLS_TAKEN))        return Str("tut.obj.cache");
+    if (!(fl & STORY_FLAG_TUT_GULL_BEATEN))         return Str("tut.obj.gull");
+    if (!(fl & STORY_FLAG_TUT_COMPLETE))            return Str("tut.obj.report");
+    return Str("tut.obj.leave");
 }
 
 // Bottom-center objective pill. Sits just above the control-hint line.
@@ -2290,7 +2192,7 @@ void FieldDraw(const FieldState *ow)
     if (ow->mode == FIELD_FREE) {
         // Touch-first phrasing on every build — drags/taps work with a mouse
         // on desktop, and the keyboard shortcuts stay as silent extras.
-        DrawText("Swipe to move   Tap to interact", 8,
+        DrawText(Str("hint.field"), 8,
                  GetScreenHeight() - 22, 14, (Color){150, 150, 150, 200});
         if (!ow->dialogue.active) {
             DrawTutorialObjective(ow);
@@ -2361,16 +2263,15 @@ void FieldDraw(const FieldState *ow)
         if (w->targetMapId == MAP_OVERWORLD_HUB) {
             // From the tutorial island this is Jan's FIRST trip — "return"
             // would read wrong.
-            title = (ow->gs->currentMapId == MAP_TUTORIAL_ISLAND)
-                        ? "Set out for the village?"
-                        : "Return to the village?";
+            title = Str((ow->gs->currentMapId == MAP_TUTORIAL_ISLAND)
+                            ? "warp.village_first" : "warp.village");
             warn  = "";
         } else if (w->targetMapId == MAP_HARBOR_F1) {
-            title = "Enter the harbor?";
+            title = Str("warp.harbor");
             warn  = "";
         } else {
-            title = "Continue to the next area?";
-            warn  = "You won't be able to return.";
+            title = Str("warp.next");
+            warn  = Str("warp.noreturn");
         }
         // Bigger panel to fit larger title text + chunky YES/NO buttons. The
         // old "Z / Enter: Yes" hint band is gone — the buttons are the

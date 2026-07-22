@@ -3,6 +3,7 @@
 #include "../battle/inventory.h"
 #include "../data/move_defs.h"
 #include "../data/item_defs.h"
+#include "../systems/strings.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -95,10 +96,10 @@ int KeeperInteract(GameState *gs, DiscardUI *discard,
 
     if (have < Q->wantCount) {
         snprintf(scratch[0], NPC_DIALOGUE_LEN,
-                 "I'm collecting %s - bring me %d and I'll trade you something nice.",
+                 Str("keeper.ask"),
                  Q->plural, Q->wantCount);
         snprintf(scratch[1], NPC_DIALOGUE_LEN,
-                 "(You have %d of %d.)", have, Q->wantCount);
+                 Str("keeper.progress"), have, Q->wantCount);
         pages[0] = scratch[0];
         pages[1] = scratch[1];
         return 2;
@@ -114,10 +115,10 @@ int KeeperInteract(GameState *gs, DiscardUI *discard,
     gs->keeperQuestIdx = (q + 1) % KEEPER_QUEST_COUNT;
 
     snprintf(scratch[0], NPC_DIALOGUE_LEN,
-             "Excellent! That's just what I needed.");
+             "%s", Str("keeper.thanks"));
     const ItemDef *rfIt = GetItemDef(r.fishItemId);
     snprintf(scratch[1], NPC_DIALOGUE_LEN,
-             "Take this %s and %d %s for your trouble.",
+             Str("keeper.reward"),
              rwMv->name, r.fishCount, rfIt->name);
 
     // Weapon bag full: hand the swap decision to the player via DiscardUI
@@ -127,7 +128,7 @@ int KeeperInteract(GameState *gs, DiscardUI *discard,
                       rwMv->defaultDurability, 0);
         if (!gotFish) {
             snprintf(scratch[2], NPC_DIALOGUE_LEN,
-                     "(Your food bag is full too - some of the reward couldn't fit.)");
+                     "%s", Str("keeper.bagfull_food"));
             pages[0] = scratch[0]; pages[1] = scratch[1]; pages[2] = scratch[2];
             return 3;
         }
@@ -137,7 +138,7 @@ int KeeperInteract(GameState *gs, DiscardUI *discard,
 
     if (!gotWeapon || !gotFish) {
         snprintf(scratch[2], NPC_DIALOGUE_LEN,
-                 "(Your bag was full - some of the reward couldn't fit.)");
+                 "%s", Str("keeper.bagfull"));
         pages[0] = scratch[0];
         pages[1] = scratch[1];
         pages[2] = scratch[2];
