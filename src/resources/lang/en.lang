@@ -45,14 +45,17 @@ tut.ryno.remind.1 = Ryno: East shore, boet. Swim the cove, slash the kelp, and s
 
 tut.ryno.gull.1 = Ryno: Shells! Lekker. Those fling hard enough to crack more than pride.
 tut.ryno.gull.2 = Ryno: Put them to work - that fat kelp gull is back at your family's drying racks. It's strutting around the south grass. Chase it off.
-tut.ryno.gull.3 = (Equip first: tap the round menu button in the corner, open the bag, and slot the ShellThrow into an item-attack slot.)
-tut.ryno.gull.4 = (Then walk up to the gull to start the fight. In battle: pick a move, then a target - Tackle up close, ShellThrow from a distance.)
+tut.ryno.gull.3 = Ryno: One more trick. A thief that's busy thieving never watches its tail. Come up quiet BEHIND it, and the first klap is free - before it even knows there's a fight.
+tut.ryno.gull.4 = (Sneak attack: stand directly behind an unaware enemy and a mark pulses on it - tap to strike first. Works up close with melee, or from a few tiles back with a ranged weapon.)
+tut.ryno.gull.5 = (Equip first: tap the round menu button in the corner, open the bag, and slot the ShellThrow into an item-attack slot.)
+tut.ryno.gull.6 = (Then walk up to the gull - or sneak in behind it - to start the fight. In battle: pick a move, then a target - Tackle up close, ShellThrow from a distance.)
 
 tut.ryno.ranged.1 = Ryno: You klapped it! Ha! But listen, boet - a kelp gull never loses alone. It sulks on the water a while, then comes back with cousins. They ALWAYS come back with cousins.
 tut.ryno.ranged.2 = Ryno: So, next lesson. When a mob lands on you, don't waddle into the middle of it. A Tackle only reaches the one right at your beak.
 tut.ryno.ranged.3 = (Melee moves like Tackle and FishingHook only hit an enemy directly ahead of you. Ranged moves like ShellThrow can hit ANY enemy, wherever they stand.)
 tut.ryno.ranged.4 = Ryno: Knock the far ones down with shells, and Tackle whatever's rude enough to get close. Fight the whole flock, boet, not one bird at a time.
-tut.ryno.ranged.5 = Ryno: ...You hear that skreeing? South side. THE RACKS, BOET! GO!
+tut.ryno.ranged.5 = Ryno: And don't forget your quiet trick - it works with shells too. Line one up from BEHIND, two or three paces back, and the first bird's down before the brawl even starts.
+tut.ryno.ranged.6 = Ryno: ...You hear that skreeing? South side. THE RACKS, BOET! GO!
 
 tut.ryno.raidremind.1 = Ryno: The racks, boet! Three of them! Shells for the far ones, Tackle for the brave ones - GO!
 
