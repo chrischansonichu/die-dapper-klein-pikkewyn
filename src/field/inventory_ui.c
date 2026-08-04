@@ -1165,9 +1165,8 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
         int moveId = led->moveIds[popupEqIdx];
         if (moveId >= 0) {
             const MoveDef *mv = GetMoveDef(moveId);
-            const char *rs = (mv->range == RANGE_MELEE)  ? "melee" :
-                             (mv->range == RANGE_RANGED) ? "ranged" :
-                             (mv->range == RANGE_AOE)    ? "AOE"    : "self";
+            char rs[24];
+            MoveKindLabel(mv, rs, sizeof(rs));
             char body[200];
             if (mv->power > 0 && mv->isWeapon) {
                 snprintf(body, sizeof(body), "%s\nPWR %d  %s\nDur %d/%d",
@@ -1310,9 +1309,8 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
 
     if (popupBagIdx >= 0) {
         const MoveDef *mv = GetMoveDef(inv->weapons[popupBagIdx].moveId);
-        const char *rs = (mv->range == RANGE_MELEE)  ? "melee" :
-                         (mv->range == RANGE_RANGED) ? "ranged" :
-                         (mv->range == RANGE_AOE)    ? "AOE"    : "self";
+        char rs[24];
+        MoveKindLabel(mv, rs, sizeof(rs));
         char body[200];
         snprintf(body, sizeof(body), "%s\nPWR %d  %s\nDur %d/%d",
                  mv->desc, mv->power, rs,
@@ -1353,10 +1351,9 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
                 DrawText(buf, colX, y, FS(14), GRAY);
             } else {
                 const MoveDef *mv = GetMoveDef(led->moveIds[i]);
-                const char *rs = (mv->range == RANGE_MELEE)  ? "MELEE" :
-                                 (mv->range == RANGE_RANGED) ? "RANGED" :
-                                 (mv->range == RANGE_AOE)    ? "AOE"    : "SELF";
-                char stats[32];
+                char rs[24];
+                MoveKindLabel(mv, rs, sizeof(rs));
+                char stats[40];
                 if (mv->power > 0) snprintf(stats, sizeof(stats), "PWR %d %s", mv->power, rs);
                 else               snprintf(stats, sizeof(stats), "%s", rs);
                 if (mv->isWeapon) {
@@ -1415,9 +1412,8 @@ static void DrawWeaponsTab(const InventoryUI *ui, const Party *party)
             Color bg = sel ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 110} : (Color){0, 0, 0, 30};
             DrawRectangle(bagX - 6, rowY - 2, bagRowW, 22, bg);
             char buf[96];
-            const char *rs = (mv->range == RANGE_MELEE)  ? "MELEE" :
-                             (mv->range == RANGE_RANGED) ? "RANGED" :
-                             (mv->range == RANGE_AOE)    ? "AOE"    : "SELF";
+            char rs[24];
+            MoveKindLabel(mv, rs, sizeof(rs));
             snprintf(buf, sizeof(buf), "%-13s PWR %d %-6s dur %d",
                      mv->name, mv->power, rs, inv->weapons[i].durability);
             DrawText(buf, bagX, rowY, FS(14), WHITE);

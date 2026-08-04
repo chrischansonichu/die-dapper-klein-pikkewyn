@@ -28,7 +28,7 @@ const char *GetLoreTitle(int loreId);
 
 #define CHEST_ALCOVE_F3       0
 #define CHEST_ALCOVE_F4       1
-#define CHEST_TUTORIAL_SHELLS 2   // tutorial island fish-trap ruin — ShellThrow
+#define CHEST_TUTORIAL_CACHE  2   // tutorial island fish-trap ruin — FishingHook
 #define CHEST_COUNT           3
 
 typedef struct ChestContents {

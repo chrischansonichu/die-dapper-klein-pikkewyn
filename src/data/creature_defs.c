@@ -12,8 +12,8 @@ const CreatureDef gCreatureDefs[CREATURE_DEF_COUNT] = {
     // WaveCall was removed from move_defs as never useful; both creatures
     // now leave that special slot empty. IDs 5/6/7 (ColonyRoar / Harpoon /
     // CrashingTide) shifted down to 4/5/6 after the deletion.
-    // Jan's item slots start empty — the tutorial hands him the FishingHook
-    // (Ryno's gift) and ShellThrow (ruin cache) in-fiction. Saves restore
+    // Jan's item slots start empty — the tutorial hands him the ShellThrow
+    // (Ryno's gift) and FishingHook (ruin cache) in-fiction. Saves restore
     // equipped moves from the save record, so this only shapes new games.
     { CREATURE_JAN,          "Jan",             CLASS_PENGUIN, 10, 3,  2,  6,  3,   {   0,   -1,   -1,   -1,   -1,  -1}, 1.0f, false },
     { CREATURE_DECKHAND,     "Deckhand",        CLASS_HUMAN,    8, 2,  2,  3,  1,   {   0,    1,   -1,   -1,   -1,  -1}, 1.0f, false },

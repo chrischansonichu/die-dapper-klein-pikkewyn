@@ -225,7 +225,7 @@ void BuildTutorialIsland(MapBuildContext *ctx)
                   (Color){0xE6, 0xE2, 0xD4, 255});
         gull->wanderInterval = 80;
         EnemySetDrops(gull, ITEM_SARDINE, 100, -1, 0);  // drops the stolen sardine
-        gull->active = (ctx->storyFlags & STORY_FLAG_TUT_SHELLS_TAKEN) != 0;
+        gull->active = (ctx->storyFlags & STORY_FLAG_TUT_CACHE_TAKEN) != 0;
     }
 
     // --- The gull mob — three cousins raiding the drying racks together.
@@ -252,8 +252,8 @@ void BuildTutorialIsland(MapBuildContext *ctx)
     if (*ctx->objectCount < ctx->objectMax) {
         ObjTile(objs, objCount, "ShellCache", 29, 31, &x, &y);
         FieldObject *cache = &ctx->objects[(*ctx->objectCount)++];
-        FieldObjectInit(cache, x, y, OBJ_CHEST, CHEST_TUTORIAL_SHELLS);
-        if (ctx->storyFlags & STORY_FLAG_TUT_SHELLS_TAKEN) cache->consumed = true;
+        FieldObjectInit(cache, x, y, OBJ_CHEST, CHEST_TUTORIAL_CACHE);
+        if (ctx->storyFlags & STORY_FLAG_TUT_CACHE_TAKEN) cache->consumed = true;
     }
 
     // --- Island dressing + side content. Tide pools refill every map build

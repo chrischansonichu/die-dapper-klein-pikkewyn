@@ -161,23 +161,25 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
         if (!(fl & STORY_FLAG_TUT_SWIM_TAUGHT)) {
             ow->gs->storyFlags |= STORY_FLAG_TUT_SWIM_TAUGHT;
             TutorialApplyZones(&ow->map, ow->gs->storyFlags);
-            // Ryno's gift: a FishingHook, equipped straight into Jan's first
-            // item-attack slot. Jan starts the game bare-handed, and slotting
-            // it here means the kelp cut works without an equip-menu detour —
-            // the bag/equip lesson waits for the ShellThrow.
+            // Ryno's gift: a ShellThrow (ranged, slashing), equipped straight
+            // into Jan's first item-attack slot. Jan starts the game
+            // bare-handed, and slotting it here means the kelp cut works
+            // without an equip-menu detour — kelp needs an edge (DMG_SLASH),
+            // and a shell's is the only one on the island. The bag/equip
+            // lesson waits for the FishingHook in the ruin cache.
             if (ow->gs->party.count > 0) {
                 Combatant *jan = &ow->gs->party.members[0];
                 int slot = MOVE_GROUP_SLOT(MOVE_GROUP_ITEM_ATTACK, 0);
                 if (jan->moveIds[slot] < 0) {
-                    const MoveDef *hook = GetMoveDef(1);  // FishingHook
-                    jan->moveIds[slot]          = 1;
-                    jan->moveDurability[slot]   = hook->defaultDurability;
+                    const MoveDef *shells = GetMoveDef(2);  // ShellThrow
+                    jan->moveIds[slot]          = 2;
+                    jan->moveDurability[slot]   = shells->defaultDurability;
                     jan->moveUpgradeLevel[slot] = 0;
                 }
             }
             return StrPages("tut.ryno.swim", pages, NPC_MAX_DIALOGUE_PAGES);
         }
-        if (!(fl & STORY_FLAG_TUT_SHELLS_TAKEN))
+        if (!(fl & STORY_FLAG_TUT_CACHE_TAKEN))
             return StrPages("tut.ryno.remind", pages, NPC_MAX_DIALOGUE_PAGES);
         if (!(fl & STORY_FLAG_TUT_GULL_BEATEN)) {
             // Latching this is what releases Ryno from the cove — he waits
@@ -406,7 +408,7 @@ static uint64_t ChestFlagFor(int chestId)
     switch (chestId) {
         case CHEST_ALCOVE_F3:
         case CHEST_ALCOVE_F4:       return STORY_FLAG_ALCOVE_CHEST_OPENED;
-        case CHEST_TUTORIAL_SHELLS: return STORY_FLAG_TUT_SHELLS_TAKEN;
+        case CHEST_TUTORIAL_CACHE: return STORY_FLAG_TUT_CACHE_TAKEN;
         default:                    return 0;
     }
 }
@@ -525,18 +527,18 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
             }
             if (addLine[0]) pages[pageCount++] = addLine;
 
-            // Tutorial shells: a weapon in the bag does nothing — nudge the
+            // Tutorial hook: a weapon in the bag does nothing — nudge the
             // equip step right at the pickup, before the walk back to Ryno.
-            if (o->dataId == CHEST_TUTORIAL_SHELLS)
-                pages[pageCount++] = Str("tut.shells.equip");
+            if (o->dataId == CHEST_TUTORIAL_CACHE)
+                pages[pageCount++] = Str("tut.cache.equip");
 
             DialogueBegin(&ow->dialogue, pages, pageCount, 30.0f);
             o->consumed = true;
             ow->gs->storyFlags |= ChestFlagFor(o->dataId);
-            // Looting the tutorial shell cache is what lets the kelp gull
+            // Looting the tutorial ruin cache is what lets the kelp gull
             // onto the island — it was spawned latent so a brand-new player
             // can't get ambushed before combat has been taught.
-            if (o->dataId == CHEST_TUTORIAL_SHELLS) {
+            if (o->dataId == CHEST_TUTORIAL_CACHE) {
                 for (int i = 0; i < ow->enemyCount; i++) {
                     if (ow->enemies[i].creatureId == CREATURE_KELP_GULL)
                         ow->enemies[i].active = true;
@@ -634,10 +636,12 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
             return;
         }
         case OBJ_BLOCKAGE: {
-            // Storm-kelp tangle on the tutorial island's fish-trap gap. Cut
-            // with the FishingHook Ryno hands over at the swim lesson — the
-            // SWIM_TAUGHT flag and the hook arrive together.
-            if (ow->gs->storyFlags & STORY_FLAG_TUT_SWIM_TAUGHT) {
+            // Storm-kelp tangle on the tutorial island's fish-trap gap.
+            // Cutting is a damage-type check, not a story-flag one: any
+            // equipped, unbroken slashing weapon severs it. In the tutorial
+            // that's the ShellThrow Ryno hands over at the swim lesson —
+            // a hook or spike just pierces and won't part the fronds.
+            if (PartyHasDamageType(&ow->gs->party, DMG_SLASH)) {
                 const char *cut[STR_MAX_PAGES];
                 int n = StrPages("tut.kelp.cut", cut, STR_MAX_PAGES);
                 DialogueBegin(&ow->dialogue, cut, n, 30.0f);
@@ -2298,7 +2302,7 @@ static const char *TutorialObjectiveText(const FieldState *ow)
     if (!(fl & STORY_FLAG_TUT_MET_RYNO))            return Str("tut.obj.find");
     if (!(fl & STORY_FLAG_TUT_SWIM_TAUGHT))         return Str("tut.obj.talk");
     if (!(fl & STORY_FLAG_TUT_KELP_CUT))            return Str("tut.obj.kelp");
-    if (!(fl & STORY_FLAG_TUT_SHELLS_TAKEN))        return Str("tut.obj.cache");
+    if (!(fl & STORY_FLAG_TUT_CACHE_TAKEN))        return Str("tut.obj.cache");
     if (!(fl & STORY_FLAG_TUT_GULL_BRIEFED) &&
         !(fl & STORY_FLAG_TUT_GULL_BEATEN))         return Str("tut.obj.shells");
     if (!(fl & STORY_FLAG_TUT_GULL_BEATEN))         return Str("tut.obj.gull");

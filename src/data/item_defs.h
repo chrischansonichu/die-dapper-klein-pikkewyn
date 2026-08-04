@@ -21,8 +21,9 @@ typedef struct ItemDef {
     char           desc[ITEM_DESC_LEN];
     ItemEffect     effect;
     int            amount;
-    int            minLevel;    // minimum level required to use; 1 = no gate
-    MoveDamageType damageType;  // for items used offensively; DMG_NONE for pure heals
+    int            minLevel;     // minimum level required to use; 1 = no gate
+    AttackClass    attackClass;  // delivery when used offensively; ATTACK_CLASS_NONE for pure heals
+    MoveDamageType damageType;   // for items used offensively; DMG_NONE for pure heals
 } ItemDef;
 
 // Item IDs

@@ -36,20 +36,20 @@ tut.ryno.meet.6 = Jan: ...Ma always said the storm brought me in.
 tut.ryno.meet.7 = Ryno: Then it's settled. And listen: penguins don't fly through the air. We fly UNDERWATER. Talk to me again when you're ready for your first lesson.
 
 tut.ryno.swim.1 = Ryno: Lesson one. The water isn't your enemy - it's your sky. Head down, feet back, and POINT yourself somewhere.
-tut.ryno.swim.2 = Ryno: And take this - my spare fishing hook. Sailors lose them by the dozen. Hooked under a flipper it cuts kelp, rope, whatever needs cutting.
-tut.ryno.swim.3 = (Ryno's FishingHook is now equipped as one of Jan's item attacks.)
+tut.ryno.swim.2 = Ryno: And take these - shell fragments off the tide line. The sea grinds their edges knife-sharp. Flung right, an edge like that slices kelp, rope, whatever needs cutting.
+tut.ryno.swim.3 = (Ryno's ShellThrow is now equipped as one of Jan's item attacks.)
 tut.ryno.swim.4 = Ryno: See the stone ring off the east shore? An old fish-trap ruin. The cove between here and there is calm - and something glints inside that ring.
-tut.ryno.swim.5 = Ryno: Storm-kelp is choking the gap in the ruin's wall. Swim over and cut it loose with the hook.
+tut.ryno.swim.5 = Ryno: Storm-kelp is choking the gap in the ruin's wall. Swim over and fling a shell through it - only an edge cuts kelp, boet. Beaks and flippers just bounce off.
 tut.ryno.swim.6 = Ryno: Follow me, boet - it's a waddle down the shore to the cove. Keep up with a penguin on a mission!
 
 tut.ryno.remind.1 = Ryno: In you go, boet - the water's right here. Slash the kelp, and see what the sea left you in that ring.
 
-tut.ryno.gull.1 = Ryno: Shells! Lekker. Those fling hard enough to crack more than pride.
-tut.ryno.gull.2 = Ryno: Put them to work - that fat kelp gull is back at your family's drying racks. It's strutting around the south grass. Chase it off.
+tut.ryno.gull.1 = Ryno: A fishing hook! Lekker. Sailors lose them by the dozen - hooked under a flipper, that point stabs deeper than any beak.
+tut.ryno.gull.2 = Ryno: Put it to work - that fat kelp gull is back at your family's drying racks. It's strutting around the south grass. Chase it off.
 tut.ryno.gull.3 = Ryno: One more trick. A thief that's busy thieving never watches its tail. Come up quiet BEHIND it, and the first klap is free - before it even knows there's a fight.
 tut.ryno.gull.4 = (Sneak attack: stand directly behind an unaware enemy and a mark pulses on it - tap to strike first. Works up close with melee, or from a few tiles back with a ranged weapon.)
-tut.ryno.gull.5 = (Equip first: tap the round menu button in the corner, open the bag, and slot the ShellThrow into an item-attack slot.)
-tut.ryno.gull.6 = (Then walk up to the gull - or sneak in behind it - to start the fight. In battle: pick a move, then a target - Tackle up close, ShellThrow from a distance.)
+tut.ryno.gull.5 = (Equip first: tap the round menu button in the corner, open the bag, and slot the FishingHook into an item-attack slot.)
+tut.ryno.gull.6 = (Then walk up to the gull - or sneak in behind it - to start the fight. In battle: pick a move, then a target - FishingHook up close, ShellThrow from a distance.)
 tut.ryno.gull.7 = Ryno: Follow me south, boet - stay close now. I'll take the dune above the racks. Quiet feet, remember.
 
 tut.ryno.ranged.1 = Ryno: You klapped it! Ha! But listen, boet - a kelp gull never loses alone. It sulks on the water a while, then comes back with cousins. They ALWAYS come back with cousins.
@@ -123,11 +123,11 @@ tut.sib.after.1 = Vlerkie: When I can dive twenty fathoms I'm coming to visit. C
 # ---------------------------------------------------------------------------
 # Tutorial island — kelp blockage, gull, rescue, objectives
 # ---------------------------------------------------------------------------
-tut.kelp.cut.1 = Jan drags Ryno's fishing hook through the tangle - once, twice. The storm-kelp parts like old rope.
+tut.kelp.cut.1 = Jan flings a shell edge-first into the tangle - once, twice. The storm-kelp parts like old rope.
 tut.kelp.cut.2 = That felt... natural. Like something a penguin was built to do.
-tut.kelp.blocked.1 = A dense tangle of storm-kelp chokes the gap in the old wall. Too tough to pull apart with flippers - something sharp might do it.
+tut.kelp.blocked.1 = A dense tangle of storm-kelp chokes the gap in the old wall. Too tough to pull apart with flippers - it needs a cutting edge, not a poke.
 
-tut.shells.equip = (Equip them before the fight: tap the round menu button in the corner, open the bag, and slot the ShellThrow into an item-attack slot.)
+tut.cache.equip = (Equip it before the fight: tap the round menu button in the corner, open the bag, and slot the FishingHook into an item-attack slot.)
 
 tut.gull.victory = The gull flaps off over the water, screeching insults. Ryno will want to hear about this.
 tut.raid.victory = The mob scatters over the swells, screeching. The drying racks - and the winter's fish - are safe.
@@ -305,7 +305,7 @@ lore.f7log4.4 = "If you are reading this and you are not me - leave my ship."
 # ---------------------------------------------------------------------------
 chest.alcove_f3.flavor = Inside the chest, a fresh urchin spike, still salt-bright.
 chest.alcove_f4.flavor = Two perlemoen, packed in seaweed. The trader will pay for these.
-chest.shells.flavor = Half-buried in the ruin's sand: a cache of shell fragments, their edges worn knife-sharp by the tide.
+chest.cache.flavor = Half-buried in the ruin's sand: a barnacled fishing hook, lost off some deck - its point still wicked-sharp.
 chest.empty = The chest is empty - you took everything from it last time.
 chest.got_weapon = Got the %s.
 chest.left_weapon = Bag full - left the %s.

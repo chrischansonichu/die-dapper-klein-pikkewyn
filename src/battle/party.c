@@ -71,3 +71,16 @@ void PartyHealAll(Party *p)
     }
     p->activeIndex = 0;
 }
+
+bool PartyHasDamageType(const Party *p, MoveDamageType t)
+{
+    for (int i = 0; i < p->count; i++) {
+        const Combatant *c = &p->members[i];
+        for (int s = 0; s < CREATURE_MAX_MOVES; s++) {
+            if (c->moveIds[s] < 0) continue;
+            if (c->moveDurability[s] == 0) continue;  // broken weapon
+            if (GetMoveDef(c->moveIds[s])->damageType == t) return true;
+        }
+    }
+    return false;
+}

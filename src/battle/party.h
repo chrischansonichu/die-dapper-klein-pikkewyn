@@ -38,5 +38,9 @@ Combatant *PartyGetActive(Party *p);
 // Restore every member to full HP (used by the defeat-rescue path — the
 // village patches everyone up before the game continues).
 void PartyHealAll(Party *p);
+// True if any member has an equipped, unbroken move of the given damage
+// type. Field interactions use this to gate physical work on actually
+// carrying the right kind of edge — e.g. kelp/rope blockages need DMG_SLASH.
+bool PartyHasDamageType(const Party *p, MoveDamageType t);
 
 #endif // PARTY_H

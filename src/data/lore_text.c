@@ -65,12 +65,12 @@ static const ChestContents kChests[CHEST_COUNT] = {
         .itemCount    = 2,
         .flavorKey    = "chest.alcove_f4.flavor",
     },
-    [CHEST_TUTORIAL_SHELLS] = {
-        .weaponMoveId = 2,             // ShellThrow
+    [CHEST_TUTORIAL_CACHE] = {
+        .weaponMoveId = 1,             // FishingHook
         .weaponDurabilityFraction = 100,
         .itemId       = 2,             // Sardine
         .itemCount    = 2,
-        .flavorKey    = "chest.shells.flavor",
+        .flavorKey    = "chest.cache.flavor",
     },
 };
 

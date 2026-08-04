@@ -18,20 +18,36 @@ typedef enum MoveRange {
     RANGE_SELF,         // targets self / entire party
 } MoveRange;
 
-// Damage type: drives rope-cutting (SLASH, PIERCE) and future elemental logic.
-// Shared with ItemDef so a "sharpened krill" could also free a captive.
+// Attack class: HOW an attack is delivered — melee swing, ranged throw/shot,
+// or magic (sonic/water calls). Orthogonal to MoveRange, which is the
+// targeting shape (adjacency, LOS, AOE, self). Shared with ItemDef.
+typedef enum AttackClass {
+    ATTACK_CLASS_NONE = 0,   // consumables, non-attacks
+    ATTACK_CLASS_MELEE,      // Tackle, FishingHook, SeaUrchinSpike
+    ATTACK_CLASS_RANGED,     // ShellThrow, Harpoon, CannonVolley
+    ATTACK_CLASS_MAGIC,      // ColonyRoar, CrashingTide
+} AttackClass;
+
+// Damage type: WHAT kind of harm the attack does — drives kelp/rope-cutting
+// and future elemental logic. Shared with ItemDef so a "sharpened krill"
+// could also free a captive.
 typedef enum MoveDamageType {
     DMG_NONE = 0,   // heal items, status-only moves
-    DMG_BLUNT,      // Tackle, ShellThrow
-    DMG_SLASH,      // FishingHook — cuts ropes
-    DMG_PIERCE,     // SeaUrchinSpike — cuts ropes
-    DMG_SPECIAL,    // WaveCall, ColonyRoar (magical/sonic)
+    DMG_BLUNT,      // Tackle, CrashingTide
+    DMG_SLASH,      // ShellThrow — edged, cuts ropes/kelp
+    DMG_PIERCE,     // FishingHook, SeaUrchinSpike, Harpoon — stabs, no cut
 } MoveDamageType;
 
-// Sharp attacks cut ropes (STATUS_BOUND).
+// Only edged (slashing) attacks cut ropes (STATUS_BOUND) and kelp blockages.
+// A hook or spike pierces — it punches holes, it doesn't sever fibers.
 static inline bool DamageCutsRopes(MoveDamageType t) {
-    return t == DMG_SLASH || t == DMG_PIERCE;
+    return t == DMG_SLASH;
 }
+
+// Short UI labels ("melee", "slash", ...). DamageTypeName returns NULL for
+// DMG_NONE so callers can skip the segment entirely.
+const char *AttackClassName(AttackClass c);
+const char *DamageTypeName(MoveDamageType t);
 
 // Move group drives both UI column placement and equip-slot rules.
 // Item Attacks are the only group that accepts weapon drops.
@@ -52,7 +68,8 @@ typedef struct MoveDef {
     bool           isWeapon;          // true = equippable weapon (swappable); false = innate move
     int            minLevel;          // minimum level required to equip/use; 1 = no gate
     MoveGroup      group;             // which of the 3 move-slot columns this belongs to
-    MoveDamageType damageType;        // physical type — drives rope-cut checks
+    AttackClass    attackClass;       // delivery: melee / ranged / magic
+    MoveDamageType damageType;        // physical type — drives rope/kelp-cut checks
     // AOE moves hit either all enemies or all friendlies, never a mix. Meaningless
     // outside RANGE_AOE. WaveCall = enemies, a hypothetical party-heal = friendlies.
     bool           aoeTargetsEnemies;
@@ -72,6 +89,11 @@ typedef struct MoveDef {
 extern const MoveDef gMoveDefs[MOVE_COUNT];
 
 const MoveDef *GetMoveDef(int id);
+
+// Compose the delivery label shown in move tooltips: class, damage type,
+// and targeting shape when it isn't single-target — "melee/pierce",
+// "ranged/slash", "magic/blunt AOE", "magic self". ~24 bytes is plenty.
+void MoveKindLabel(const MoveDef *mv, char *out, int outSize);
 
 //----------------------------------------------------------------------------------
 // Weapon upgrade math — pure functions on (moveId, upgradeLevel). Centralized

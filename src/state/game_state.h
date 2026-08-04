@@ -30,7 +30,7 @@
 #define STORY_FLAG_TUT_MET_RYNO      (1ull << 25)  // first Ryno talk (the reveal)
 #define STORY_FLAG_TUT_SWIM_TAUGHT   (1ull << 26)  // swim lesson — east cove open
 #define STORY_FLAG_TUT_KELP_CUT      (1ull << 27)  // fish-trap gap slashed open
-#define STORY_FLAG_TUT_SHELLS_TAKEN  (1ull << 28)  // ShellThrow cache looted
+#define STORY_FLAG_TUT_CACHE_TAKEN   (1ull << 28)  // FishingHook cache looted
 #define STORY_FLAG_TUT_GULL_BEATEN   (1ull << 29)  // practice fight won
 #define STORY_FLAG_TUT_COMPLETE      (1ull << 30)  // goodbyes done — north channel open
 #define STORY_FLAG_TUT_RANGED_TAUGHT (1ull << 31)  // ranged lesson — gull mob active
@@ -47,7 +47,7 @@
 #define STORY_FLAG_TUT_DARE_DONE     (1ull << 39)  // buoy touched
 #define STORY_FLAG_TUT_DARE_PAID     (1ull << 40)  // Vlerkie paid out his stash
 #define STORY_FLAG_TUT_POOL_HINT     (1ull << 41)  // first tide-pool heal tip shown
-#define STORY_FLAG_TUT_GULL_BRIEFED  (1ull << 42)  // shells shown to Ryno — he heads south
+#define STORY_FLAG_TUT_GULL_BRIEFED  (1ull << 42)  // cache find shown to Ryno — he heads south
 #define STORY_FLAG_TUT_ARRIVED       (1ull << 43)  // hub journey montage shown
 #define STORY_FLAG_HUB_RYNO_GREETED  (1ull << 44)  // village Ryno's first-arrival talk
 
