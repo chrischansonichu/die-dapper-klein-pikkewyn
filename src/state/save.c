@@ -25,7 +25,9 @@
 //   logbooks, opened alcove chests). Dungeon 1 was reorganised from 9 floors
 //   to 7 (F6 = docks staging, F7 = captain's ship); old map ids in flight no
 //   longer match anything in MapId, so v6 saves are rejected as stale.
-#define SAVE_VERSION 7u
+// Bumped 7 → 8 (2026-09-09): GameState gained `rescueResumeMapId` so the
+//   easy-mode resume slot knows which dungeon (harbor vs lokasie) it belongs to.
+#define SAVE_VERSION 8u
 
 // Flat per-combatant record. creatureId lets us re-resolve the CreatureDef
 // pointer on load. We snapshot effective stats rather than re-deriving them
@@ -62,6 +64,7 @@ typedef struct SaveData {
     int32_t  keeperQuestIdx;
     int32_t  difficulty;
     int32_t  rescueResumeFloor;
+    int32_t  rescueResumeMapId;
     int32_t  blacksmithScrap;
     uint64_t storyFlags;
 
@@ -141,6 +144,7 @@ bool SaveGame(const GameState *gs, int playerTileX, int playerTileY, int playerD
     s.keeperQuestIdx    = gs->keeperQuestIdx;
     s.difficulty        = gs->difficulty;
     s.rescueResumeFloor = gs->rescueResumeFloor;
+    s.rescueResumeMapId = gs->rescueResumeMapId;
     s.blacksmithScrap   = gs->blacksmithScrap;
     s.storyFlags        = gs->storyFlags;
 
@@ -195,6 +199,8 @@ bool LoadGame(GameState *gs, int *outPlayerX, int *outPlayerY, int *outPlayerDir
     gs->keeperQuestIdx    = s.keeperQuestIdx;
     gs->difficulty        = s.difficulty;
     gs->rescueResumeFloor = s.rescueResumeFloor;
+    gs->rescueResumeMapId = s.rescueResumeMapId;
+    gs->rescueSourceMapId = -1;
     gs->blacksmithScrap   = s.blacksmithScrap;
     gs->storyFlags        = s.storyFlags;
 

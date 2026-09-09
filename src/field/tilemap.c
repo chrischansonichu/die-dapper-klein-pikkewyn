@@ -202,8 +202,9 @@ static void DrawAuthoredTiles(const TileMap *m,
             if (gid <= 0) continue;
             const Texture2D *atlas;
             int tileIdx;
-            if (gid >= 289) { atlas = &m->legacyAtlas;  tileIdx = gid - 289; }
-            else            { atlas = &m->terrainAtlas; tileIdx = gid - 1;   }
+            if (gid >= 295)      { atlas = &m->lokasieAtlas; tileIdx = gid - 295; }
+            else if (gid >= 289) { atlas = &m->legacyAtlas;  tileIdx = gid - 289; }
+            else                 { atlas = &m->terrainAtlas; tileIdx = gid - 1;   }
             if (atlas->id == 0) continue;
             int columns = atlas->width / (int)tp;
             if (columns <= 0) continue;
@@ -316,8 +317,10 @@ void TileMapLoadAtlases(TileMap *m)
     if (!m->authored) return;
     if (m->terrainAtlas.id != 0) { UnloadTexture(m->terrainAtlas); m->terrainAtlas.id = 0; }
     if (m->legacyAtlas.id  != 0) { UnloadTexture(m->legacyAtlas);  m->legacyAtlas.id  = 0; }
+    if (m->lokasieAtlas.id != 0) { UnloadTexture(m->lokasieAtlas); m->lokasieAtlas.id = 0; }
     m->terrainAtlas = LoadTexture("resources/terrain.png");
     m->legacyAtlas  = LoadTexture("resources/tileset.png");
+    m->lokasieAtlas = LoadTexture("resources/lokasie.png");
 }
 
 void TileMapUnload(TileMap *m)
@@ -333,5 +336,9 @@ void TileMapUnload(TileMap *m)
     if (m->legacyAtlas.id != 0) {
         UnloadTexture(m->legacyAtlas);
         m->legacyAtlas.id = 0;
+    }
+    if (m->lokasieAtlas.id != 0) {
+        UnloadTexture(m->lokasieAtlas);
+        m->lokasieAtlas.id = 0;
     }
 }

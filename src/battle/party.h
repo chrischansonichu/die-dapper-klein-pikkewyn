@@ -42,5 +42,10 @@ void PartyHealAll(Party *p);
 // type. Field interactions use this to gate physical work on actually
 // carrying the right kind of edge — e.g. kelp/rope blockages need DMG_SLASH.
 bool PartyHasDamageType(const Party *p, MoveDamageType t);
+// True if any member has an equipped, unbroken WEAPON (isWeapon) matching
+// both filters; pass ATTACK_CLASS_NONE / DMG_NONE to ignore a filter. Used
+// for the lokasie gates: a drum needs anything thrown from range, a padlock
+// needs a real blunt weapon (a flipper Tackle doesn't count).
+bool PartyHasWeaponKind(const Party *p, AttackClass cls, MoveDamageType t);
 
 #endif // PARTY_H

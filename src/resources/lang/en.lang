@@ -45,23 +45,23 @@ tut.ryno.swim.6 = Ryno: Follow me, boet - it's a waddle down the shore to the co
 tut.ryno.remind.1 = Ryno: In you go, boet - the water's right here. Slash the kelp, and see what the sea left you in that ring.
 
 tut.ryno.gull.1 = Ryno: A fishing hook! Lekker. Sailors lose them by the dozen - hooked under a flipper, that point stabs deeper than any beak.
-tut.ryno.gull.2 = Ryno: Put it to work - that fat kelp gull is back at your family's drying racks. It's strutting around the south grass. Chase it off.
+tut.ryno.gull.2 = Ryno: Put it to work - that fat kelp gull is back at your family's fish pens, beak in the catch. It's strutting around the south shore. Chase it off.
 tut.ryno.gull.3 = Ryno: One more trick. A thief that's busy thieving never watches its tail. Come up quiet BEHIND it, and the first klap is free - before it even knows there's a fight.
 tut.ryno.gull.4 = (Sneak attack: stand directly behind an unaware enemy and a mark pulses on it - tap to strike first. Works up close with melee, or from a few tiles back with a ranged weapon.)
 tut.ryno.gull.5 = (Equip first: tap the round menu button in the corner, open the bag, and slot the FishingHook into an item-attack slot.)
 tut.ryno.gull.6 = (Then walk up to the gull - or sneak in behind it - to start the fight. In battle: pick a move, then a target - FishingHook up close, ShellThrow from a distance.)
-tut.ryno.gull.7 = Ryno: Follow me south, boet - stay close now. I'll take the dune above the racks. Quiet feet, remember.
+tut.ryno.gull.7 = Ryno: Follow me south, boet - stay close now. I'll take the dune above the pens. Quiet feet, remember.
 
 tut.ryno.ranged.1 = Ryno: You klapped it! Ha! But listen, boet - a kelp gull never loses alone. It sulks on the water a while, then comes back with cousins. They ALWAYS come back with cousins.
 tut.ryno.ranged.2 = Ryno: So, next lesson. When a mob lands on you, don't waddle into the middle of it. A Tackle only reaches the one right at your beak.
 tut.ryno.ranged.3 = (Melee moves like Tackle and FishingHook only hit an enemy directly ahead of you. Ranged moves like ShellThrow can hit ANY enemy, wherever they stand.)
 tut.ryno.ranged.4 = Ryno: Knock the far ones down with shells, and Tackle whatever's rude enough to get close. Fight the whole flock, boet, not one bird at a time.
 tut.ryno.ranged.5 = Ryno: And don't forget your quiet trick - it works with shells too. Line one up from BEHIND, two or three paces back, and the first bird's down before the brawl even starts.
-tut.ryno.ranged.6 = Ryno: Look for the fat one standing dead still, eyes locked on the racks. Too greedy to watch its own tail. Creep in behind THAT one first, hey.
+tut.ryno.ranged.6 = Ryno: Look for the fat one standing dead still, eyes locked on the pens. Too greedy to watch its own tail. Creep in behind THAT one first, hey.
 tut.ryno.ranged.7 = Ryno: And if they spot you and give chase - don't be proud, boet. RUN. Gulls are greedy but lazy: lure one away from its cousins, then turn and klap it on its own.
-tut.ryno.ranged.8 = Ryno: ...You hear that skreeing? South side. THE RACKS, BOET! GO!
+tut.ryno.ranged.8 = Ryno: ...You hear that skreeing? South side. THE PENS, BOET! GO!
 
-tut.ryno.raidremind.1 = Ryno: The racks, boet! Three of them! Shells for the far ones, Tackle for the brave ones - GO!
+tut.ryno.raidremind.1 = Ryno: The pens, boet! Three of them! Shells for the far ones, Tackle for the brave ones - GO!
 
 tut.ryno.finale.1 = Jan: Ryno... if I'm a penguin, where is everyone? You're the first one I've ever seen.
 tut.ryno.finale.2 = Ryno: That's the sore truth, boet. There isn't enough fish left to keep a colony together. Every season we swim further from home just to eat.
@@ -93,14 +93,14 @@ tut.sib.base.1 = Vlerkie: I dove twelve fathoms today! Bet you ca- oh. Sorry, Ja
 tut.sib.base.2 = Vlerkie: ...I like your waddle, though. It's a good waddle.
 
 tut.family.proud.1 = Ma Duiker: You chased that thieving gull off! Come here, let me look at you. My little fighter.
-tut.family.proud.2 = Pa Duiker: Racks are safe for the first time in weeks. Well done, my boy.
+tut.family.proud.2 = Pa Duiker: The pens are quiet for the first time in weeks. Well done, my boy.
 
-tut.family.raid.1 = Ma Duiker: Jan! The whole mob's come back for the racks - a winter of fish, gone in an afternoon if they strip them!
+tut.family.raid.1 = Ma Duiker: Jan! The whole mob's come back for the pens - a week of herding, gone in an afternoon if they gut them!
 tut.family.raid.2 = Pa Duiker: Three of the buggers this time! Watch the sky, my boy!
 tut.family.raid.3 = Vlerkie: I threw a pebble and missed! Get them, Jan!
 
 tut.family.proud2.1 = Ma Duiker: Three at once! I watched the whole thing with my heart in my beak. Look at you. LOOK at you!
-tut.family.proud2.2 = Pa Duiker: First quiet the racks have had all season. That was proper fighting, son.
+tut.family.proud2.2 = Pa Duiker: First quiet the pens have had all season. That was proper fighting, son.
 
 # Farewells — one scripted goodbye per family member, all three required
 # before Ryno opens the channel. The .after lines play on re-talk.
@@ -130,7 +130,7 @@ tut.kelp.blocked.1 = A dense tangle of storm-kelp chokes the gap in the old wall
 tut.cache.equip = (Equip it before the fight: tap the round menu button in the corner, open the bag, and slot the FishingHook into an item-attack slot.)
 
 tut.gull.victory = The gull flaps off over the water, screeching insults. Ryno will want to hear about this.
-tut.raid.victory = The mob scatters over the swells, screeching. The drying racks - and the winter's fish - are safe.
+tut.raid.victory = The mob scatters over the swells, screeching. The fish pens - and the family's catch - are safe.
 
 tut.rescue.1 = Ma Duiker hauls you out of the surf by the scruff of your neck. "Enough heroics for one tide, my boy."
 tut.rescue.2 = Catch your breath, then try again. That gull has it coming.
@@ -162,8 +162,8 @@ tut.nest.after = The empty nest holds the shape of the wind. Jan carries the res
 tut.crate.1 = A splintered crate, half-buried in the sand. The boards are stamped with letters from no alphabet Jan knows.
 tut.crate.2 = Inside: a torn scrap of netting, mesh fine as feathers. Whatever this net was made to catch, it wasn't made to let anything go.
 
-tut.rack.full = Sardines and harders hang in tidy rows, drying in the salt wind. A whole winter's insurance. The gulls know it too.
-tut.rack.safe = The racks sway in the wind, rows unbroken. Safe - for now, and thanks to Jan.
+tut.pen.full = A ring of stacked stones holds back a pocket of sea. Inside, the morning's catch circles silver - herded in at high tide, kept fresh for the lean days. The gulls know it too.
+tut.pen.safe = The penned fish circle their stone ring, calm and unbothered. Safe - for now, and thanks to Jan.
 
 tut.decor.driftwood = A silver-grey driftwood log, sanded smooth by a hundred tides. Warm from the sun. A very good log.
 tut.decor.shells = A drift of broken shells, heaped up by the last spring tide. None of them the right shape for throwing.
@@ -183,10 +183,10 @@ tut.obj.talk = Talk to Ryno again
 tut.obj.kelp = Swim the east cove and slash the kelp at the ruin
 tut.obj.cache = Search the ruin for what the sea left behind
 tut.obj.shells = Show Ryno what the sea left you in the ruin
-tut.obj.gull = Chase the gull off the drying racks on the south grass
+tut.obj.gull = Chase the gull off the fish pens on the south shore
 tut.obj.report = Tell Ryno about the gull
-tut.obj.raid = Drive the gull mob off the drying racks
-tut.obj.report2 = Tell Ryno the racks are safe
+tut.obj.raid = Drive the gull mob off the fish pens
+tut.obj.report2 = Tell Ryno the pens are safe
 tut.obj.farewell = Say goodbye to Ma, Pa, and Vlerkie
 tut.obj.nest = Visit the west point rock before you leave
 tut.obj.ready = Tell Ryno you're ready to go
@@ -349,3 +349,104 @@ battle.hint.target = Tap an enemy to attack
 battle.victory = Victory!
 battle.defeat = Defeated...
 hint.field = Swipe to move   Tap to interact
+
+# ===========================================================================
+# LEVEL 2 — the Sinkbaai lokasie
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Village — the news (auto-plays on the first hub visit after the Captain)
+# ---------------------------------------------------------------------------
+lok.news.1 = The village should be cheering. It isn't. Penguins stand in knots on the plaza, talking low, and every head turns when Jan comes through the gate.
+lok.news.2 = Ryno: Boet. Thank the tides. Listen - while you were down at the harbor, little Lappies went missing. Klein Lappies, the moulting chick from the north nests. Three days now.
+lok.news.3 = Ryno: A fisher saw men on the beach that night, with a sack that moved. They went up the coast to Sinkbaai - the lokasie on the shore, all zinc shacks and dogs.
+lok.news.4 = Ryno: And the story going round is that a sangoma up there keeps him. For luck, they say. Whatever THAT means. The elder knows more - go and hear him, boet. Then go get that chick.
+
+# ---------------------------------------------------------------------------
+# Village elder — the briefing, and the re-talk
+# ---------------------------------------------------------------------------
+hub.elder.lok.1 = Elder: You beat the Captain and came home to bad news, Jan. I'm sorry for it. Lappies was taken from the north nests while the colony slept.
+hub.elder.lok.2 = Elder: Sinkbaai is a day up the coast - a lokasie of zinc and dust between the dunes and the road. Good people live there, mostly. But a crew runs poached perlemoen through a yard in the middle of it.
+hub.elder.lok.3 = Elder: That crew answers to a sangoma with a hut at the top of the hill. A traditional healer - a diviner. Some say a good one, once. The rumour is the chick is kept in that hut, and the sangoma wants him for his 'luck'.
+hub.elder.lok.4 = Elder: I've had the east wall opened. Follow the coast, come ashore below the shacks, and work your way up. Take the seal - a penguin alone in those alleys is a penguin in a sack.
+hub.elder.lok.5 = Elder: And Jan - not everyone in Sinkbaai is your enemy. Ask before you klap. A grandmother knows more about those alleys than any lookout.
+hub.elder.lok_again.1 = Elder: Sinkbaai, Jan - up the coast through the east gate. Ask the residents, watch the dogs, and don't stand next to anything that smells of paraffin.
+
+# ---------------------------------------------------------------------------
+# Warp prompt + objective banner + rescue
+# ---------------------------------------------------------------------------
+warp.lokasie = Set out for Sinkbaai?
+warp.lokasie_warn = A long swim up the coast to the lokasie.
+lok.obj.1 = Find a way up off the beach and into Sinkbaai
+lok.obj.2 = Work through the alleys - and look for what's hidden in them
+lok.obj.3 = Follow the storm-water ditch east
+lok.obj.4 = Get past the yard boss and out of the scrap yard
+lok.obj.5 = Fight up the road to the sangoma's gate
+lok.obj.6 = The sangoma's hut - Lappies must be inside
+rescue.lokasie.1 = A fisher heading home found you face-down in the dunes below the lokasie and carried you all the way back to the village.
+rescue.lokasie.2 = "That place chews up penguins," he says. "Go back with your friends, and go back angry."
+
+# ---------------------------------------------------------------------------
+# Arrivals
+# ---------------------------------------------------------------------------
+lok.arrive.s1.1 = A grey beach under a grey hill. Above the dunes, zinc roofs climb the slope in every colour a tin of paint comes in, and smoke leans off them in the wind.
+lok.arrive.s1.2 = Sinkbaai. Somewhere up there a chick is waiting. Between here and there: fences, dogs, and men in the surf who are not fishing for fish.
+lok.arrive.s6.1 = The gate swings shut behind Jan. Inside the painted walls the noise of the road drops away. A round hut with a thatched roof sits in the middle of a swept yard, and the air smells of smoke and bitter herbs.
+lok.arrive.s6.2 = No lookouts. No dogs. Just the hut, its door shut, and a thin sound from inside that might be a chick, or might be the wind.
+
+# ---------------------------------------------------------------------------
+# Residents
+# ---------------------------------------------------------------------------
+lok.kid.first.1 = Thandi: Haai! A PENGUIN! Wena, you're far from the water, penguin. ...Are you looking for the small one?
+lok.kid.first.2 = Thandi: Two nights ago the runners came up the beach with a sack. It went 'kraak' like a seagull, but sadder. They took it to the yard - past the alleys, past the sloot. That's where they keep everything.
+lok.kid.first.3 = Thandi: Don't go up the middle, they'll see you. And watch the red drums by the walls, the men say if you kick one it goes BOOM. ...I'm not allowed near them. But nobody said YOU aren't.
+lok.kid.again.1 = Thandi: The yard, penguin! Past the sloot. And the red drums go BOOM, remember.
+
+lok.ouma.first.1 = Ouma Nomsa: Hau. A penguin in my ditch. Sit, sit - you're too thin for a fighter. Here - smoked snoek, still warm from the braai drum. Eat.
+lok.ouma.first.2 = Ouma Nomsa: You want the small one. Everyone knows, child. The sangoma up the hill took him. He says a sea-bird in the house brings the fish back. Hmph. He was a good man once, before the yard boys started paying him.
+lok.ouma.first.3 = Ouma Nomsa: Take the sloot - the ditch. The boys hate the water and you are made of it. And that yard beyond? There's a shed with a lock the boss lost the key to years ago. Nothing a good klap wouldn't open.
+lok.ouma.again.1 = Ouma Nomsa: The ditch, child. And eat your snoek.
+
+lok.spaza.first.1 = Bra Vusi: Yoh. I sell cooldrink, chips, airtime - I don't sell to penguins. But I'm not going to stop you either, my friend. Everybody on this road saw that sack.
+lok.spaza.first.2 = Bra Vusi: The big one by the gate is the sangoma's man. The others follow him. Knock HIM down and the road goes quiet, you understand me?
+lok.spaza.first.3 = Bra Vusi: And there's a drum in the alley behind my shop that's been sweating paraffin since Easter. If it goes up, I never saw you. I never saw anything.
+lok.spaza.again.1 = Bra Vusi: The big one by the gate, penguin. And I never saw you.
+
+# ---------------------------------------------------------------------------
+# Gates — drum, wire, padlock, the hut door
+# ---------------------------------------------------------------------------
+lok.drum.blocked.1 = A red drum, full and sweating, leaning on the wall at the end of the alley. Paraffin. Jan pokes it with a flipper and it sloshes.
+lok.drum.blocked.2 = Something tells him this is not a thing to stand next to - and not a thing to hit with a beak. From a distance, maybe. With something thrown.
+lok.drum.boom.1 = Jan backs down the alley, sights along the wall, and lets fly. The drum rocks - hisses - and the whole world goes WHOOMP.
+lok.drum.boom.2 = When the smoke thins, the drum is a black smear and the wall behind it is a hole with scorched edges. Beyond it: somewhere the runners never meant anyone to go.
+lok.wire.blocked.1 = A gap in the fence, lashed shut with wire and an old mealie sack. The knots are rusted solid - it needs cutting, not pulling.
+lok.wire.cut.1 = Jan works a shell edge into the tangle. Wire pings, the sack drops, and the fence gap yawns open onto a yard nobody's swept in years.
+lok.lock.blocked.1 = A zinc shed gate, chained shut with a padlock the size of Jan's head, rusted orange. No key in the world still fits it. A hard enough klap might not need one.
+lok.lock.smash.1 = Jan swings the knobkierie with everything he's got. The padlock doesn't so much break as give up - it bursts into rust and the chain slithers off the gate.
+lok.hut.door.1 = The door is shut fast, and the air is thick with smoke and bitter herbs. Behind it, something small shifts and goes still. Lappies - it has to be.
+lok.hut.door.2 = Whatever waits inside will have to wait. Jan has come as far as this build of the story goes - the sangoma's hut opens in a later update.
+
+# ---------------------------------------------------------------------------
+# Lore — sign, ledger
+# ---------------------------------------------------------------------------
+lore.loksign.title = Welcome Board
+lore.loksign.1 = A hand-painted board on two driftwood posts, letters in red and blue: SINKBAAI - WELKOM - NO DUMPING - NO POACHING.
+lore.loksign.2 = Someone has scratched out NO POACHING and written PRICES AT THE YARD underneath in tar.
+lore.lokledger.title = Runners' Tally
+lore.lokledger.1 = A school exercise book on a crate, pages swollen with damp. Columns of tally marks under one word: PERLEMOEN.
+lore.lokledger.2 = Under the last column, a different hand: "Sea-bird to the hut. Boss says the luck comes back with the fish. Boss says a lot of things."
+
+# ---------------------------------------------------------------------------
+# Chests
+# ---------------------------------------------------------------------------
+chest.lok_s2.flavor = Behind the blown wall, a crate of runners' odds and ends - and on top, a kettie: a forked stick, good rubber, and a pocket of river stones.
+chest.lok_s3.flavor = A cooler box under a sheet of zinc. Inside, wrapped in newspaper: smoked snoek, three of them, still smelling of the braai.
+chest.lok_s4.flavor = The shed the boss lost the key to. Perlemoen, packed in wet sacking - the yard's whole reason for being. Jan takes what he can carry.
+chest.lok_s5.flavor = Bra Vusi's back stock, it turns out, is not all cooldrink. A spare kettie and one perlemoen, wrapped in a shop apron.
+
+# ---------------------------------------------------------------------------
+# Decor
+# ---------------------------------------------------------------------------
+lok.decor.tyres = A stack of bald tyres, warm from the sun. A very small dog has been sleeping in the top one, by the smell.
+lok.decor.scrap = Offcuts of zinc and a coil of fence wire, waiting to become somebody's roof.
+lok.decor.drums = Empty drums, rusted through at the bottom. Whatever was in them left a long time ago. Harmless.

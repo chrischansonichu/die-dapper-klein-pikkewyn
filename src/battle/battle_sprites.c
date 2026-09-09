@@ -247,6 +247,14 @@ void DrawCombatantSprite(int creatureId, Rectangle r, bool isEnemy,
         case CREATURE_CAPTAIN_BOSS: DrawCaptainSprite(rr,  faceLeft, alpha, flashWhite); break;
         case CREATURE_SEAL:         DrawSealSprite(rr,     faceLeft, alpha, flashWhite); break;
         case CREATURE_KELP_GULL:    DrawGullSprite(rr,     faceLeft, alpha, flashWhite); break;
+        // Lokasie crew + yard dog share the field renderer (it branches on
+        // creature id internally), so battle and overworld always agree.
+        case CREATURE_SKOLLIE:
+        case CREATURE_LOOKOUT:
+        case CREATURE_YARD_BOSS:
+        case CREATURE_BRAK:
+            DrawSailorFromAtlas(creatureId, rr, faceLeft, alpha, flashWhite);
+            break;
         default: {
             // Fallback: the old colored box, so unknown creatures still render.
             Color c = isEnemy ? (Color){0xA8, 0x50, 0x54, 255} : (Color){0x50, 0x68, 0xA0, 255};

@@ -14,6 +14,10 @@
 void EnemySpritesDrawSailor(int creatureId, Rectangle r, int dir, int frame,
                             float alpha, bool flashWhite);
 
+// Friendly lokasie resident (NPC_RESIDENT) — same humanoid template as the
+// crew with civilian clothes and round eyes. personaId = LOK_PERSONA_*.
+void EnemySpritesDrawResident(int personaId, Rectangle r, int dir);
+
 // Kept as no-ops so the field lifecycle hooks (ReloadResources / Unload)
 // continue to compile without special-casing the switch to procedural art.
 void EnemySpritesReload(void);

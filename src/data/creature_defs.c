@@ -32,6 +32,15 @@ const CreatureDef gCreatureDefs[CREATURE_DEF_COUNT] = {
     // peck in (SPD 7 beats Jan's 6) so the player sees damage taken once,
     // then folds in two hits. Penguin growth curve: it's a seabird.
     { CREATURE_KELP_GULL,    "Kelp Gull",       CLASS_PENGUIN,  7, 2,  1,  7,  2,   {   0,   -1,   -1,   -1,   -1,  -1}, 1.0f, false },
+    // Level 2 — lokasie crew. Placed at levels 7-9 (Jan arrives ~10 after the
+    // Captain). Skollies are the deckhands of this level; lookouts are quick
+    // and shoot first (Kettie, id 10); the yard boss swings a Knobkierie (id
+    // 9) and is the tanky mid-boss of stages 4 and 5. The brak is a fast,
+    // fragile biter that nearly always moves first.
+    { CREATURE_SKOLLIE,      "Skollie",         CLASS_HUMAN,    9, 2,  2,  4,  2,   {   0,   10,   -1,   -1,   -1,  -1}, 1.0f, false },
+    { CREATURE_LOOKOUT,      "Lookout",         CLASS_HUMAN,    7, 3,  1,  6,  3,   {   0,   10,   -1,   -1,   -1,  -1}, 1.0f, false },
+    { CREATURE_YARD_BOSS,    "Yard Boss",       CLASS_HUMAN,   22, 4,  5,  2,  1,   {   0,    9,   -1,   -1,   -1,  -1}, 1.2f, false },
+    { CREATURE_BRAK,         "Brak",            CLASS_CANINE,   8, 3,  1,  7,  3,   {   0,   -1,   -1,   -1,   -1,  -1}, 0.9f, false },
 };
 
 // Penguins grow nimbly (high DEX, modest power). Humans are bulky and hit hard
@@ -41,6 +50,7 @@ static const ClassGrowth gClassGrowth[CLASS_COUNT] = {
     [CLASS_HUMAN]    = { .hpPerLevel = 3, .atkPerLevel = 2, .defPerLevel = 1, .spdPerLevel = 1, .dexPerLevel = 1 },
     [CLASS_PINNIPED] = { .hpPerLevel = 4, .atkPerLevel = 2, .defPerLevel = 1, .spdPerLevel = 1, .dexPerLevel = 2 },
     [CLASS_DIVER]    = { .hpPerLevel = 3, .atkPerLevel = 2, .defPerLevel = 1, .spdPerLevel = 1, .dexPerLevel = 2 },
+    [CLASS_CANINE]   = { .hpPerLevel = 3, .atkPerLevel = 2, .defPerLevel = 1, .spdPerLevel = 2, .dexPerLevel = 2 },
 };
 
 const CreatureDef *GetCreatureDef(int id)

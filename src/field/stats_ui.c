@@ -13,6 +13,8 @@ static const char *kClassNames[CLASS_COUNT] = {
     [CLASS_PENGUIN]  = "Penguin",
     [CLASS_HUMAN]    = "Human",
     [CLASS_PINNIPED] = "Pinniped",
+    [CLASS_DIVER]    = "Diver",
+    [CLASS_CANINE]   = "Dog",
 };
 
 static const char *kGroupTitle[MOVE_GROUP_COUNT] = {

@@ -34,7 +34,7 @@
 #define STORY_FLAG_TUT_GULL_BEATEN   (1ull << 29)  // practice fight won
 #define STORY_FLAG_TUT_COMPLETE      (1ull << 30)  // goodbyes done — north channel open
 #define STORY_FLAG_TUT_RANGED_TAUGHT (1ull << 31)  // ranged lesson — gull mob active
-#define STORY_FLAG_TUT_RAID_BEATEN   (1ull << 32)  // drying-rack raid repelled
+#define STORY_FLAG_TUT_RAID_BEATEN   (1ull << 32)  // fish-pen raid repelled
 #define STORY_FLAG_TUT_LEAVE_OFFERED (1ull << 33)  // Ryno's offer — farewells unlocked
 #define STORY_FLAG_TUT_FAREWELL_MA   (1ull << 34)  // said goodbye to Ma
 #define STORY_FLAG_TUT_FAREWELL_PA   (1ull << 35)  // said goodbye to Pa
@@ -50,6 +50,28 @@
 #define STORY_FLAG_TUT_GULL_BRIEFED  (1ull << 42)  // cache find shown to Ryno — he heads south
 #define STORY_FLAG_TUT_ARRIVED       (1ull << 43)  // hub journey montage shown
 #define STORY_FLAG_HUB_RYNO_GREETED  (1ull << 44)  // village Ryno's first-arrival talk
+
+// Level 2 — the Sinkbaai lokasie (MAP_LOKASIE, floor = stage 1..6). Opens
+// once the Captain has fallen. One-shot scenes, hidden-item gates, and the
+// friendly residents' first conversations each get a bit. Bits 62-63 are
+// reserved; the next level needs a second flag word.
+#define STORY_FLAG_LOK_NEWS          (1ull << 45)  // hub scene: Lappies is missing
+#define STORY_FLAG_LOK_BRIEFED       (1ull << 46)  // elder's briefing — gate explained
+#define STORY_FLAG_LOK_ARRIVED       (1ull << 47)  // S1 beach arrival narration shown
+#define STORY_FLAG_LOK_CHEST_S2      (1ull << 48)  // drum-alley chest (Kettie) looted
+#define STORY_FLAG_LOK_CHEST_S3      (1ull << 49)  // wired yard chest (snoek) looted
+#define STORY_FLAG_LOK_CHEST_S4      (1ull << 50)  // padlocked shed chest (perlemoen) looted
+#define STORY_FLAG_LOK_CHEST_S5      (1ull << 51)  // road-alley chest looted
+#define STORY_FLAG_LOK_DRUM_S2       (1ull << 52)  // S2 paraffin drum blown — wall open
+#define STORY_FLAG_LOK_DRUM_S5       (1ull << 53)  // S5 paraffin drum blown — wall open
+#define STORY_FLAG_LOK_WIRE_S3       (1ull << 54)  // S3 yard wire cut
+#define STORY_FLAG_LOK_LOCK_S4       (1ull << 55)  // S4 shed padlock smashed
+#define STORY_FLAG_LOK_KID_TALKED    (1ull << 56)  // Thandi's first talk (S1)
+#define STORY_FLAG_LOK_OUMA_TALKED   (1ull << 57)  // Ouma Nomsa's first talk (S3)
+#define STORY_FLAG_LOK_SPAZA_TALKED  (1ull << 58)  // spaza keeper's first talk (S5)
+#define STORY_FLAG_LOK_S6_ARRIVED    (1ull << 59)  // compound arrival narration shown
+#define STORY_FLAG_LOK_LEDGER_READ   (1ull << 60)  // S4 runners' ledger read
+#define STORY_FLAG_LOK_SIGN_READ     (1ull << 61)  // S1 welcome sign read
 
 //----------------------------------------------------------------------------------
 // GameState - persistent state that survives map transitions and battles.
@@ -121,6 +143,13 @@ typedef struct GameState {
     // Hard mode never sets this; F1 deaths set it to 1 (which is a no-op
     // redirect — they'd land back on F1 anyway).
     int      rescueResumeFloor;
+    // Which dungeon `rescueResumeFloor` belongs to (a MapId as int), so a
+    // harbor death never redirects a lokasie entry and vice versa. Saved.
+    int      rescueResumeMapId;
+    // Map the party was defeated on, for the rescue narration ("fished out
+    // of the harbor" vs "found in the dunes"). Transient — consumed by
+    // screen_gameplay on the very next map transition.
+    int      rescueSourceMapId;
 
     // Scrap stash held by the blacksmith — currency for weapon upgrades.
     // Scrap is produced by melting weapons and never lives in the player's

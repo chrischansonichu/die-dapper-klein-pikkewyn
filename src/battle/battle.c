@@ -501,6 +501,8 @@ static void AttackAnimParams(const MoveDef *mv,
                 case 1: *outAccent = (Color){210, 210, 220, 255}; break; // FishingHook
                 case 2: *outAccent = (Color){210, 175, 120, 255}; break; // ShellThrow
                 case 3: *outAccent = (Color){170, 110, 210, 255}; break; // SeaUrchinSpike
+                case 9: *outAccent = (Color){176, 124,  76, 255}; break; // Knobkierie (hardwood)
+                case 10: *outAccent = (Color){168, 164, 156, 255}; break; // Kettie (river stone)
                 default: break;
             }
             break;

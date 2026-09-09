@@ -17,6 +17,8 @@ void GameStateInit(GameState *gs)
     gs->pendingFloor     = 0;
     gs->tempAllyPartyIdx = -1;
     gs->tempAllyNpcIdx   = -1;
+    gs->rescueResumeMapId = -1;
+    gs->rescueSourceMapId = -1;
 
     PartyInit(&gs->party);
     PartyAddMember(&gs->party, CREATURE_JAN, 5);

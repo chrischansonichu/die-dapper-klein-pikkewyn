@@ -134,6 +134,7 @@ set(GAME_SOURCES
     ../field/inventory_ui.c
     ../field/map_authored.c
     ../field/map_dungeon_proc.c
+    ../field/map_lokasie.c
     ../field/map_source.c
     ../field/map_tmx.c
     ../field/map_tutorial.c

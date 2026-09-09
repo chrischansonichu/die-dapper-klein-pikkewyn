@@ -9,7 +9,7 @@
 
 #define MOVE_NAME_LEN  32
 #define MOVE_DESC_LEN  64
-#define MOVE_COUNT     9
+#define MOVE_COUNT     11
 
 typedef enum MoveRange {
     RANGE_MELEE = 0,    // must be in front column, hits adjacent enemy
@@ -23,8 +23,8 @@ typedef enum MoveRange {
 // targeting shape (adjacency, LOS, AOE, self). Shared with ItemDef.
 typedef enum AttackClass {
     ATTACK_CLASS_NONE = 0,   // consumables, non-attacks
-    ATTACK_CLASS_MELEE,      // Tackle, FishingHook, SeaUrchinSpike
-    ATTACK_CLASS_RANGED,     // ShellThrow, Harpoon, CannonVolley
+    ATTACK_CLASS_MELEE,      // Tackle, FishingHook, SeaUrchinSpike, Knobkierie
+    ATTACK_CLASS_RANGED,     // ShellThrow, Harpoon, CannonVolley, Kettie
     ATTACK_CLASS_MAGIC,      // ColonyRoar, CrashingTide
 } AttackClass;
 
@@ -33,7 +33,7 @@ typedef enum AttackClass {
 // could also free a captive.
 typedef enum MoveDamageType {
     DMG_NONE = 0,   // heal items, status-only moves
-    DMG_BLUNT,      // Tackle, CrashingTide
+    DMG_BLUNT,      // Tackle, CrashingTide, Knobkierie, Kettie — smashes locks
     DMG_SLASH,      // ShellThrow — edged, cuts ropes/kelp
     DMG_PIERCE,     // FishingHook, SeaUrchinSpike, Harpoon — stabs, no cut
 } MoveDamageType;

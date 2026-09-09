@@ -4,6 +4,7 @@
 #include "enemy_sprites.h"
 #include "map_source.h"
 #include "map_tutorial.h"
+#include "map_lokasie.h"
 #include "village.h"
 #include "../state/game_state.h"
 #include "../state/save.h"
@@ -189,7 +190,7 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
         }
         if (!(fl & STORY_FLAG_TUT_RANGED_TAUGHT)) {
             // Ranged lesson — and the moment it lands, the beaten gull's
-            // cousins hit the drying racks. Compact away any kelp gulls
+            // cousins hit the fish pens. Compact away any kelp gulls
             // already in the list (the beaten first gull on a live field,
             // or the latent mob on a save/reloaded one — the field is not
             // rebuilt around battles, so both states reach here), then
@@ -290,7 +291,7 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
                     return StrPages("tut.sib.dare", pages, NPC_MAX_DIALOGUE_PAGES);
                 }
             }
-            // Gull mob on the racks — the whole family is in alarm mode.
+            // Gull mob on the pens — the whole family is in alarm mode.
             if (raidActive)
                 return StrPages("tut.family.raid", pages, NPC_MAX_DIALOGUE_PAGES);
             if (fl & STORY_FLAG_TUT_RAID_BEATEN)
@@ -299,6 +300,52 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
                 return StrPages("tut.family.proud", pages, NPC_MAX_DIALOGUE_PAGES);
         }
         // Fall through to the NPC's authored dialogue below.
+    }
+
+    // --- Level 2 hook: once the Captain has fallen, the village elder's job
+    // is the Lappies briefing — where the lokasie is, who took him, and that
+    // the east gate is open. First talk latches BRIEFED; later talks repeat
+    // the short version so the player can always re-read the objective.
+    if (n->type == NPC_PENGUIN_ELDER &&
+        ow->gs->currentMapId == MAP_OVERWORLD_HUB &&
+        ow->gs->captainDefeated) {
+        if (!(ow->gs->storyFlags & STORY_FLAG_LOK_BRIEFED)) {
+            ow->gs->storyFlags |= STORY_FLAG_LOK_BRIEFED;
+            return StrPages("hub.elder.lok", pages, NPC_MAX_DIALOGUE_PAGES);
+        }
+        return StrPages("hub.elder.lok_again", pages, NPC_MAX_DIALOGUE_PAGES);
+    }
+
+    // --- Lokasie residents. Not the crew: the people who actually live in
+    // Sinkbaai, each with a first conversation that hands the player one
+    // useful thing (a sighting, the ditch, the gate) and a short re-talk.
+    if (n->type == NPC_RESIDENT) {
+        uint64_t fl = ow->gs->storyFlags;
+        switch (n->personaId) {
+        case LOK_PERSONA_KID:
+            if (!(fl & STORY_FLAG_LOK_KID_TALKED)) {
+                ow->gs->storyFlags |= STORY_FLAG_LOK_KID_TALKED;
+                return StrPages("lok.kid.first", pages, NPC_MAX_DIALOGUE_PAGES);
+            }
+            return StrPages("lok.kid.again", pages, NPC_MAX_DIALOGUE_PAGES);
+        case LOK_PERSONA_OUMA:
+            if (!(fl & STORY_FLAG_LOK_OUMA_TALKED)) {
+                ow->gs->storyFlags |= STORY_FLAG_LOK_OUMA_TALKED;
+                // Ouma presses a smoked snoek on Jan — "you're too thin for
+                // a fighter". The line narrates it, so grant it here.
+                InventoryAddItem(&ow->gs->party.inventory, ITEM_SNOEK, 1);
+                return StrPages("lok.ouma.first", pages, NPC_MAX_DIALOGUE_PAGES);
+            }
+            return StrPages("lok.ouma.again", pages, NPC_MAX_DIALOGUE_PAGES);
+        case LOK_PERSONA_SPAZA:
+            if (!(fl & STORY_FLAG_LOK_SPAZA_TALKED)) {
+                ow->gs->storyFlags |= STORY_FLAG_LOK_SPAZA_TALKED;
+                return StrPages("lok.spaza.first", pages, NPC_MAX_DIALOGUE_PAGES);
+            }
+            return StrPages("lok.spaza.again", pages, NPC_MAX_DIALOGUE_PAGES);
+        default:
+            break;
+        }
     }
 
     if ((n->type == NPC_PENGUIN_ELDER || n->type == NPC_PENGUIN_VILLAGER)
@@ -331,7 +378,8 @@ static void ApplyWarp(FieldState *ow, int warpIdx)
     // redirect; subsequent runs start fresh at F1.
     if (ow->gs->rescueResumeFloor > 1
         && targetMapId == MAP_HARBOR_F1
-        && targetFloor == 1) {
+        && targetFloor == 1
+        && ow->gs->rescueResumeMapId != MAP_LOKASIE) {
         int resumeFloor = ow->gs->rescueResumeFloor;
         if      (resumeFloor >= 7) targetMapId = MAP_HARBOR_F7;
         else if (resumeFloor == 6) targetMapId = MAP_HARBOR_F6;
@@ -340,6 +388,17 @@ static void ApplyWarp(FieldState *ow, int warpIdx)
         targetSpawnX   = 2;
         targetSpawnY   = 2;
         targetSpawnDir = 2;
+        ow->gs->rescueResumeFloor = 0;
+    }
+    // Same kindness for the lokasie: the hub's east gate leads to stage 1,
+    // but an easy-mode death deeper in drops the player back on that stage.
+    if (ow->gs->rescueResumeFloor > 1
+        && targetMapId == MAP_LOKASIE
+        && targetFloor == 1
+        && ow->gs->rescueResumeMapId == MAP_LOKASIE) {
+        targetFloor = ow->gs->rescueResumeFloor;
+        if (targetFloor > LOKASIE_STAGE_COUNT) targetFloor = LOKASIE_STAGE_COUNT;
+        LokasieStageSpawn(targetFloor, &targetSpawnX, &targetSpawnY, &targetSpawnDir);
         ow->gs->rescueResumeFloor = 0;
     }
 
@@ -409,6 +468,10 @@ static uint64_t ChestFlagFor(int chestId)
         case CHEST_ALCOVE_F3:
         case CHEST_ALCOVE_F4:       return STORY_FLAG_ALCOVE_CHEST_OPENED;
         case CHEST_TUTORIAL_CACHE: return STORY_FLAG_TUT_CACHE_TAKEN;
+        case CHEST_LOK_S2_DRUM:    return STORY_FLAG_LOK_CHEST_S2;
+        case CHEST_LOK_S3_WIRE:    return STORY_FLAG_LOK_CHEST_S3;
+        case CHEST_LOK_S4_LOCK:    return STORY_FLAG_LOK_CHEST_S4;
+        case CHEST_LOK_S5_DRUM:    return STORY_FLAG_LOK_CHEST_S5;
         default:                    return 0;
     }
 }
@@ -424,6 +487,8 @@ static uint64_t LogbookFlagFor(int loreId)
         case LORE_F5_LANTERN_HINT: return STORY_FLAG_LOGBOOK_F5_HINT;
         case LORE_F6_LOG3:         return STORY_FLAG_LOGBOOK_F6_LOG3;
         case LORE_F7_LOG4:         return STORY_FLAG_LOGBOOK_F7_LOG4;
+        case LORE_LOK_LEDGER:      return STORY_FLAG_LOK_LEDGER_READ;
+        case LORE_LOK_SIGN:        return STORY_FLAG_LOK_SIGN_READ;
         default: return 0;
     }
 }
@@ -622,16 +687,89 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
             const char *key = "tut.decor.driftwood";
             if (o->dataId == DECOR_SHELLS) key = "tut.decor.shells";
             if (o->dataId == DECOR_STONES) key = "tut.decor.stones";
+            if (o->dataId == DECOR_TYRES)  key = "lok.decor.tyres";
+            if (o->dataId == DECOR_SCRAP)  key = "lok.decor.scrap";
+            if (o->dataId == DECOR_DRUMS)  key = "lok.decor.drums";
             const char *page[1] = { Str(key) };
             DialogueBegin(&ow->dialogue, page, 1, 30.0f);
             return;
         }
-        case OBJ_RACK: {
-            // The family's winter stores — line reflects whether the gull
+        case OBJ_SIGN: {
+            // Painted board — same lore pipeline as a logbook, different draw.
+            int n = 0;
+            const char *const *pages = GetLoreText(o->dataId, &n);
+            if (!pages || n <= 0) return;
+            DialogueBegin(&ow->dialogue, (const char **)pages, n, 30.0f);
+            o->consumed = true;
+            ow->gs->storyFlags |= LogbookFlagFor(o->dataId);
+            return;
+        }
+        case OBJ_DRUM: {
+            // The lokasie's "throw something at it" puzzle. A full paraffin
+            // drum against a wall: any RANGED weapon (a shell, a harpoon, a
+            // kettie stone) sets it off from a safe distance and the wall
+            // behind it comes down — LokasieApplyBlast repaints the hole
+            // tiles walkable. Without one, Jan just gets a hint that this
+            // is not a thing to stand next to.
+            if (PartyHasWeaponKind(&ow->gs->party, ATTACK_CLASS_RANGED, DMG_NONE)) {
+                const char *boom[STR_MAX_PAGES];
+                int n = StrPages("lok.drum.boom", boom, STR_MAX_PAGES);
+                DialogueBegin(&ow->dialogue, boom, n, 30.0f);
+                o->active = false;
+                ow->gs->storyFlags |= LokasieDrumFlag(o->dataId);
+                LokasieApplyBlast(&ow->map, o->dataId);
+            } else {
+                const char *blocked[STR_MAX_PAGES];
+                int n = StrPages("lok.drum.blocked", blocked, STR_MAX_PAGES);
+                DialogueBegin(&ow->dialogue, blocked, n, 30.0f);
+            }
+            return;
+        }
+        case OBJ_WIRE_GATE: {
+            // Fence gap wired shut — the kelp rule again: only an edge cuts.
+            if (PartyHasDamageType(&ow->gs->party, DMG_SLASH)) {
+                const char *cut[STR_MAX_PAGES];
+                int n = StrPages("lok.wire.cut", cut, STR_MAX_PAGES);
+                DialogueBegin(&ow->dialogue, cut, n, 30.0f);
+                o->active = false;
+                ow->gs->storyFlags |= STORY_FLAG_LOK_WIRE_S3;
+            } else {
+                const char *blocked[STR_MAX_PAGES];
+                int n = StrPages("lok.wire.blocked", blocked, STR_MAX_PAGES);
+                DialogueBegin(&ow->dialogue, blocked, n, 30.0f);
+            }
+            return;
+        }
+        case OBJ_PADLOCK: {
+            // Rusted padlock on the shed gate. Needs a real blunt WEAPON —
+            // a flipper Tackle is blunt but doesn't count; the Knobkierie
+            // the yard boss drops is the intended key.
+            if (PartyHasWeaponKind(&ow->gs->party, ATTACK_CLASS_NONE, DMG_BLUNT)) {
+                const char *smash[STR_MAX_PAGES];
+                int n = StrPages("lok.lock.smash", smash, STR_MAX_PAGES);
+                DialogueBegin(&ow->dialogue, smash, n, 30.0f);
+                o->active = false;
+                ow->gs->storyFlags |= STORY_FLAG_LOK_LOCK_S4;
+            } else {
+                const char *blocked[STR_MAX_PAGES];
+                int n = StrPages("lok.lock.blocked", blocked, STR_MAX_PAGES);
+                DialogueBegin(&ow->dialogue, blocked, n, 30.0f);
+            }
+            return;
+        }
+        case OBJ_HUT_DOOR: {
+            // End of the line for this build — the sangoma's door stays shut.
+            const char *pages[STR_MAX_PAGES];
+            int n = StrPages("lok.hut.door", pages, STR_MAX_PAGES);
+            DialogueBegin(&ow->dialogue, pages, n, 30.0f);
+            return;
+        }
+        case OBJ_FISH_PEN: {
+            // The family's penned catch — line reflects whether the gull
             // raid has been dealt with yet.
             bool safe = (ow->gs->storyFlags & STORY_FLAG_TUT_RAID_BEATEN) != 0;
-            const char *page[1] = { Str(safe ? "tut.rack.safe"
-                                             : "tut.rack.full") };
+            const char *page[1] = { Str(safe ? "tut.pen.safe"
+                                             : "tut.pen.full") };
             DialogueBegin(&ow->dialogue, page, 1, 30.0f);
             return;
         }
@@ -1384,7 +1522,7 @@ static void ResolveBattleEnd(FieldState *ow, int result)
         // Tutorial fights — beating the first kelp gull advances the story
         // toward Ryno's ranged lesson; clearing the whole mob (no gull left
         // active anywhere on the field, in case aggro geometry ever split
-        // the raid into two fights) wraps the drying-rack raid.
+        // the raid into two fights) wraps the fish-pen raid.
         for (int k = 0; k < ctx->enemyCount; k++) {
             int idx = ctx->enemyFieldIdx[k];
             if (idx < 0 || idx >= ow->enemyCount) continue;
@@ -1493,9 +1631,15 @@ static void ResolveBattleEnd(FieldState *ow, int result)
         // Hard mode and non-dungeon defeats clear the slot.
         if (ow->gs->difficulty == 0 && ow->gs->currentFloor > 0) {
             ow->gs->rescueResumeFloor = ow->gs->currentFloor;
+            ow->gs->rescueResumeMapId = ow->gs->currentMapId;
         } else {
             ow->gs->rescueResumeFloor = 0;
+            ow->gs->rescueResumeMapId = -1;
         }
+        // Who found Jan, and which gate they carry him through — read by
+        // screen_gameplay for the rescue narration.
+        ow->gs->rescueSourceMapId = ow->gs->currentMapId;
+        bool fromLokasie = (ow->gs->currentMapId == MAP_LOKASIE);
         int itemsLost = 0, weaponsDamaged = 0;
         int totalLost = DropInventoryOnRescue(&ow->gs->party.inventory,
                                               &itemsLost, &weaponsDamaged);
@@ -1520,9 +1664,11 @@ static void ResolveBattleEnd(FieldState *ow, int result)
         ow->gs->pendingMapId     = MAP_OVERWORLD_HUB;
         ow->gs->pendingMapSeed   = 0;
         ow->gs->pendingFloor     = 0;
-        ow->gs->pendingSpawnX    = 11;
-        ow->gs->pendingSpawnY    = 13;
-        ow->gs->pendingSpawnDir  = 3;
+        // Harbor rescues land at the south gate; lokasie rescues come in
+        // the east gate, the way the fisher carried him.
+        ow->gs->pendingSpawnX    = fromLokasie ? 21 : 11;
+        ow->gs->pendingSpawnY    = fromLokasie ?  8 : 13;
+        ow->gs->pendingSpawnDir  = fromLokasie ?  1 :  3;
     }
 
     ow->mode = FIELD_FREE;
@@ -1976,6 +2122,42 @@ void FieldUpdate(FieldState *ow, float dt)
         return;
     }
 
+    // Level 2 opener: the first time Jan is back in the village after the
+    // Captain, the news lands before he can take a step — Lappies is gone.
+    // The elder then carries the details (hub.elder.lok) and the east gate
+    // is already open (map_authored builds it off captainDefeated).
+    if (ow->gs->currentMapId == MAP_OVERWORLD_HUB &&
+        ow->gs->captainDefeated &&
+        !(ow->gs->storyFlags & STORY_FLAG_LOK_NEWS) &&
+        !ow->dialogue.active) {
+        ow->gs->storyFlags |= STORY_FLAG_LOK_NEWS;
+        const char *news[STR_MAX_PAGES];
+        int n = StrPages("lok.news", news, STR_MAX_PAGES);
+        DialogueBegin(&ow->dialogue, news, n, 30.0f);
+        return;
+    }
+
+    // Lokasie stage arrivals — one-shot scene-setting on the beach (S1) and
+    // inside the sangoma's compound (S6).
+    if (ow->gs->currentMapId == MAP_LOKASIE && !ow->dialogue.active) {
+        if (ow->gs->currentFloor == 1 &&
+            !(ow->gs->storyFlags & STORY_FLAG_LOK_ARRIVED)) {
+            ow->gs->storyFlags |= STORY_FLAG_LOK_ARRIVED;
+            const char *pg[STR_MAX_PAGES];
+            int n = StrPages("lok.arrive.s1", pg, STR_MAX_PAGES);
+            DialogueBegin(&ow->dialogue, pg, n, 30.0f);
+            return;
+        }
+        if (ow->gs->currentFloor == LOKASIE_STAGE_COUNT &&
+            !(ow->gs->storyFlags & STORY_FLAG_LOK_S6_ARRIVED)) {
+            ow->gs->storyFlags |= STORY_FLAG_LOK_S6_ARRIVED;
+            const char *pg[STR_MAX_PAGES];
+            int n = StrPages("lok.arrive.s6", pg, STR_MAX_PAGES);
+            DialogueBegin(&ow->dialogue, pg, n, 30.0f);
+            return;
+        }
+    }
+
     // If dialogue is active, update it and skip field input
     if (ow->dialogue.active) {
         DialogueUpdate(&ow->dialogue, dt);
@@ -2295,7 +2477,14 @@ static void DrawPartyFollowersInBattle(const FieldState *ow)
 // to walk", and it retires after a few successful steps.
 static const char *TutorialObjectiveText(const FieldState *ow)
 {
-    if (!ow->gs || ow->gs->currentMapId != MAP_TUTORIAL_ISLAND) return NULL;
+    if (!ow->gs) return NULL;
+    // Lokasie: one line per stage, keyed by floor ("lok.obj.1".."lok.obj.6").
+    if (ow->gs->currentMapId == MAP_LOKASIE) {
+        static char key[24];
+        snprintf(key, sizeof(key), "lok.obj.%d", ow->gs->currentFloor);
+        return Str(key);
+    }
+    if (ow->gs->currentMapId != MAP_TUTORIAL_ISLAND) return NULL;
     uint64_t fl = ow->gs->storyFlags;
     if (!(fl & STORY_FLAG_TUT_INTRO)) return NULL;  // intro scene still pending
     if (ow->tutorialSteps < 3)                      return Str("tut.obj.move");
@@ -2636,6 +2825,9 @@ void FieldDraw(const FieldState *ow)
         } else if (w->targetMapId == MAP_HARBOR_F1) {
             title = Str("warp.harbor");
             warn  = "";
+        } else if (w->targetMapId == MAP_LOKASIE && w->targetFloor == 1) {
+            title = Str("warp.lokasie");
+            warn  = Str("warp.lokasie_warn");
         } else {
             title = Str("warp.next");
             warn  = Str("warp.noreturn");

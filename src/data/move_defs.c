@@ -26,6 +26,14 @@ const MoveDef gMoveDefs[MOVE_COUNT] = {
     // tuned LOW relative to its read. 50 base × 1.5 enrage atk lands a heavy
     // AOE without one-shotting party members at low levels.
     { 8, "CannonVolley",   "The cannons roar across the deck",  50, RANGE_AOE,-1, false, 1, MOVE_GROUP_SPECIAL,     ATTACK_CLASS_RANGED, DMG_BLUNT,   true,  0,         0 },
+    // Level 2 (lokasie) kit — fills the two empty cells of the class/type
+    // grid. Knobkierie is the first real blunt weapon (a hardwood club with
+    // a heavy knob — smashes rusted padlocks); Kettie is the first ranged
+    // blunt (a forked-stick catapult flinging stones — knocks things down
+    // from a distance). Both are carried by the lokasie crew and drop from
+    // them, so the player sees them used before owning one.
+    { 9, "Knobkierie",     "A hardwood club with a heavy knob", 110, RANGE_MELEE,  20, true,  8, MOVE_GROUP_ITEM_ATTACK, ATTACK_CLASS_MELEE,  DMG_BLUNT,   false, 2,         0 },
+    { 10, "Kettie",        "Forked stick, rubber, a pocket of stones", 90, RANGE_RANGED, 18, true, 5, MOVE_GROUP_ITEM_ATTACK, ATTACK_CLASS_RANGED, DMG_BLUNT, false, 1,     0 },
 };
 
 const char *AttackClassName(AttackClass c)

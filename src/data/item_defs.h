@@ -31,7 +31,8 @@ typedef struct ItemDef {
 #define ITEM_FRESH_FISH      1
 #define ITEM_SARDINE         2
 #define ITEM_PERLEMOEN       3
-#define ITEM_COUNT           4
+#define ITEM_SNOEK           4   // smoked snoek — lokasie street food, sold off braai drums
+#define ITEM_COUNT           5
 
 extern const ItemDef gItemDefs[ITEM_COUNT];
 

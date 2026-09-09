@@ -12,7 +12,9 @@
 #define LORE_F5_LANTERN_HINT 2
 #define LORE_F6_LOG3       3
 #define LORE_F7_LOG4       4
-#define LORE_COUNT         5
+#define LORE_LOK_SIGN      5   // Sinkbaai welcome board (lokasie S1)
+#define LORE_LOK_LEDGER    6   // runners' perlemoen tally (lokasie S4)
+#define LORE_COUNT         7
 
 // Returns NULL for unknown ids. `outPageCount` receives the page count for
 // the entry; pages are NUL-terminated strings owned by the static table.
@@ -29,7 +31,11 @@ const char *GetLoreTitle(int loreId);
 #define CHEST_ALCOVE_F3       0
 #define CHEST_ALCOVE_F4       1
 #define CHEST_TUTORIAL_CACHE  2   // tutorial island fish-trap ruin — FishingHook
-#define CHEST_COUNT           3
+#define CHEST_LOK_S2_DRUM     3   // lokasie S2, behind the blown wall — Kettie
+#define CHEST_LOK_S3_WIRE     4   // lokasie S3, wired-shut yard — smoked snoek
+#define CHEST_LOK_S4_LOCK     5   // lokasie S4, padlocked shed — perlemoen
+#define CHEST_LOK_S5_DRUM     6   // lokasie S5, road alley pocket — Kettie + perlemoen
+#define CHEST_COUNT           7
 
 typedef struct ChestContents {
     // Weapon dropped (move id), or -1 for none.

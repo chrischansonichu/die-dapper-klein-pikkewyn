@@ -32,7 +32,13 @@ typedef enum NpcType {
     NPC_BLACKSMITH,  // hub forge NPC — repairs/upgrades weapons for Reputation
     NPC_CORMORANT,   // Jan's adoptive family on the tutorial island
     NPC_RYNO,        // traveling penguin — tutorial guide; dialogue scripted in field.c
+    NPC_RESIDENT,    // lokasie resident (human, friendly) — personaId picks the look + script
 } NpcType;
+
+// Npc.personaId values for NPC_RESIDENT — the lokasie's friendly faces.
+#define LOK_PERSONA_KID    1   // Thandi — saw the sack (stage 1)
+#define LOK_PERSONA_OUMA   2   // Ouma Nomsa — knows the ditch (stage 3)
+#define LOK_PERSONA_SPAZA  3   // Bra Vusi — spaza keeper on the road (stage 5)
 
 struct FieldEnemy;
 

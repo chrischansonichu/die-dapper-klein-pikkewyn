@@ -43,6 +43,38 @@ static const struct { int tile; unsigned char flags; } kLegacy[6] = {
     { TILE_GRASS,   TILE_FLAG_WALKABLE },
 };
 
+// Lokasie tileset (gid 295..318). Order matches tools/gen_lokasie_tileset.py.
+// Ground reads as sand for battle logic (tar as dock, purely cosmetic); every
+// built thing — walls, roofs, fences, tyre stacks, rubble, thatch — is rock
+// (solid); the storm-water ditch is walkable water (penguins are fast in it);
+// the surf beyond the beach is deep water.
+static const struct { int tile; unsigned char flags; } kLokasie[LOKASIE_TILE_COUNT] = {
+    { TILE_SAND,    TILE_FLAG_WALKABLE },               //  0 dirt
+    { TILE_SAND,    TILE_FLAG_WALKABLE },               //  1 dirt + pebbles
+    { TILE_SAND,    TILE_FLAG_WALKABLE },               //  2 packed path
+    { TILE_DOCK,    TILE_FLAG_WALKABLE },               //  3 tar
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  //  4 zinc wall
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  //  5 turquoise wall
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  //  6 rust-red wall
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  //  7 roof zinc
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  //  8 roof rust
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  //  9 roof blue
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  // 10 wire fence
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  // 11 fence post
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  // 12 tyre stack
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  // 13 rubble heap
+    { TILE_SHALLOW, TILE_FLAG_WATER },                  // 14 ditch water
+    { TILE_GRASS,   TILE_FLAG_WALKABLE },               // 15 grass tufts
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  // 16 door (wall)
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  // 17 window (wall)
+    { TILE_SAND,    TILE_FLAG_WALKABLE },               // 18 sand
+    { TILE_OCEAN,   TILE_FLAG_SOLID | TILE_FLAG_WATER },// 19 deep water
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  // 20 boulder
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  // 21 painted concrete wall
+    { TILE_ROCK,    TILE_FLAG_SOLID },                  // 22 thatch roof
+    { TILE_SAND,    TILE_FLAG_WALKABLE },               // 23 scorched ground
+};
+
 // Classify one gid into (legacy tile id, flags). Unknown gids fall back to
 // walkable sand so a repainted map never hard-locks the player.
 static void ClassifyGid(int gid, int *outTile, unsigned char *outFlags)
@@ -50,6 +82,11 @@ static void ClassifyGid(int gid, int *outTile, unsigned char *outFlags)
     *outTile  = TILE_SAND;
     *outFlags = TILE_FLAG_WALKABLE;
 
+    if (gid >= LOKASIE_FIRST_GID && gid < LOKASIE_FIRST_GID + LOKASIE_TILE_COUNT) {
+        *outTile  = kLokasie[gid - LOKASIE_FIRST_GID].tile;
+        *outFlags = kLokasie[gid - LOKASIE_FIRST_GID].flags;
+        return;
+    }
     if (gid >= 289 && gid < 289 + 6) {
         *outTile  = kLegacy[gid - 289].tile;
         *outFlags = kLegacy[gid - 289].flags;

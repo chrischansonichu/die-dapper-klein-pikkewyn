@@ -145,10 +145,10 @@
   <object id="29" name="RynoChannel" x="504" y="504">
    <point/>
   </object>
-  <object id="30" name="Rack1" x="408" y="2328">
+  <object id="30" name="Pen1" x="408" y="2328">
    <point/>
   </object>
-  <object id="31" name="Rack2" x="552" y="2328">
+  <object id="31" name="Pen2" x="552" y="2328">
    <point/>
   </object>
   <object id="11" name="SwimCove" x="912" y="1344" width="384" height="240"/>

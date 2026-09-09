@@ -93,6 +93,32 @@ void DrawItemIcon(Rectangle r, int itemId)
                        1.6f, gPH.ink);
         } break;
 
+        case ITEM_SNOEK: {
+            // Smoked snoek — long dark fish with a smoky orange belly and a
+            // curl of braai smoke rising off it.
+            float cx2 = cx - size * 0.04f;
+            float bodyRx  = size * 0.38f;
+            float bodyRy  = size * 0.12f;
+            Color body  = (Color){0x5A, 0x62, 0x66, 255};
+            Color belly = (Color){0xD8, 0x98, 0x58, 255};
+            DrawEllipse((int)cx2, (int)cy, bodyRx, bodyRy, body);
+            DrawEllipse((int)cx2, (int)(cy + bodyRy * 0.30f),
+                        bodyRx * 0.72f, bodyRy * 0.50f, belly);
+            Vector2 tA = { cx2 + bodyRx,               cy };
+            Vector2 tB = { cx2 + bodyRx + size * 0.17f, cy - size * 0.13f };
+            Vector2 tC = { cx2 + bodyRx + size * 0.17f, cy + size * 0.13f };
+            DrawTriangle(tB, tA, tC, body);
+            DrawCircle((int)(cx2 - bodyRx * 0.58f), (int)(cy - bodyRy * 0.15f),
+                       1.6f, gPH.panel);
+            // Smoke curls.
+            for (int i = 0; i < 3; i++) {
+                DrawCircle((int)(cx2 - size * 0.10f + i * size * 0.09f),
+                           (int)(cy - size * 0.26f - (i & 1) * size * 0.05f),
+                           size * 0.035f,
+                           (Color){gPH.inkLight.r, gPH.inkLight.g, gPH.inkLight.b, 110});
+            }
+        } break;
+
         case ITEM_PERLEMOEN: {
             // Iridescent abalone shell — overlapping arcs forming a rough
             // half-spiral. Reads as "fancy seafood" without trying to be
@@ -240,6 +266,39 @@ void DrawMoveIcon(Rectangle r, int moveId)
             // Grip wrap
             DrawCircle((int)(cx - size * 0.20f), (int)(cy + size * 0.20f),
                        size * 0.05f, gPH.ink);
+        } break;
+
+        case 9: { // Knobkierie — hardwood shaft with a heavy round knob
+            Color wood = (Color){0x8B, 0x5E, 0x34, 255};
+            Color knob = (Color){0x6A, 0x44, 0x24, 255};
+            DrawLineEx((Vector2){cx - size * 0.28f, cy + size * 0.30f},
+                       (Vector2){cx + size * 0.14f, cy - size * 0.14f},
+                       size * 0.075f, wood);
+            DrawCircle((int)(cx + size * 0.20f), (int)(cy - size * 0.20f),
+                       size * 0.13f, knob);
+            DrawCircle((int)(cx + size * 0.16f), (int)(cy - size * 0.24f),
+                       size * 0.045f, (Color){0xA8, 0x7A, 0x4E, 255});
+            // Grip wrap.
+            DrawLineEx((Vector2){cx - size * 0.24f, cy + size * 0.22f},
+                       (Vector2){cx - size * 0.16f, cy + size * 0.30f},
+                       2.0f, gPH.ink);
+        } break;
+
+        case 10: { // Kettie — forked stick, rubber bands, a stone in the pouch
+            Color wood   = (Color){0x9A, 0x70, 0x44, 255};
+            Color rubber = (Color){0x3A, 0x30, 0x2C, 255};
+            Color stone  = (Color){0xA6, 0xA0, 0xA8, 255};
+            Vector2 crotch = { cx, cy + size * 0.02f };
+            // Handle + two prongs.
+            DrawLineEx(crotch, (Vector2){cx, cy + size * 0.34f}, size * 0.075f, wood);
+            DrawLineEx(crotch, (Vector2){cx - size * 0.22f, cy - size * 0.26f}, size * 0.065f, wood);
+            DrawLineEx(crotch, (Vector2){cx + size * 0.22f, cy - size * 0.26f}, size * 0.065f, wood);
+            // Rubber to the pouch (drawn back, loaded).
+            Vector2 pouch = { cx, cy - size * 0.02f };
+            DrawLineEx((Vector2){cx - size * 0.22f, cy - size * 0.26f}, pouch, 1.6f, rubber);
+            DrawLineEx((Vector2){cx + size * 0.22f, cy - size * 0.26f}, pouch, 1.6f, rubber);
+            DrawCircle((int)pouch.x, (int)pouch.y, size * 0.06f, stone);
+            DrawCircleLines((int)pouch.x, (int)pouch.y, size * 0.06f, gPH.ink);
         } break;
 
         case 6: { // CrashingTide — large wave shape

@@ -32,7 +32,7 @@ void TutorialApplyZones(TileMap *m, uint64_t storyFlags);
 // RynoCove/RynoSouth/RynoChannel points are visual notes only).
 void TutorialRynoPos(uint64_t storyFlags, int *outX, int *outY, int *outDir);
 
-// Append the drying-rack gull mob to `enemies` (latent unless `active`).
+// Append the fish-pen gull mob to `enemies` (latent unless `active`).
 // Called by the map builder on rebuilds that land mid-raid, and by field.c
 // live when Ryno's ranged lesson lands — the field persists across battles,
 // so the mob can't wait for the next map rebuild to exist.

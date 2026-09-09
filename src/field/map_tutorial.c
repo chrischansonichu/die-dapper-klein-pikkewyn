@@ -36,7 +36,7 @@ void TutorialRynoPos(uint64_t fl, int *outX, int *outY, int *outDir)
         *outX = 10; *outY = 10; *outDir = 3;
     } else if ((fl & STORY_FLAG_TUT_GULL_BRIEFED) ||
                (fl & STORY_FLAG_TUT_RANGED_TAUGHT)) {
-        // South dune, overlooking the drying racks for the gull fights.
+        // South dune, overlooking the fish pens for the gull fights.
         // Gated on the briefing, not the cache: he waits at the cove until
         // Jan has come back and SHOWN him the shells.
         *outX = 11; *outY = 41; *outDir = 0;
@@ -54,10 +54,10 @@ void TutorialSpawnRaidGulls(FieldEnemy *enemies, int *enemyCount, int enemyMax,
 {
     // Positions mirror the RaidGull1..3 point objects in tutorial.tmx (same
     // source-of-truth rule as kZones: the C table is gameplay, the tmx
-    // objects are the visual note). Clustered on the drying-rack grass so
+    // objects are the visual note). Clustered on the fish-pen shore so
     // the aggro sweep (radius 5) pulls all three into one fight — that IS
     // the ranged-combat lesson. The third gull STANDS facing south ("eyes
-    // on the racks"): standing enemies only look the way they face, so its
+    // on the pens"): standing enemies only look the way they face, so its
     // back is permanently open — the guaranteed sneak-attack target Ryno
     // points out. It sits east of the wanderers so the tile behind it stays
     // outside their LOS range (3) and the sneak line-up isn't ambushed.
@@ -213,7 +213,7 @@ void BuildTutorialIsland(MapBuildContext *ctx)
         NpcAddDialogue(bettie, Str("tut.bettie.base.2"));
     }
 
-    // --- Kelp gull raiding the family's drying racks — the practice fight.
+    // --- Kelp gull raiding the family's fish pens — the practice fight.
     // Spawned latent (inactive) so it can't ambush Jan before combat has been
     // taught: field.c flips it active the moment the shell cache is looted.
     // One-shot: not placed at all once beaten.
@@ -228,7 +228,7 @@ void BuildTutorialIsland(MapBuildContext *ctx)
         gull->active = (ctx->storyFlags & STORY_FLAG_TUT_CACHE_TAKEN) != 0;
     }
 
-    // --- The gull mob — three cousins raiding the drying racks together.
+    // --- The gull mob — three cousins raiding the fish pens together.
     // Only on rebuilds (save/load, map re-entry) that land mid-raid; the
     // first-play spawn happens live in field.c when Ryno's ranged lesson
     // lands, because the field is NOT rebuilt around battles and the mob
@@ -272,8 +272,8 @@ void BuildTutorialIsland(MapBuildContext *ctx)
         { "Buoy",      21, 28, OBJ_BUOY,     0 },
         { "StormNest",  5, 26, OBJ_NEST,     0 },
         { "Crate",      6, 12, OBJ_CRATE,    0 },
-        { "Rack1",      8, 48, OBJ_RACK,     0 },
-        { "Rack2",     11, 48, OBJ_RACK,     0 },
+        { "Pen1",       8, 48, OBJ_FISH_PEN, 0 },
+        { "Pen2",      11, 48, OBJ_FISH_PEN, 0 },
         { "Driftwood", 10, 22, OBJ_DECOR,    DECOR_DRIFTWOOD },
         { "ShellPile", 15, 20, OBJ_DECOR,    DECOR_SHELLS    },
         { "StonePile", 12, 49, OBJ_DECOR,    DECOR_STONES    },

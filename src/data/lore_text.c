@@ -20,6 +20,8 @@ static const LoreEntry kLore[LORE_COUNT] = {
     [LORE_F5_LANTERN_HINT] = { "lore.f5tally.title",  "lore.f5tally"  },
     [LORE_F6_LOG3]         = { "lore.f6log3.title",   "lore.f6log3"   },
     [LORE_F7_LOG4]         = { "lore.f7log4.title",   "lore.f7log4"   },
+    [LORE_LOK_SIGN]        = { "lore.loksign.title",  "lore.loksign"  },
+    [LORE_LOK_LEDGER]      = { "lore.lokledger.title","lore.lokledger"},
 };
 
 const char *const *GetLoreText(int loreId, int *outPageCount)
@@ -71,6 +73,36 @@ static const ChestContents kChests[CHEST_COUNT] = {
         .itemId       = 2,             // Sardine
         .itemCount    = 2,
         .flavorKey    = "chest.cache.flavor",
+    },
+    // Lokasie hidden items — each sits behind an environmental gate that
+    // needs a particular kind of weapon (see field.c BeginObjectInteraction).
+    [CHEST_LOK_S2_DRUM] = {
+        .weaponMoveId = 10,            // Kettie
+        .weaponDurabilityFraction = 100,
+        .itemId       = 2,             // Sardine
+        .itemCount    = 2,
+        .flavorKey    = "chest.lok_s2.flavor",
+    },
+    [CHEST_LOK_S3_WIRE] = {
+        .weaponMoveId = -1,
+        .weaponDurabilityFraction = 0,
+        .itemId       = 4,             // Smoked Snoek
+        .itemCount    = 3,
+        .flavorKey    = "chest.lok_s3.flavor",
+    },
+    [CHEST_LOK_S4_LOCK] = {
+        .weaponMoveId = -1,
+        .weaponDurabilityFraction = 0,
+        .itemId       = 3,             // Perlemoen
+        .itemCount    = 2,
+        .flavorKey    = "chest.lok_s4.flavor",
+    },
+    [CHEST_LOK_S5_DRUM] = {
+        .weaponMoveId = 10,            // Kettie (a spare — the first one wears out)
+        .weaponDurabilityFraction = 100,
+        .itemId       = 3,             // Perlemoen
+        .itemCount    = 1,
+        .flavorKey    = "chest.lok_s5.flavor",
     },
 };
 

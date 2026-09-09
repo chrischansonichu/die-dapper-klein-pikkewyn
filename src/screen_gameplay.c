@@ -138,9 +138,15 @@ static void ApplyPendingMapTransition(void)
         // the default; the tutorial island uses the family instead (there is
         // no village in Jan's world yet at that point).
         const char *pages[STR_MAX_PAGES + 1];
-        int n = StrPages((gGameState.currentMapId == MAP_TUTORIAL_ISLAND)
-                             ? "tut.rescue" : "rescue.village",
-                         pages, STR_MAX_PAGES);
+        // Who found Jan depends on where he went down: the family on the
+        // tutorial island, a fisher in the dunes below the lokasie, the
+        // village otherwise (the harbor). rescueSourceMapId is transient
+        // and consumed here.
+        const char *key = "rescue.village";
+        if (gGameState.currentMapId == MAP_TUTORIAL_ISLAND) key = "tut.rescue";
+        else if (gGameState.rescueSourceMapId == MAP_LOKASIE) key = "rescue.lokasie";
+        gGameState.rescueSourceMapId = -1;
+        int n = StrPages(key, pages, STR_MAX_PAGES);
         if (gGameState.rescueLossPending) {
             pages[n++] = gGameState.rescueLossMsg;
             gGameState.rescueLossPending = false;

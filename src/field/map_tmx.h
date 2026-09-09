@@ -14,9 +14,19 @@
 // Gid convention (fixed by the .tmx tileset declarations):
 //   1..288  terrain.tsx  (tools/terrain.png, 24 columns, wang blob blocks)
 //   289..294 tileset.tsx (legacy 6-tile procedural set: ocean..grass)
+//   295..318 lokasie.tsx (tools/lokasie.png, 8 columns — Level 2 set; tile
+//            list + generator in tools/gen_lokasie_tileset.py)
 //----------------------------------------------------------------------------------
 
 #define TMX_MAX_OBJECTS  32
+
+// Lokasie tileset — first gid and per-tile indices (gid = FIRST + index).
+// Exposed so map builders can repaint tiles at runtime (blast holes).
+#define LOKASIE_FIRST_GID    295
+#define LOKASIE_TILE_COUNT   24
+#define LOKASIE_TILE_DIRT     0
+#define LOKASIE_TILE_RUBBLE  13
+#define LOKASIE_TILE_SCORCH  23
 #define TMX_OBJ_NAME_LEN 64
 
 typedef struct TmxObject {

@@ -1,6 +1,7 @@
 #include "dev_warp_ui.h"
 #include "raylib.h"
 #include "map_source.h"
+#include "map_lokasie.h"
 #include "../state/game_state.h"
 #include "../battle/inventory.h"
 #include "../data/item_defs.h"
@@ -36,6 +37,14 @@ static const DevWarpDest gDests[] = {
     { "Harbor F5",       MAP_HARBOR_PROC,   5,  2,  2, 2 },
     { "Harbor F6 (Dock)",MAP_HARBOR_F6,     6,  2,  2, 0 },
     { "Harbor F7 (Boss)",MAP_HARBOR_F7,     7,  8, 10, 3 },
+    // Lokasie spawns are overridden from LokasieStageSpawn in ApplyWarpRow
+    // so this table can't drift from the stage maps.
+    { "Lokasie S1 (Shore)",   MAP_LOKASIE, 1, 0, 0, 0 },
+    { "Lokasie S2 (Alleys)",  MAP_LOKASIE, 2, 0, 0, 0 },
+    { "Lokasie S3 (Ditch)",   MAP_LOKASIE, 3, 0, 0, 0 },
+    { "Lokasie S4 (Yard)",    MAP_LOKASIE, 4, 0, 0, 0 },
+    { "Lokasie S5 (Road)",    MAP_LOKASIE, 5, 0, 0, 0 },
+    { "Lokasie S6 (Sangoma)", MAP_LOKASIE, 6, 0, 0, 0 },
 };
 static const int gDestCount = (int)(sizeof(gDests) / sizeof(gDests[0]));
 
@@ -76,9 +85,9 @@ static const int gCheatCount = (int)(sizeof(gCheats) / sizeof(gCheats[0]));
 // ---------------------------------------------------------------------------
 
 #define DEV_PANEL_W 380
-#define DEV_PANEL_H 430
-#define DEV_ROW_H    32
-#define DEV_ROW_GAP   4
+#define DEV_PANEL_H 440
+#define DEV_ROW_H    22
+#define DEV_ROW_GAP   2
 #define DEV_HEADER_Y 50  // y-offset of the first row (under tab strip)
 
 static inline Rectangle DevPanelRect(void)
@@ -219,6 +228,14 @@ static bool ApplyWarpRow(DevWarpUI *d, struct GameState *gs, int idx)
     gs->pendingSpawnX   = dd->spawnX;
     gs->pendingSpawnY   = dd->spawnY;
     gs->pendingSpawnDir = dd->spawnDir;
+    if (dd->mapId == MAP_LOKASIE) {
+        LokasieStageSpawn(dd->floor, &gs->pendingSpawnX, &gs->pendingSpawnY,
+                          &gs->pendingSpawnDir);
+        // Authored stages ignore the seed, and a dev jump into the lokasie
+        // should also open the hub gate so the run reads as post-Captain.
+        gs->pendingMapSeed  = 0;
+        gs->captainDefeated = true;
+    }
     DevWarpUIClose(d);
     return true;
 }
@@ -325,7 +342,7 @@ void DevWarpUIDraw(const DevWarpUI *d, const struct GameState *gs)
                                 ? gDests[i].label
                                 : gCheats[i].label;
         DrawText(label, (int)r.x + 12,
-                 (int)r.y + (DEV_ROW_H - 16) / 2, 16, gPH.ink);
+                 (int)r.y + (DEV_ROW_H - 14) / 2, 14, gPH.ink);
     }
 
     // Toast under the list — most recent cheat result.

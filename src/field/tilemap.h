@@ -46,6 +46,7 @@ typedef struct TileMap {
     int           gids[MAP_MAX_W * MAP_MAX_H];
     Texture2D     terrainAtlas;   // resources/terrain.png  (gids 1..288)
     Texture2D     legacyAtlas;    // resources/tileset.png  (gids 289..294)
+    Texture2D     lokasieAtlas;   // resources/lokasie.png  (gids 295..318)
 } TileMap;
 
 // Build a procedural tileset texture (TILE_COUNT tiles wide, 1 tile tall)

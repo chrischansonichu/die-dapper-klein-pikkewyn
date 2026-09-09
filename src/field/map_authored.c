@@ -334,12 +334,30 @@ void BuildOverworldHub(MapBuildContext *ctx)
     TileMapSetTile(m, 11, m->height - 2, TILE_SAND);
     TileMapSetTile(m, 12, m->height - 2, TILE_SAND);
 
+    // East gate — the coast road to the Sinkbaai lokasie (Level 2). Only
+    // opens once the Captain has fallen: before that the wall is unbroken so
+    // the village reads as having exactly one way out. Sand path from the
+    // food-bank spur along y=8 to the wall, two door tiles in the wall.
+    if (ctx->captainDefeated) {
+        for (int x = 17; x <= m->width - 1; x++) TileMapSetTile(m, x, 8, TILE_SAND);
+        TileMapSetTile(m, m->width - 2, 9, TILE_SAND);
+        TileMapSetTile(m, m->width - 1, 9, TILE_SAND);
+    }
+
     AddHubNpcs(ctx);
 
     // South-gate warp → harbor floor 1. Both tiles of the 2-wide gap trigger
     // so the player can approach the gate from either side.
     AddWarp(ctx, 11, m->height - 1, MAP_HARBOR_F1, 1, 8, 14, 3);
     AddWarp(ctx, 12, m->height - 1, MAP_HARBOR_F1, 1, 8, 14, 3);
+
+    // East-gate warp → lokasie stage 1 (the beach below the shacks). Spawn
+    // coords mirror LokasieStageSpawn(1) — kept literal here so map_authored
+    // stays independent of the lokasie header.
+    if (ctx->captainDefeated) {
+        AddWarp(ctx, m->width - 1, 8, MAP_LOKASIE, 1, 13, 16, 3);
+        AddWarp(ctx, m->width - 1, 9, MAP_LOKASIE, 1, 13, 16, 3);
+    }
 
     *ctx->spawnTileX = 11;
     *ctx->spawnTileY = 7;

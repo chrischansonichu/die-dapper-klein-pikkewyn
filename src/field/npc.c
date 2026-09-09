@@ -1,5 +1,6 @@
 #include "npc.h"
 #include "enemy.h"
+#include "enemy_sprites.h"
 #include "field.h"
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
@@ -516,6 +517,18 @@ void NpcDraw(const Npc *n, Camera2D cam)
         case NPC_BLACKSMITH:    DrawBlacksmith(px, py, sz, n->dir);   break;
         case NPC_CORMORANT:     DrawCormorant(px, py, sz, n->dir);    break;
         case NPC_RYNO:          DrawRyno(px, py, sz, n->dir);         break;
+        case NPC_RESIDENT: {
+            // Human residents use the crew's humanoid template (friendly
+            // variant). Thandi is a child — three-quarter height, feet on
+            // the same baseline.
+            Rectangle r = { (float)px, (float)py, (float)sz, (float)sz };
+            if (n->personaId == LOK_PERSONA_KID) {
+                float h = sz * 0.78f;
+                r = (Rectangle){ px + (sz - h) * 0.5f, py + (sz - h), h, h };
+            }
+            EnemySpritesDrawResident(n->personaId, r, n->dir);
+            break;
+        }
     }
 }
 

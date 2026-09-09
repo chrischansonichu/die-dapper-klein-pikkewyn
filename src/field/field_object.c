@@ -258,30 +258,202 @@ void FieldObjectDraw(const FieldObject *o, Camera2D cam)
                     }
                     break;
                 }
+                case DECOR_TYRES: {
+                    // Three bald tyres, leaning stack.
+                    const Color tyre = (Color){0x2E, 0x2A, 0x28, 255};
+                    const Color hi   = (Color){0x4A, 0x46, 0x44, 255};
+                    for (int i = 0; i < 3; i++) {
+                        float y = cy + tp * 0.24f - i * 8.0f;
+                        float x = cx + (i & 1) * 3.0f;
+                        DrawEllipse((int)x, (int)y, tp * 0.34f, 7.0f, tyre);
+                        DrawEllipse((int)x, (int)(y - 2.0f), tp * 0.34f, 5.5f, hi);
+                        DrawEllipse((int)x, (int)(y - 2.0f), tp * 0.13f, 2.2f, tyre);
+                    }
+                    break;
+                }
+                case DECOR_SCRAP: {
+                    // Heap of zinc offcuts and a coil of wire.
+                    const Color zinc  = (Color){0xB9, 0xBE, 0xC2, 255};
+                    const Color rib   = (Color){0x8E, 0x94, 0x9A, 255};
+                    const Color wire  = (Color){0x7A, 0x80, 0x84, 255};
+                    DrawLineEx((Vector2){px + tp * 0.10f, cy + tp * 0.22f},
+                               (Vector2){px + tp * 0.70f, cy - tp * 0.10f}, 6.0f, zinc);
+                    DrawLineEx((Vector2){px + tp * 0.10f, cy + tp * 0.22f},
+                               (Vector2){px + tp * 0.70f, cy - tp * 0.10f}, 1.5f, rib);
+                    DrawLineEx((Vector2){px + tp * 0.30f, cy + tp * 0.30f},
+                               (Vector2){px + tp * 0.90f, cy + tp * 0.06f}, 6.0f, zinc);
+                    DrawLineEx((Vector2){px + tp * 0.30f, cy + tp * 0.30f},
+                               (Vector2){px + tp * 0.90f, cy + tp * 0.06f}, 1.5f, rib);
+                    for (int i = 0; i < 3; i++) {
+                        DrawCircleLines((int)(cx - tp * 0.16f + i * 4), (int)(cy - tp * 0.16f),
+                                        tp * 0.10f, wire);
+                    }
+                    break;
+                }
+                case DECOR_DRUMS: {
+                    // Two empty, rusted-through drums on their sides. Meant to
+                    // read as "just scenery" next to the live red one.
+                    const Color drum = (Color){0x8A, 0x7A, 0x6A, 255};
+                    const Color rust = (Color){0xB0, 0x6A, 0x48, 255};
+                    for (int i = 0; i < 2; i++) {
+                        float dx = (i == 0) ? -tp * 0.16f : tp * 0.16f;
+                        Rectangle b = { cx + dx - tp * 0.14f, cy - tp * 0.20f + i * 6.0f,
+                                        tp * 0.28f, tp * 0.42f };
+                        DrawRectangleRounded(b, 0.5f, 8, drum);
+                        DrawRectangleRoundedLines(b, 0.5f, 8, gPH.ink);
+                        DrawEllipse((int)(b.x + b.width * 0.5f), (int)(b.y + b.height * 0.55f),
+                                    tp * 0.06f, tp * 0.04f, rust);
+                        DrawRectangle((int)b.x, (int)(b.y + b.height * 0.30f), (int)b.width, 2, gPH.inkLight);
+                    }
+                    break;
+                }
             }
             break;
         }
-        case OBJ_RACK: {
-            // Fish-drying rack: two driftwood posts, a taut line, and a row
-            // of small silver fish hung to cure. The thing the gulls raid.
+        case OBJ_DRUM: {
+            // The live one: a full paraffin drum, upright, painted red with
+            // a hazard stripe and a wet stain at the base. Reads different
+            // from the rusted empties on purpose — this is the thing you
+            // throw a shell at.
             float tp = (float)(TILE_SIZE * TILE_SCALE);
-            const Color post = (Color){0x8A, 0x7A, 0x60, 255};
-            const Color fish = (Color){0xC9, 0xCE, 0xD2, 255};
-            float lx = px + tp * 0.14f, rx2 = px + tp * 0.86f;
-            float topY = cy - tp * 0.22f;
-            DrawLineEx((Vector2){lx, cy + tp * 0.30f},
-                       (Vector2){lx, topY}, 4.0f, post);
-            DrawLineEx((Vector2){rx2, cy + tp * 0.30f},
-                       (Vector2){rx2, topY}, 4.0f, post);
-            DrawLineEx((Vector2){lx, topY}, (Vector2){rx2, topY},
-                       2.0f, gPH.ink);
+            const Color red    = (Color){0xB8, 0x40, 0x38, 255};
+            const Color redHi  = (Color){0xD0, 0x60, 0x50, 255};
+            const Color stripe = (Color){0xE8, 0xC8, 0x50, 255};
+            DrawEllipse((int)cx, (int)(cy + tp * 0.34f), tp * 0.30f, tp * 0.09f,
+                        (Color){0x4A, 0x3C, 0x30, 120});                    // stain
+            Rectangle b = { cx - tp * 0.20f, cy - tp * 0.30f, tp * 0.40f, tp * 0.62f };
+            DrawRectangleRounded(b, 0.30f, 8, red);
+            DrawRectangle((int)(b.x + 4), (int)(b.y + 4), 5, (int)(b.height - 8), redHi);
+            DrawRectangle((int)b.x, (int)(b.y + b.height * 0.42f), (int)b.width, 5, stripe);
+            DrawRectangleRoundedLines(b, 0.30f, 8, gPH.ink);
+            // Rim + cap.
+            DrawEllipse((int)cx, (int)b.y, tp * 0.20f, tp * 0.06f, redHi);
+            DrawCircle((int)(cx + tp * 0.08f), (int)b.y, 3.0f, gPH.inkDark);
+            break;
+        }
+        case OBJ_WIRE_GATE: {
+            // Fence gap lashed shut with a tangle of wire and an old sack.
+            float tp = (float)(TILE_SIZE * TILE_SCALE);
+            const Color wire = (Color){0x7A, 0x80, 0x84, 255};
+            const Color sack = (Color){0xC4, 0x9C, 0x60, 255};
+            DrawLineEx((Vector2){px + 4, py + tp * 0.14f}, (Vector2){px + tp - 4, py + tp * 0.14f},
+                       2.5f, gPH.inkLight);
+            for (int i = 0; i < 4; i++) {
+                float y0 = py + tp * (0.18f + i * 0.18f);
+                DrawLineEx((Vector2){px + 4, y0}, (Vector2){px + tp - 4, y0 + 8}, 1.5f, wire);
+                DrawLineEx((Vector2){px + 4, y0 + 8}, (Vector2){px + tp - 4, y0}, 1.5f, wire);
+            }
+            DrawRectangleRounded((Rectangle){ cx - tp * 0.16f, cy - tp * 0.06f,
+                                              tp * 0.32f, tp * 0.28f }, 0.4f, 6, sack);
+            // The knots — thick coils where the wire is tied off.
+            DrawCircle((int)(cx - tp * 0.20f), (int)(cy - tp * 0.10f), 4.0f, wire);
+            DrawCircle((int)(cx + tp * 0.20f), (int)(cy + tp * 0.14f), 4.0f, wire);
+            break;
+        }
+        case OBJ_PADLOCK: {
+            // A zinc shed gate, chained, with a fat rusted padlock.
+            float tp = (float)(TILE_SIZE * TILE_SCALE);
+            const Color zinc  = (Color){0xB9, 0xBE, 0xC2, 255};
+            const Color rib   = (Color){0x8E, 0x94, 0x9A, 255};
+            const Color chain = (Color){0x6A, 0x6E, 0x72, 255};
+            const Color lock  = (Color){0xA8, 0x62, 0x40, 255};
+            Rectangle g = { px + 3, py + tp * 0.10f, tp - 6, tp * 0.84f };
+            DrawRectangleRec(g, zinc);
+            for (int i = 1; i < 7; i++)
+                DrawLineEx((Vector2){g.x + i * 6, g.y + 2}, (Vector2){g.x + i * 6, g.y + g.height - 2},
+                           1.5f, rib);
+            DrawRectangleLinesEx(g, 2.0f, gPH.ink);
+            // Chain across the middle.
+            for (int i = 0; i < 6; i++)
+                DrawCircleLines((int)(g.x + 6 + i * 6), (int)(cy - 2), 3.0f, chain);
+            // Padlock body + shackle.
+            Rectangle body = { cx - 7, cy - 4, 14, 12 };
+            DrawRectangleRounded(body, 0.3f, 6, lock);
+            DrawRectangleRoundedLines(body, 0.3f, 6, gPH.inkDark);
+            DrawCircleLines((int)cx, (int)(cy - 6), 5.0f, chain);
+            DrawCircle((int)cx, (int)(cy + 2), 1.5f, gPH.inkDark);
+            break;
+        }
+        case OBJ_SIGN: {
+            // Hand-painted board on two posts.
+            float tp = (float)(TILE_SIZE * TILE_SCALE);
+            const Color board = (Color){0xE8, 0xDC, 0xC0, 255};
+            const Color post  = (Color){0x7E, 0x5A, 0x3A, 255};
+            DrawRectangle((int)(cx - tp * 0.26f), (int)(cy - tp * 0.02f), 4, (int)(tp * 0.34f), post);
+            DrawRectangle((int)(cx + tp * 0.22f), (int)(cy - tp * 0.02f), 4, (int)(tp * 0.34f), post);
+            Rectangle b = { cx - tp * 0.36f, cy - tp * 0.32f, tp * 0.72f, tp * 0.34f };
+            DrawRectangleRounded(b, 0.15f, 4, board);
+            DrawRectangleRoundedLines(b, 0.15f, 4, gPH.ink);
+            // Painted "letters": a red word and a blue word.
+            DrawLineEx((Vector2){b.x + 6, b.y + 7}, (Vector2){b.x + b.width - 8, b.y + 7},
+                       3.0f, (Color){0xB8, 0x40, 0x38, 255});
+            DrawLineEx((Vector2){b.x + 10, b.y + 13}, (Vector2){b.x + b.width - 12, b.y + 13},
+                       2.0f, (Color){0x3C, 0x4A, 0x6A, 255});
+            break;
+        }
+        case OBJ_HUT_DOOR: {
+            // The sangoma's door: dark wood in a plaster arch, beadwork
+            // hanging across it, a curl of smoke from the gap at the top.
+            float tp = (float)(TILE_SIZE * TILE_SCALE);
+            const Color plaster = (Color){0xE0, 0xC6, 0x9E, 255};
+            const Color wood    = (Color){0x4A, 0x3A, 0x2C, 255};
+            DrawRectangleRounded((Rectangle){ px + 2, py + 2, tp - 4, tp - 4 }, 0.2f, 6, plaster);
+            Rectangle d = { cx - tp * 0.22f, py + tp * 0.16f, tp * 0.44f, tp * 0.80f };
+            DrawRectangleRounded(d, 0.35f, 8, wood);
+            DrawRectangleRoundedLines(d, 0.35f, 8, gPH.inkDark);
+            // Bead strings.
+            static const Color kBeads[4] = {
+                {0xE8, 0xC8, 0x50, 255}, {0xB8, 0x40, 0x38, 255},
+                {0x58, 0xA8, 0xC0, 255}, {0xF0, 0xEE, 0xE4, 255},
+            };
+            for (int i = 0; i < 4; i++) {
+                float bx = d.x + 6 + i * 7.0f;
+                for (int k = 0; k < 4; k++)
+                    DrawCircle((int)bx, (int)(d.y + 6 + k * 6), 1.8f, kBeads[(i + k) & 3]);
+            }
+            // Smoke.
+            float t = (float)GetTime();
             for (int i = 0; i < 3; i++) {
-                float fx2 = lx + (rx2 - lx) * (0.25f + 0.25f * (float)i);
-                DrawLineEx((Vector2){fx2, topY},
-                           (Vector2){fx2, topY + 5.0f}, 1.5f, gPH.inkLight);
-                DrawEllipse((int)fx2, (int)(topY + 10.0f), 3.5f, 6.0f, fish);
-                DrawCircle((int)fx2, (int)(topY + 6.5f), 1.5f,
-                           (Color){0x6E, 0x76, 0x7C, 255});
+                float sy = py + tp * 0.10f - i * 5.0f - fmodf(t * 6.0f, 5.0f);
+                DrawCircle((int)(cx + sinf(t * 1.5f + i) * 3.0f), (int)sy, 2.5f,
+                           (Color){gPH.inkLight.r, gPH.inkLight.g, gPH.inkLight.b, 90});
+            }
+            break;
+        }
+        case OBJ_FISH_PEN: {
+            // Fish pen: a ring of stacked shore-stones holding back a pocket
+            // of seawater, with the morning's catch herded inside at high
+            // tide. Nature's larder — the thing the gulls raid.
+            float tp = (float)(TILE_SIZE * TILE_SCALE);
+            const Color waterDeep = (Color){0x6E, 0x96, 0x98, 255};
+            const Color water     = (Color){0x8E, 0xB6, 0xB4, 255};
+            const Color stone     = (Color){0x9A, 0x96, 0x8C, 255};
+            const Color stoneHi   = (Color){0xB2, 0xAE, 0xA4, 255};
+            const Color fish      = (Color){0xC9, 0xCE, 0xD2, 255};
+            float poolY = cy + tp * 0.07f;
+            // Pool: darker depth under a lighter surface.
+            DrawEllipse((int)cx, (int)poolY, tp * 0.36f, tp * 0.22f, waterDeep);
+            DrawEllipse((int)cx, (int)(poolY - 1.5f),
+                        tp * 0.32f, tp * 0.18f, water);
+            // Penned fish circling the ring — silver slivers, nose to tail.
+            DrawEllipse((int)(cx - tp * 0.11f), (int)(poolY - 2.0f),
+                        4.5f, 2.0f, fish);
+            DrawEllipse((int)(cx + tp * 0.07f), (int)(poolY + 3.0f),
+                        4.0f, 2.0f, fish);
+            DrawEllipse((int)(cx + tp * 0.13f), (int)(poolY - 4.0f),
+                        3.5f, 1.8f, fish);
+            // Stacked-stone rim, stone by stone around the pool's edge.
+            static const float kRim[][2] = {
+                { -0.36f,  0.00f }, {  0.36f,  0.00f },
+                {  0.00f, -0.22f }, {  0.00f,  0.22f },
+                { -0.26f, -0.15f }, {  0.26f, -0.15f },
+                { -0.26f,  0.16f }, {  0.26f,  0.16f },
+            };
+            for (int i = 0; i < (int)(sizeof(kRim) / sizeof(kRim[0])); i++) {
+                float sx = cx + kRim[i][0] * tp;
+                float sy = poolY + kRim[i][1] * tp;
+                DrawEllipse((int)sx, (int)sy, 4.5f, 3.5f, stone);
+                DrawEllipse((int)sx, (int)(sy - 1.5f), 3.5f, 2.5f, stoneHi);
             }
             break;
         }

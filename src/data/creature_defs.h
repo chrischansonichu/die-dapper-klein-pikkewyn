@@ -38,13 +38,14 @@ static inline int MoveGroupSlotStart(int group) {
     }
 }
 #define MOVE_GROUP_SLOT(group, n) (MoveGroupSlotStart(group) + (n))
-#define CREATURE_DEF_COUNT 8
+#define CREATURE_DEF_COUNT 12
 
 typedef enum CreatureClass {
     CLASS_PENGUIN = 0,
     CLASS_HUMAN,
     CLASS_PINNIPED,
     CLASS_DIVER,       // human anatomy trained for water — no water speed penalty
+    CLASS_CANINE,      // lokasie yard dogs — fast, fragile, first to bite
     CLASS_COUNT,
 } CreatureClass;
 
@@ -94,8 +95,14 @@ const ClassGrowth *GetClassGrowth(CreatureClass cclass);
 #define CREATURE_SEAL         4
 #define CREATURE_POACHER      5
 #define CREATURE_CAPTAIN_BOSS 6
-// Tutorial-island practice foe — a rack-robbing kelp gull. Deliberately the
+// Tutorial-island practice foe — a pen-robbing kelp gull. Deliberately the
 // weakest creature in the table so the first fight teaches, not punishes.
 #define CREATURE_KELP_GULL    7
+// Level 2 — the Sinkbaai lokasie. The sangoma's runners: not the residents,
+// who are NPCs, but the crew that moves poached perlemoen through the yard.
+#define CREATURE_SKOLLIE      8   // rank-and-file — Tackle + Kettie
+#define CREATURE_LOOKOUT      9   // stands watch, ranged first — Kettie
+#define CREATURE_YARD_BOSS   10   // heavy — Knobkierie; guards the yard gates
+#define CREATURE_BRAK        11   // yard dog — quick bite, folds fast
 
 #endif // CREATURE_DEFS_H

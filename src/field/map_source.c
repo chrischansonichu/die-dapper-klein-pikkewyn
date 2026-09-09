@@ -1,6 +1,7 @@
 #include "map_source.h"
 #include "map_dungeon_proc.h"
 #include "map_tutorial.h"
+#include "map_lokasie.h"
 
 void BuildHarborFloor1(MapBuildContext *ctx);
 void BuildHarborFloor6(MapBuildContext *ctx);
@@ -27,6 +28,9 @@ void MapBuild(MapId id, int floor, MapBuildContext *ctx, unsigned seed)
             break;
         case MAP_TUTORIAL_ISLAND:
             BuildTutorialIsland(ctx);
+            break;
+        case MAP_LOKASIE:
+            BuildLokasieStage(ctx, floor);
             break;
         default:
             BuildOverworldHub(ctx);
