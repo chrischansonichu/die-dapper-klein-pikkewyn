@@ -1005,14 +1005,15 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
 static Rectangle TargetBackRect(void)
 {
     int sw = GetScreenWidth();
-    // Strip / button heights had to grow once the global UI_TEXT_SCALE
-    // (1.5×) made "Back" render at ~24px from a 16pt request. Landscape
-    // strip is now 32px tall and the button 26px so the label sits inside.
-    int th = SCREEN_PORTRAIT ? 44 : 32;
-    int bw = SCREEN_PORTRAIT ? 90 : 84;
-    int bh = th - 6;
-    return (Rectangle){ (float)(sw - bw - 6), 3.0f, (float)bw, (float)bh };
+    // 44px is the minimum comfortable thumb target; the old 84x26 chip was
+    // the hardest tap in the game. The hint strip grows to match.
+    int bw = 72, bh = 46;
+    return (Rectangle){ (float)(sw - bw - 8), 5.0f, (float)bw, (float)bh };
 }
+
+// Height of the target-hint strip across the top of the screen; sized to
+// hold TargetBackRect with a little breathing room.
+#define TARGET_STRIP_H 56
 
 static bool ScreenTapToTile(const TileMap *map, const Camera2D *camera,
                             Vector2 tapPos, int *outX, int *outY)
@@ -1700,11 +1701,11 @@ void BattleDrawUI(const BattleContext *ctx)
         // screen the panel hides them. Render a thin top-screen hint strip
         // and a red back-icon button consistent with the rest of the UI.
         int sw = GetScreenWidth();
-        int th = SCREEN_PORTRAIT ? 44 : 22;
-        int fontSize = SCREEN_PORTRAIT ? 20 : 16;
+        int th = TARGET_STRIP_H;
+        int fontSize = 20;
         DrawRectangle(0, 0, sw, th, (Color){0x3C, 0x28, 0x14, 220});
         const char *hint = Str("battle.hint.target");
-        DrawText(hint, 10, (th - fontSize) / 2, fontSize,
+        DrawText(hint, 14, (th - fontSize) / 2, fontSize,
                  (Color){0xF7, 0xEF, 0xD9, 240});
         DrawBackIconButton(TargetBackRect());
         break;

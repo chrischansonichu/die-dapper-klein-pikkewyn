@@ -8,8 +8,12 @@
 // Dialogue box - typewriter effect, multi-page text display
 //----------------------------------------------------------------------------------
 
-#define DIALOGUE_MAX_PAGES  8
-#define DIALOGUE_PAGE_LEN   200
+// Pages are capped by both count and length. Source strings (STR_VAL_LEN)
+// are 400 bytes; PAGE_LEN leaves room for the inserted wrap newlines. Pages
+// that wrap to more lines than the panel can show are split across extra
+// pages at DialogueBegin, so MAX_PAGES is larger than STR_MAX_PAGES.
+#define DIALOGUE_MAX_PAGES  16
+#define DIALOGUE_PAGE_LEN   420
 
 typedef struct DialogueBox {
     char  pages[DIALOGUE_MAX_PAGES][DIALOGUE_PAGE_LEN];

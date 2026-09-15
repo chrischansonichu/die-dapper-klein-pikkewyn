@@ -10,7 +10,7 @@
 //----------------------------------------------------------------------------------
 
 #define NPC_MAX_DIALOGUE_PAGES 8
-#define NPC_DIALOGUE_LEN       200
+#define NPC_DIALOGUE_LEN       400
 #define NPC_SPRITE_SIZE        16
 
 // Guide walking (see NpcWalkUpdate). One tile-step takes NPC_MOVE_FRAMES

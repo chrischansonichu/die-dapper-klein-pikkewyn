@@ -7,7 +7,7 @@
 
 #define STR_MAX_ENTRIES 512
 #define STR_KEY_LEN      48
-#define STR_VAL_LEN     240
+#define STR_VAL_LEN     400
 
 typedef struct StrEntry {
     uint32_t hash;

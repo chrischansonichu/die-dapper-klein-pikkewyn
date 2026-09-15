@@ -114,6 +114,19 @@ typedef struct FieldState {
     // Steps walked since this FieldState was built. Only consumer today is
     // the tutorial island's "how to walk" hint, which hides after a few steps.
     int           tutorialSteps;
+
+    // Hub first-arrival: the elder's welcome plays right after the journey
+    // montage closes. Transient — set when the montage begins.
+    bool          pendingHubWelcome;
+
+    // Harbor F6 ship sail-in. Pending = the third lantern's dialogue is still
+    // up; arriving = hull animation running (input locked); camHold keeps the
+    // camera on the ship through the docking line; camReturnT eases it back.
+    bool          shipArrivePending;
+    bool          shipArriving;
+    float         shipArriveT;
+    bool          shipCamHold;
+    float         camReturnT;
 } FieldState;
 
 void FieldInit(FieldState *f, struct GameState *gs);

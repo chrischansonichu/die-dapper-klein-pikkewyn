@@ -493,24 +493,6 @@ static uint64_t LogbookFlagFor(int loreId)
     }
 }
 
-// Recompute the gangplank tile's solid flag on F6 once a lantern is lit. The
-// warp tile starts SOLID; clearing it lets the player step onto / interact
-// with the warp once all three lanterns are lit. We scan warps[] rather than
-// hardcoding the tile so a future map redesign keeps working.
-static void UpdateF6GangplankSolid(FieldState *ow)
-{
-    if (ow->gs->currentMapId != MAP_HARBOR_F6) return;
-    bool allLit = (ow->gs->storyFlags & STORY_FLAG_LANTERN_ALL)
-                       == STORY_FLAG_LANTERN_ALL;
-    if (!allLit) return;
-
-    for (int i = 0; i < ow->warpCount; i++) {
-        const FieldWarp *w = &ow->warps[i];
-        if (w->targetMapId != MAP_HARBOR_F7) continue;
-        TileMapClearFlag(&ow->map, w->tileX, w->tileY, TILE_FLAG_SOLID);
-    }
-}
-
 // Dispatch a FieldObject interaction: logbooks open dialogue, lanterns flip
 // a story bit, chests roll loot. Static text lives in data/lore_text.c.
 static void BeginObjectInteraction(FieldState *ow, int objIdx)
@@ -537,13 +519,16 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
             uint64_t bit = LanternFlagFor(o->dataId);
             ow->gs->storyFlags |= bit;
             o->consumed = true;
-            UpdateF6GangplankSolid(ow);
             bool allLit = (ow->gs->storyFlags & STORY_FLAG_LANTERN_ALL)
                               == STORY_FLAG_LANTERN_ALL;
             if (allLit) {
+                // The signal is complete: narrate the answer from the dark,
+                // then (once this dialogue closes) the ship sails in.
                 const char *final[STR_MAX_PAGES];
                 int n = StrPages("lantern.final", final, STR_MAX_PAGES);
                 DialogueBegin(&ow->dialogue, final, n, 30.0f);
+                if (ow->gs->currentMapId == MAP_HARBOR_F6)
+                    ow->shipArrivePending = true;
             } else {
                 const char *single[1] = { Str("lantern.single") };
                 DialogueBegin(&ow->dialogue, single, 1, 30.0f);
@@ -1739,6 +1724,15 @@ void FieldInit(FieldState *ow, GameState *gs)
 
     ow->map.tileset = TilesetBuild();
     TileMapLoadAtlases(&ow->map);   // no-op unless the builder loaded a TMX
+
+    // Static NPCs placed on water tiles (the post-victory harbor swimmers)
+    // never pass through NpcWalkUpdate, which is the only other place that
+    // refreshes onWater — so they stood on the surface. Seed it from the
+    // built map once.
+    for (int i = 0; i < ow->npcCount; i++) {
+        Npc *n = &ow->npcs[i];
+        n->onWater = TileMapIsWater(&ow->map, n->tileX, n->tileY);
+    }
     PlayerInit(&ow->player, spawnX, spawnY);
     ow->player.dir = spawnDir;
     InventoryUIInit(&ow->invUi);
@@ -1756,6 +1750,9 @@ void FieldInit(FieldState *ow, GameState *gs)
     Vector2 startPos = PlayerPixelPos(&ow->player);
     ow->camera = CameraCreate(startPos, mapPixW, mapPixH);
 }
+
+#define SHIP_ARRIVE_SECS 3.2f
+static Vector2 HarborShipCenter(const FieldState *ow);
 
 void FieldUpdate(FieldState *ow, float dt)
 {
@@ -2006,6 +2003,15 @@ void FieldUpdate(FieldState *ow, float dt)
         return;
     }
 
+    // Bag-full discard prompt takes priority over every other modal — it
+    // can be opened from INSIDE the inventory or the blacksmith (unequip /
+    // upgrade overflow), and it draws on top of them, so it must also win
+    // the input. It used to sit after them in this chain, which left the
+    // modal visible but dead until the player blindly closed the bag.
+    if (ow->discardUi.active) {
+        DiscardUIUpdate(&ow->discardUi, &ow->gs->party);
+        return;
+    }
     // Inventory overlay captures all input while open
     if (ow->invUi.active) {
         InventoryUIUpdate(&ow->invUi, &ow->gs->party, &ow->discardUi);
@@ -2032,12 +2038,6 @@ void FieldUpdate(FieldState *ow, float dt)
         BlacksmithUIUpdate(&ow->blacksmithUi, &ow->gs->party,
                            &ow->gs->villageReputation,
                            &ow->gs->blacksmithScrap);
-        return;
-    }
-    // Bag-full discard prompt takes priority — the player's mid-transaction
-    // and shouldn't be able to open other modals until they resolve it.
-    if (ow->discardUi.active) {
-        DiscardUIUpdate(&ow->discardUi, &ow->gs->party);
         return;
     }
 #ifdef DEV_BUILD
@@ -2119,6 +2119,22 @@ void FieldUpdate(FieldState *ow, float dt)
         const char *journey[STR_MAX_PAGES];
         int n = StrPages("tut.journey", journey, STR_MAX_PAGES);
         DialogueBegin(&ow->dialogue, journey, n, 30.0f);
+        ow->pendingHubWelcome = true;
+        return;
+    }
+
+    // ...and the moment the montage closes, the elder (standing two tiles
+    // south of the gate) turns to Jan and does the welcome: who's who in the
+    // village, and why the harbor to the south is the problem.
+    if (ow->pendingHubWelcome && !ow->dialogue.active) {
+        ow->pendingHubWelcome = false;
+        for (int i = 0; i < ow->npcCount; i++) {
+            if (ow->npcs[i].type == NPC_PENGUIN_ELDER)
+                NpcTurnToFace(&ow->npcs[i], ow->player.tileX, ow->player.tileY);
+        }
+        const char *welcome[STR_MAX_PAGES];
+        int n = StrPages("hub.welcome", welcome, STR_MAX_PAGES);
+        DialogueBegin(&ow->dialogue, welcome, n, 30.0f);
         return;
     }
 
@@ -2155,6 +2171,38 @@ void FieldUpdate(FieldState *ow, float dt)
             int n = StrPages("lok.arrive.s6", pg, STR_MAX_PAGES);
             DialogueBegin(&ow->dialogue, pg, n, 30.0f);
             return;
+        }
+    }
+
+    // --- Harbor F6: the Captain's ship sails in once the third lantern is
+    // lit. Sequence: lantern.final dialogue → sail-in animation (camera on
+    // the ship, input locked) → lantern.docked dialogue → camera eases back
+    // to Jan. The gangplank warp only exists once the hull is in place.
+    if (ow->shipArrivePending && !ow->dialogue.active) {
+        ow->shipArrivePending = false;
+        ow->shipArriving      = true;
+        ow->shipArriveT       = 0.0f;
+        ow->shipCamHold       = true;
+    }
+    if (ow->shipCamHold) {
+        int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;
+        int mapPixH = ow->map.height * TILE_SIZE * TILE_SCALE;
+        CameraUpdateSmoothed(&ow->camera, HarborShipCenter(ow),
+                             mapPixW, mapPixH, 0.45f, dt);
+        if (ow->shipArriving) {
+            ow->shipArriveT += dt;
+            if (ow->shipArriveT >= SHIP_ARRIVE_SECS) {
+                ow->shipArriving = false;
+                HarborF6PlaceShip(&ow->map, ow->warps, &ow->warpCount,
+                                  FIELD_MAX_WARPS);
+                const char *docked[1] = { Str("lantern.docked") };
+                DialogueBegin(&ow->dialogue, docked, 1, 30.0f);
+            }
+            return;
+        }
+        if (!ow->dialogue.active) {
+            ow->shipCamHold = false;
+            ow->camReturnT  = 1.2f;
         }
     }
 
@@ -2359,10 +2407,129 @@ void FieldUpdate(FieldState *ow, float dt)
         }
     }
 
-    // Update camera
+    // Update camera. After a scripted pan (the F6 ship) ease back to Jan
+    // instead of snapping.
     int mapPixW = ow->map.width  * TILE_SIZE * TILE_SCALE;
     int mapPixH = ow->map.height * TILE_SIZE * TILE_SCALE;
-    CameraUpdate(&ow->camera, PlayerPixelPos(&ow->player), mapPixW, mapPixH);
+    if (ow->camReturnT > 0.0f) {
+        ow->camReturnT -= dt;
+        CameraUpdateSmoothed(&ow->camera, PlayerPixelPos(&ow->player),
+                             mapPixW, mapPixH, 0.3f, dt);
+    } else {
+        CameraUpdate(&ow->camera, PlayerPixelPos(&ow->player), mapPixW, mapPixH);
+    }
+}
+
+//----------------------------------------------------------------------------------
+// Harbor F6 — the Captain's ship. The hull tiles are walkable dock; this
+// overlay gives them a bow, plank seams, a cabin and a mast so they read as a
+// vessel, and slides the whole thing in from the east during the sail-in.
+//----------------------------------------------------------------------------------
+
+// World-space rectangle of the hull at its moored position.
+static Rectangle HarborShipRect(const FieldState *ow)
+{
+    const float tp = (float)(TILE_SIZE * TILE_SCALE);
+    int x0, y0, w, h;
+    HarborF6ShipRect(&ow->map, &x0, &y0, &w, &h);
+    return (Rectangle){ x0 * tp, y0 * tp, w * tp, h * tp };
+}
+
+static Vector2 HarborShipCenter(const FieldState *ow)
+{
+    Rectangle r = HarborShipRect(ow);
+    // Aim a little above the hull so the dock and the water read together.
+    return (Vector2){ r.x + r.width * 0.5f, r.y - r.height * 0.5f };
+}
+
+static bool HarborShipVisible(const FieldState *ow)
+{
+    if (!ow->gs || ow->gs->currentMapId != MAP_HARBOR_F6) return false;
+    if (ow->shipArriving) return true;
+    if (ow->shipArrivePending) return false;
+    return (ow->gs->storyFlags & STORY_FLAG_LANTERN_ALL) == STORY_FLAG_LANTERN_ALL;
+}
+
+static void DrawHarborShip(const FieldState *ow)
+{
+    if (!HarborShipVisible(ow)) return;
+    const float tp = (float)(TILE_SIZE * TILE_SCALE);
+    Rectangle r = HarborShipRect(ow);
+
+    // Sail-in: ease from beyond the east edge to the mooring.
+    float dx = 0.0f;
+    if (ow->shipArriving) {
+        float t = ow->shipArriveT / SHIP_ARRIVE_SECS;
+        if (t > 1.0f) t = 1.0f;
+        float e = 1.0f - (1.0f - t) * (1.0f - t) * (1.0f - t);
+        float startX = ow->map.width * tp + tp;
+        dx = (startX - r.x) * (1.0f - e);
+        // Bob on the swell while under way.
+        r.y += sinf((float)GetTime() * 4.0f) * 2.0f * (1.0f - e);
+    }
+    r.x += dx;
+
+    // Wake behind the stern while moving.
+    if (ow->shipArriving && dx > 4.0f) {
+        for (int i = 0; i < 4; i++) {
+            float wy = r.y + 8.0f + i * (r.height - 16.0f) / 3.0f;
+            float len = 30.0f + i * 12.0f;
+            DrawLineEx((Vector2){ r.x + r.width, wy },
+                       (Vector2){ r.x + r.width + len, wy + (i % 2 ? 4.0f : -4.0f) },
+                       3.0f, (Color){255, 255, 255, 140});
+        }
+    }
+
+    // Bow — points west, the way she came in.
+    Vector2 bowTip = { r.x - tp * 0.9f, r.y + r.height * 0.5f };
+    DrawTriangle(bowTip, (Vector2){ r.x + 1.0f, r.y + r.height },
+                 (Vector2){ r.x + 1.0f, r.y }, gPH.dock);
+    PHWobbleLine((Vector2){ r.x, r.y }, bowTip, 1.5f, 3.0f, gPH.ink, 0x611);
+    PHWobbleLine(bowTip, (Vector2){ r.x, r.y + r.height }, 1.5f, 3.0f, gPH.ink, 0x612);
+
+    // Hull plate + plank seams. While moving the map tiles aren't there yet,
+    // so the plate carries the whole silhouette; once moored it just tints
+    // the dock tiles beneath so the vessel still reads as one shape.
+    DrawRectangleRec(r, ow->shipArriving ? gPH.dock
+                                         : (Color){gPH.dockDark.r, gPH.dockDark.g,
+                                                   gPH.dockDark.b, 40});
+    for (int i = 1; i < 4; i++) {
+        float sy = r.y + r.height * i / 4.0f;
+        DrawLineEx((Vector2){ r.x + 6.0f, sy }, (Vector2){ r.x + r.width - 6.0f, sy },
+                   1.5f, gPH.dockDark);
+    }
+    PHWobbleLine((Vector2){ r.x, r.y }, (Vector2){ r.x + r.width, r.y },
+                 1.5f, 3.0f, gPH.ink, 0x613);
+    PHWobbleLine((Vector2){ r.x + r.width, r.y }, (Vector2){ r.x + r.width, r.y + r.height },
+                 1.5f, 3.0f, gPH.ink, 0x614);
+    PHWobbleLine((Vector2){ r.x, r.y + r.height }, (Vector2){ r.x + r.width, r.y + r.height },
+                 1.5f, 3.0f, gPH.ink, 0x615);
+
+    // Stern cabin — east end, so the gangplank (map centre) stays clear.
+    Rectangle cabin = { r.x + r.width - tp * 3.2f, r.y - tp * 0.9f, tp * 2.4f, tp * 1.1f };
+    DrawRectangleRec(cabin, gPH.wall);
+    DrawRectangleLinesEx(cabin, 2.5f, gPH.ink);
+    DrawRectangle((int)(cabin.x - 4.0f), (int)(cabin.y - 8.0f),
+                  (int)(cabin.width + 8.0f), 10, gPH.roof);
+    DrawRectangleLines((int)(cabin.x - 4.0f), (int)(cabin.y - 8.0f),
+                       (int)(cabin.width + 8.0f), 10, gPH.ink);
+    // Two portholes.
+    for (int i = 0; i < 2; i++) {
+        float px = cabin.x + cabin.width * (0.3f + 0.4f * i);
+        float py = cabin.y + cabin.height * 0.5f;
+        DrawCircle((int)px, (int)py, 6.0f, gPH.water);
+        DrawCircleLines((int)px, (int)py, 6.0f, gPH.ink);
+    }
+
+    // Mast + furled sail + the Captain's red pennant, west of the cabin.
+    float mx = r.x + r.width * 0.28f;
+    float mastTop = r.y - tp * 2.6f;
+    DrawLineEx((Vector2){ mx, r.y + 4.0f }, (Vector2){ mx, mastTop }, 4.0f, gPH.ink);
+    Rectangle sail = { mx + 3.0f, mastTop + tp * 0.5f, tp * 1.4f, tp * 0.9f };
+    DrawRectangleRounded(sail, 0.4f, 6, gPH.panel);
+    DrawRectangleRoundedLinesEx(sail, 0.4f, 6, 2.0f, gPH.ink);
+    DrawTriangle((Vector2){ mx, mastTop }, (Vector2){ mx, mastTop + 16.0f },
+                 (Vector2){ mx + 26.0f, mastTop + 8.0f }, gPH.roof);
 }
 
 static void DrawWarpMarkers(const FieldState *ow)
@@ -2533,6 +2700,7 @@ void FieldDraw(const FieldState *ow)
     TileMapDraw(&ow->map, ow->camera);
 
     BeginMode2D(ow->camera);
+        DrawHarborShip(ow);
         DrawWarpMarkers(ow);
 
         // Village: paint the row of Muizenberg-style beach huts over the

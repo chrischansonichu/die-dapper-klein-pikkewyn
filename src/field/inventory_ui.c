@@ -9,6 +9,7 @@
 #include "../systems/touch_input.h"
 #include "../systems/ui_button.h"
 #include "icons.h"
+#include "../battle/battle_sprites.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -43,7 +44,19 @@ static inline Rectangle MemberStripRect(void) {
     int tabBottom = InvPanelY() + 14 + 38;
 #endif
     return (Rectangle){ (float)x, (float)(tabBottom + 10),
-                        (float)w, 38.0f };
+                        (float)w, 46.0f };
+}
+
+// Portrait chip per party member along the left of the strip. Tapping one
+// selects that member; the active one gets the accent plate. Shared by the
+// draw and the hit-test so they can't drift.
+#define MEMBER_CHIP_SZ  38
+#define MEMBER_CHIP_GAP 6
+static inline Rectangle MemberChipRect(int i) {
+    Rectangle r = MemberStripRect();
+    return (Rectangle){ r.x + 8.0f + (float)(i * (MEMBER_CHIP_SZ + MEMBER_CHIP_GAP)),
+                        r.y + (r.height - MEMBER_CHIP_SZ) * 0.5f,
+                        (float)MEMBER_CHIP_SZ, (float)MEMBER_CHIP_SZ };
 }
 
 // Per-row stride for every scrolling list (items, weapons bag). Background
@@ -863,34 +876,39 @@ static void DrawMemberStrip(const InventoryUI *ui, const Party *party)
                          (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 50});
     DrawRectangleRoundedLinesEx(r, 0.20f, 6, 1.5f, gPH.ink);
 
-    // Name + HP text — centered vertically in the strip's left half.
+    // Portrait chips — one per member, the battle sprite on a small plate,
+    // so the party reads as faces rather than a name that quietly changes.
+    for (int i = 0; i < party->count; i++) {
+        const Combatant *pm = &party->members[i];
+        Rectangle c = MemberChipRect(i);
+        bool sel = (i == idx);
+        DrawRectangleRounded(c, 0.25f, 6,
+                             sel ? gPH.panel : (Color){0, 0, 0, 22});
+        DrawRectangleRoundedLinesEx(c, 0.25f, 6, sel ? 2.5f : 1.0f,
+                                    sel ? gPH.ink : gPH.inkLight);
+        int creatureId = pm->def ? pm->def->id : 0;
+        DrawCombatantSprite(creatureId,
+                            (Rectangle){ c.x + 3, c.y + 3, c.width - 6, c.height - 6 },
+                            false, pm->alive ? 1.0f : 0.45f, 0.0f, 0.0f, false);
+    }
+
+    // Name + HP text to the right of the chips.
+    int textX = (int)(r.x + 8.0f + party->count * (MEMBER_CHIP_SZ + MEMBER_CHIP_GAP)) + 8;
     char hp[48];
     snprintf(hp, sizeof(hp), "%s   HP %d/%d", m->name, m->hp, m->maxHp);
-    DrawText(hp, (int)r.x + 14, (int)r.y + 6, 16, gPH.ink);
+    DrawText(hp, textX, (int)r.y + 8, 17, gPH.ink);
 
-    // HP bar — thin sliver at bottom of strip, left half only.
-    int barX = (int)r.x + 14;
-    int barY = (int)r.y + 26;
-    int barW = (int)(r.width * 0.55f) - 14;
+    // HP bar under the text.
+    int barX = textX;
+    int barY = (int)r.y + 32;
+    int barW = (int)(r.x + r.width) - 16 - textX;
+    if (barW > 260) barW = 260;
     DrawRectangleRounded((Rectangle){(float)barX, (float)barY, (float)barW, 6.0f},
                          0.5f, 4, (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 50});
     float pct = m->maxHp > 0 ? (float)m->hp / (float)m->maxHp : 0.0f;
     if (pct > 0.0f) {
         DrawRectangleRounded((Rectangle){(float)barX, (float)barY, barW * pct, 6.0f},
                              0.5f, 4, (Color){110, 160, 80, 255});
-    }
-
-    if (party->count > 1) {
-        // Prev / next arrow chips on the right edge.
-        int chipW = 36, chipH = 28;
-        int gap   = 6;
-        int rightX = (int)(r.x + r.width) - 12 - chipW;
-        int chipY  = (int)(r.y + (r.height - chipH) * 0.5f);
-        Rectangle nextR = { (float)rightX, (float)chipY, (float)chipW, (float)chipH };
-        Rectangle prevR = { (float)(rightX - chipW - gap), (float)chipY,
-                            (float)chipW, (float)chipH };
-        DrawChunkyButton(prevR, "<", 20, false, true);
-        DrawChunkyButton(nextR, ">", 20, false, true);
     }
 }
 
@@ -899,29 +917,19 @@ static void DrawMemberStrip(const InventoryUI *ui, const Party *party)
 static bool MemberStripUpdate(InventoryUI *ui, const Party *party)
 {
     if (party->count <= 1) return false;
-    Rectangle r = MemberStripRect();
-    int chipW = 36, chipH = 28, gap = 6;
-    int rightX = (int)(r.x + r.width) - 12 - chipW;
-    int chipY  = (int)(r.y + (r.height - chipH) * 0.5f);
-    Rectangle nextR = { (float)rightX, (float)chipY, (float)chipW, (float)chipH };
-    Rectangle prevR = { (float)(rightX - chipW - gap), (float)chipY,
-                        (float)chipW, (float)chipH };
 
     // Helper: trigger a slide transition with the given direction.
-    // dirSign = +1 → new member slides in from the right (tapped NEXT)
-    // dirSign = -1 → new member slides in from the left (tapped PREV)
+    // dirSign = +1 → new member slides in from the right (moved forward)
+    // dirSign = -1 → new member slides in from the left (moved back)
     #define SLIDE_SECS 0.18f
-    if (TouchTapInRect(prevR)) {
-        ui->memberCursor = (ui->memberCursor - 1 + party->count) % party->count;
-        ui->memberTransitionT   = SLIDE_SECS;
-        ui->memberTransitionDir = -1;
-        return true;
-    }
-    if (TouchTapInRect(nextR)) {
-        ui->memberCursor = (ui->memberCursor + 1) % party->count;
-        ui->memberTransitionT   = SLIDE_SECS;
-        ui->memberTransitionDir = +1;
-        return true;
+    for (int i = 0; i < party->count; i++) {
+        if (TouchTapInRect(MemberChipRect(i))) {
+            if (i == ui->memberCursor) return false;
+            ui->memberTransitionDir = (i > ui->memberCursor) ? +1 : -1;
+            ui->memberCursor        = i;
+            ui->memberTransitionT   = SLIDE_SECS;
+            return true;
+        }
     }
 
     // Horizontal swipe across the panel cycles members. TouchPressedDir is a

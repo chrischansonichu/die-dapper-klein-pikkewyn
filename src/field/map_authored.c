@@ -31,18 +31,7 @@ static void AddWarp(MapBuildContext *ctx, int tx, int ty,
 // the map that used to be built inline by FieldInit (dock + shallow + beach).
 //----------------------------------------------------------------------------------
 
-static void AddHarborF1Npcs(MapBuildContext *ctx)
-{
-    if (*ctx->npcCount + 1 > ctx->npcMax) return;
-
-    // Friendly dock-dwelling penguin (no hat — only the village mayor wears one).
-    Npc *elder = &ctx->npcs[(*ctx->npcCount)++];
-    NpcInit(elder, 8, 13, 0, NPC_PENGUIN_VILLAGER);
-    NpcAddDialogue(elder, Str("harbor.elder.1"));
-    NpcAddDialogue(elder, Str("harbor.elder.2"));
-}
-
-// Happy-harbor crowd — replaces AddHarborF1Npcs + AddHarborF1Enemies once the
+// Happy-harbor crowd — replaces AddHarborF1Enemies once the
 // Captain has fallen. Sailors are gone; penguins reclaim the dock. No combat
 // spawns, no descent warp (BuildHarborFloor1 omits it in this branch). All
 // non-mayor penguins use NPC_PENGUIN_VILLAGER (no top hat).
@@ -404,7 +393,6 @@ void BuildHarborFloor1(MapBuildContext *ctx)
         TileMapSetTile(m, 8, 18, TILE_SAND);
         AddWarp(ctx, 8, 18, MAP_OVERWORLD_HUB, 0, 11, 14, 3);
     } else {
-        AddHarborF1Npcs(ctx);
         AddHarborF1Enemies(ctx);
         AddSealCaptiveScene(ctx);
 
@@ -420,11 +408,50 @@ void BuildHarborFloor1(MapBuildContext *ctx)
     *ctx->spawnDir   = 3; // facing up, toward the dock
 }
 
-// Harbor floor 6 — the docks staging beat. Wooden dock to the north, shallow
-// water to the south leading to the ship's hull, with three lanterns the
-// player must light to lower the gangplank into F7. No combat. The gangplank
-// warp tile is built solid; field.c clears the SOLID flag once all three
-// lanterns are lit (storyFlags STORY_FLAG_LANTERN_*).
+// Harbor floor 6 — the docks staging beat. Wooden dock to the north, open
+// shallow water to the south. Three lanterns on the dock are the signal
+// that brings the Captain's ship in: until all three are lit there is no
+// ship, no gangplank and no way down to F7. HarborF6PlaceShip paints the
+// hull once the flags say the signal has been given. No combat.
+void HarborF6ShipRect(const TileMap *m, int *x0, int *y0, int *w, int *h)
+{
+    *x0 = 4;
+    *y0 = m->height - 3;
+    *w  = m->width - 8;      // x 4 .. width-5 inclusive
+    *h  = 2;
+}
+
+void HarborF6PlaceShip(TileMap *m, FieldWarp *warps, int *warpCount, int warpMax)
+{
+    int x0, y0, w, h;
+    HarborF6ShipRect(m, &x0, &y0, &w, &h);
+
+    // Ship hull along the south edge — a band of dock tiles two rows tall
+    // that reads as the side of a moored vessel (the overlay in field.c
+    // draws the bow, cabin and mast over it).
+    for (int y = y0; y < y0 + h; y++)
+        for (int x = x0; x < x0 + w; x++)
+            TileMapSetTile(m, x, y, TILE_DOCK);
+
+    // Gangplank — a single dock tile the player walks onto from the water,
+    // carrying the warp to the F7 deck. Door-like like every other warp.
+    int gangX = m->width / 2;
+    int gangY = y0 - 1;
+    TileMapSetTile(m, gangX, gangY, TILE_DOCK);
+
+    for (int i = 0; i < *warpCount; i++)
+        if (warps[i].tileX == gangX && warps[i].tileY == gangY) return;
+    if (*warpCount >= warpMax) return;
+    FieldWarp *wp = &warps[(*warpCount)++];
+    wp->tileX = gangX; wp->tileY = gangY;
+    wp->targetMapId    = MAP_HARBOR_F7;
+    wp->targetFloor    = 7;
+    wp->targetSpawnX   = 8;
+    wp->targetSpawnY   = 10;
+    wp->targetSpawnDir = 3;
+    TileMapAddFlag(m, gangX, gangY, TILE_FLAG_WARP | TILE_FLAG_SOLID);
+}
+
 void BuildHarborFloor6(MapBuildContext *ctx)
 {
     TileMap *m = ctx->map;
@@ -455,33 +482,16 @@ void BuildHarborFloor6(MapBuildContext *ctx)
     TileMapSetTile(m, 2, 3, TILE_ROCK);
     TileMapSetTile(m, 19, 5, TILE_ROCK);
 
-    // Ship hull along the south edge — a band of dock tiles two rows tall
-    // that reads as the side of a moored vessel. The gangplank is a single
-    // tile of dock connecting the hull to the central swim lane.
-    for (int y = m->height - 3; y <= m->height - 2; y++)
-        for (int x = 4; x <= m->width - 5; x++)
-            TileMapSetTile(m, x, y, TILE_DOCK);
-
-    // Gangplank — a single dock tile the player walks onto from the water.
-    // Solid by default until the lanterns are all lit; field.c flips the
-    // flag once the storyFlags bits are set.
-    int gangX = m->width / 2;
-    int gangY = m->height - 4;
-    TileMapSetTile(m, gangX, gangY, TILE_DOCK);
-
     // Player spawns at the descent landing, facing south toward the water.
     *ctx->spawnTileX = m->width / 2;
     *ctx->spawnTileY = 1;
     *ctx->spawnDir   = 0;
 
-    // Gangplank warp → F7 boss arena. Built solid; if the player has already
-    // lit all three lanterns on a previous visit, clear the SOLID flag now so
-    // the warp is immediately usable on re-entry.
-    AddWarp(ctx, gangX, gangY, MAP_HARBOR_F7, 7, 8, 10, 3);
+    // The ship is already in if the signal was given on an earlier visit.
     bool allLit = (ctx->storyFlags & STORY_FLAG_LANTERN_ALL)
                        == STORY_FLAG_LANTERN_ALL;
     if (allLit) {
-        TileMapClearFlag(m, gangX, gangY, TILE_FLAG_SOLID);
+        HarborF6PlaceShip(m, ctx->warps, ctx->warpCount, ctx->warpMax);
     }
 
     // Three lanterns spaced across the dock — west, middle, east. dataId

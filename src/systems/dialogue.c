@@ -9,7 +9,7 @@
     #define PANEL_PAD  16
     #define TEXT_SIZE  30
 #else
-    #define PANEL_H    110
+    #define PANEL_H    140
     #define PANEL_PAD  10
     #define TEXT_SIZE  22
 #endif
@@ -48,9 +48,19 @@ static void WrapText(const char *src, char *dst, int dstCap, int maxPx, int font
     dst[di] = '\0';
 }
 
+// Number of wrapped lines the panel can show. Measured from the live font's
+// line skip so a font swap can't silently clip the last line again.
+static int PanelMaxLines(void)
+{
+    int skip = (int)MeasureTextEx(font, "A\nA", (float)TEXT_SIZE, 0.0f).y / 2;
+    if (skip <= 0) skip = TEXT_SIZE;
+    int lines = (PANEL_H - 2 * PANEL_PAD) / skip;
+    return lines < 1 ? 1 : lines;
+}
+
 void DialogueBegin(DialogueBox *d, const char *pages[], int count, float charSpeed)
 {
-    d->pageCount    = count < DIALOGUE_MAX_PAGES ? count : DIALOGUE_MAX_PAGES;
+    d->pageCount    = 0;
     d->currentPage  = 0;
     d->visibleChars = 0;
     d->charTimer    = 0.0f;
@@ -58,9 +68,37 @@ void DialogueBegin(DialogueBox *d, const char *pages[], int count, float charSpe
     d->active       = true;
     d->finished     = false;
 
-    int wrapPx = PANEL_W - 2 * PANEL_PAD;
-    for (int i = 0; i < d->pageCount; i++) {
-        WrapText(pages[i], d->pages[i], DIALOGUE_PAGE_LEN, wrapPx, TEXT_SIZE);
+    int wrapPx   = PANEL_W - 2 * PANEL_PAD;
+    int maxLines = PanelMaxLines();
+    for (int i = 0; i < count && d->pageCount < DIALOGUE_MAX_PAGES; i++) {
+        char wrapped[DIALOGUE_PAGE_LEN];
+        WrapText(pages[i], wrapped, DIALOGUE_PAGE_LEN, wrapPx, TEXT_SIZE);
+
+        // A source page that wraps past the panel's line budget used to be
+        // silently clipped (the mayor's sangoma speech lost its last words).
+        // Split it: each chunk of maxLines lines becomes its own page.
+        const char *cursor = wrapped;
+        while (*cursor && d->pageCount < DIALOGUE_MAX_PAGES) {
+            const char *end = cursor;
+            int lines = 0;
+            while (*end) {
+                if (*end == '\n') {
+                    lines++;
+                    if (lines == maxLines) break;
+                }
+                end++;
+            }
+            size_t len = (size_t)(end - cursor);
+            if (len >= DIALOGUE_PAGE_LEN) len = DIALOGUE_PAGE_LEN - 1;
+            memcpy(d->pages[d->pageCount], cursor, len);
+            d->pages[d->pageCount][len] = '\0';
+            d->pageCount++;
+            cursor = (*end == '\n') ? end + 1 : end;
+        }
+    }
+    if (d->pageCount == 0) {
+        d->pages[0][0] = '\0';
+        d->pageCount   = 1;
     }
 }
 

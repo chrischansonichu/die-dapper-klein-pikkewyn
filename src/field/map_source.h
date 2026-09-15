@@ -86,4 +86,14 @@ typedef struct MapBuildContext {
 // treated as MAP_HARBOR_F1.
 void MapBuild(MapId id, int floor, MapBuildContext *ctx, unsigned seed);
 
+// Harbor F6 — the Captain's ship. It is NOT part of the base floor: the
+// three dock lanterns are the signal that brings it in. PlaceShip paints the
+// hull band + gangplank tiles and registers the gangplank warp to F7. The
+// F6 builder calls it on entry when the lanterns are already lit; field.c
+// calls it after the live sail-in animation. ShipRect reports the hull's
+// tile rectangle so the overlay renderer and the animation agree on where
+// the ship ends up.
+void HarborF6PlaceShip(TileMap *m, FieldWarp *warps, int *warpCount, int warpMax);
+void HarborF6ShipRect(const TileMap *m, int *x0, int *y0, int *w, int *h);
+
 #endif // MAP_SOURCE_H

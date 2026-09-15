@@ -124,7 +124,7 @@ tut.sib.after.1 = Vlerkie: When I can dive twenty fathoms I'm coming to visit. C
 # Tutorial island — kelp blockage, gull, rescue, objectives
 # ---------------------------------------------------------------------------
 tut.kelp.cut.1 = Jan flings a shell edge-first into the tangle - once, twice. The storm-kelp parts like old rope.
-tut.kelp.cut.2 = That felt... natural. Like something a penguin was built to do.
+tut.kelp.cut.2 = Jan: Ha! Ma always said a shell was only good for scraping barnacles. (A sharp edge cuts what flippers can't - kelp, rope, nets. Keep one handy.)
 tut.kelp.blocked.1 = A dense tangle of storm-kelp chokes the gap in the old wall. Too tough to pull apart with flippers - it needs a cutting edge, not a poke.
 
 tut.cache.equip = (Equip it before the fight: tap the round menu button in the corner, open the bag, and slot the FishingHook into an item-attack slot.)
@@ -220,9 +220,6 @@ hub.ryno.later.1 = Ryno: Tide's not right yet, so you're stuck with me a while l
 # ---------------------------------------------------------------------------
 # Harbor floor 1
 # ---------------------------------------------------------------------------
-harbor.elder.1 = Jan! The sailors have taken all the fish!
-harbor.elder.2 = You must fight them off. Be brave, little one.
-
 harbor.clear.1 = The dock is clear! You've done well, Jan.
 harbor.clear.2 = Rumor is more sailors are stalking the tidal pools further up the coast...
 harbor.clear.3 = Don't stop here - press on up the coast. There's more waiting for you.
@@ -252,9 +249,18 @@ seal.greet = Arf! Thanks for the rescue! %s joins your party.
 # ---------------------------------------------------------------------------
 # Village hub NPCs
 # ---------------------------------------------------------------------------
-hub.elder.1 = Welcome to the village, Jan.
-hub.elder.2 = The sailors have moved up the coast. The harbor is through the south gate.
-hub.elder.3 = Rest here whenever you need to. You'll always find your way back.
+hub.elder.1 = Elder: The harbor is through the south gate, Jan. The sailors hold our dock and fish our water empty - clear them out and the fish come home.
+hub.elder.2 = Elder: Go slow. Fight one at a time, eat when you're hurt, and come back to the village whenever you need to rest.
+hub.elder.3 = Elder: And talk to the scribe before you go. He writes your journey down - so if the sea gets you, you don't lose it.
+
+# First arrival in the hub: the elder meets Jan at the gate right after the
+# journey montage and introduces the village and its trouble.
+hub.welcome.1 = Elder: Ryno! Back at last - and this must be Annika's boy. Welcome to the village, Jan. I'm the elder here. The one with the hat.
+hub.welcome.2 = Elder: Everyone you see got fed up with the trawlers somewhere and swam here. Come, let me show you around. It's small, but it's ours.
+hub.welcome.3 = Elder: The red hut is the keeper's - the keeper hands out jobs and pays for them. The green hut is the food bank: what we catch, we share. Bring fish there when you have spare.
+hub.welcome.4 = Elder: The scribe writes at his lectern on the square - talk to him to save your journey. The salvager in the yellow hut buys broken weapons. The smith's forge is cold until we have something to forge with.
+hub.welcome.5 = Elder: Now the bad news. Our fishing ground is the harbor, just south of here. The sailors have taken it. They've built a camp on our dock and they fish the water empty.
+hub.welcome.6 = Elder: We are not fighters, Jan. But Ryno says you are. When you're ready, the south gate leads down to the harbor. Rest here whenever you need to.
 
 hub.smith.locked.1 = The blacksmith is hunched over a cold forge, shaping nothing in particular.
 hub.smith.locked.2 = "Forge's cold. Nothing worth shaping 'til the harbor's ours again. Clear it and we'll talk."
@@ -286,7 +292,7 @@ lore.f4trader.3 = "Do not bring rust. The forge will not eat rust."
 
 lore.f5tally.title = Tally Mark
 lore.f5tally.1 = A tally mark in damp ink, crossed out and re-drawn three times.
-lore.f5tally.2 = "Three lanterns guide the captain's ship to dock. No light, no plank."
+lore.f5tally.2 = "Three lanterns on the dock bring the captain's ship in. No light, no ship."
 
 lore.f6log3.title = Captain's Log p.3
 lore.f6log3.1 = A salt-stained page tucked under a crate.
@@ -315,15 +321,32 @@ chest.left_items = Bag full - left %d %s.
 drop.item = Got %s!
 drop.weapon = Picked up a %s!
 drop.armor = Picked up %s!
+discard.title = WEAPON BAG FULL
+discard.explain.1 = Your weapon bag holds %d weapons and every slot is taken.
+discard.explain.2 = Tap a weapon to throw it into the sea. The new one takes its place. Weakest first.
+discard.incoming = New: %s (%d uses left)
+discard.row = %s - %d uses left
+discard.row_broken = %s - broken
+discard.toss = TOSS %s
+discard.toss_none = TOSS WEAPON
+discard.refuse = REFUSE
+discard.take = TAKE IT
+discard.result_tossed = Tossed the %s into the surf.
+discard.result_took = Took the %s.
+discard.result_refused = Refused the %s. It slips back into the sea.
+discard.result_more = Another weapon is waiting - %d more to sort.
+discard.close = CLOSE
+discard.next = NEXT
 drop.armor_lost = A %s tumbles to the deck - but your armor chest is full. Lost.
 
 # ---------------------------------------------------------------------------
 # Lanterns (Harbor F6)
 # ---------------------------------------------------------------------------
 lantern.already = The lantern is already burning. Its halo wobbles in the wind.
-lantern.single = The lantern flickers and steadies. Warm light spills onto the planks.
-lantern.final.1 = The third lantern catches and steadies. Three flames in a line, paint the dock.
-lantern.final.2 = Down at the hull, ropes creak. The gangplank lowers itself into place.
+lantern.single = The lantern flickers and steadies. Warm light spills onto the planks. Out on the dark water, nothing answers - yet.
+lantern.final.1 = The third lantern catches and steadies. Three flames in a line paint the dock - a signal any sailor would know.
+lantern.final.2 = Far out past the harbor mouth, a lamp blinks back. Then a bell. Then the creak of a big hull turning on the tide.
+lantern.docked = The Captain's ship bumps against the dock and a gangplank drops into the shallows. Everyone who took our fish is on that deck.
 
 # ---------------------------------------------------------------------------
 # Boss & victory
