@@ -72,6 +72,7 @@
 #define STORY_FLAG_LOK_S6_ARRIVED    (1ull << 59)  // compound arrival narration shown
 #define STORY_FLAG_LOK_LEDGER_READ   (1ull << 60)  // S4 runners' ledger read
 #define STORY_FLAG_LOK_SIGN_READ     (1ull << 61)  // S1 welcome sign read
+#define STORY_FLAG_HUB_LEFT          (1ull << 62)  // first warp out of the hub taken — touch cues stop
 
 //----------------------------------------------------------------------------------
 // GameState - persistent state that survives map transitions and battles.

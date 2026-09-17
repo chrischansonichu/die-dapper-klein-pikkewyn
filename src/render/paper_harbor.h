@@ -62,6 +62,13 @@ void PHDrawInkFrame(Rectangle rect, float jitter, float thickness, Color c,
 void PHDrawBubbleLabel(const char *text, int fontSize, Vector2 tailTip,
                        float alpha, int seed);
 
+// Breathing highlight on a tile: a faint parchment wash plus a hand-inked
+// loop that swells ~3px per side over a ~2.5s cycle, its stroke thickening
+// as it grows. `t` is GetTime(); `c` is the stroke colour; `alpha` scales
+// the whole thing. Used for the battle actor and field touch cues.
+void PHDrawBreathingFrame(Rectangle tile, float t, Color c, float alpha,
+                          int seed);
+
 // Blits the baked paper-grain texture over the given rect. Typically called
 // once at the end of a screen's Draw with rect = {0, 0, screenW, screenH}.
 // Costs a single GPU draw.

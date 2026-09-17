@@ -402,6 +402,9 @@ static void ApplyWarp(FieldState *ow, int warpIdx)
         ow->gs->rescueResumeFloor = 0;
     }
 
+    if (ow->gs->currentMapId == MAP_OVERWORLD_HUB && targetMapId != MAP_OVERWORLD_HUB)
+        ow->gs->storyFlags |= STORY_FLAG_HUB_LEFT;
+
     ow->gs->hasPendingMap   = true;
     ow->gs->pendingMapId    = targetMapId;
     ow->gs->pendingMapSeed  = (targetFloor > 0)
@@ -2532,6 +2535,23 @@ static void DrawHarborShip(const FieldState *ow)
                  (Vector2){ mx + 26.0f, mastTop + 8.0f }, gPH.roof);
 }
 
+// Touch cues (the ink frame on whatever Jan faces) are a teaching aid, not
+// a permanent HUD element. Shown on the tutorial island and in the colony
+// until the player first warps out of it.
+static bool FieldShowTouchCues(const FieldState *ow)
+{
+    if (ow->gs->currentMapId == MAP_TUTORIAL_ISLAND) return true;
+    if (ow->gs->currentMapId == MAP_OVERWORLD_HUB)
+        return !(ow->gs->storyFlags & STORY_FLAG_HUB_LEFT);
+    return false;
+}
+
+static Rectangle TileRectAt(int tileX, int tileY)
+{
+    float tp = (float)(TILE_SIZE * TILE_SCALE);
+    return (Rectangle){ (float)tileX * tp, (float)tileY * tp, tp, tp };
+}
+
 static void DrawWarpMarkers(const FieldState *ow)
 {
     int tp = TILE_SIZE * TILE_SCALE;
@@ -2782,22 +2802,24 @@ void FieldDraw(const FieldState *ow)
             int tilePixels = TILE_SIZE * TILE_SCALE;
             // Touch-first game: the marker says what to actually do. A mouse
             // click counts as a tap on desktop (and Z still works silently).
-            // Same parchment speech bubble the battle target picker uses,
-            // bobbing gently so it reads as a prompt rather than a label.
-            const char *interactGlyph = Str("ui.tap");
-            float bob = sinf((float)GetTime() * 3.0f) * 2.0f;
-            for (int i = 0; i < ow->npcCount; i++) {
-                if (NpcIsInteractable(&ow->npcs[i], ow->player.tileX, ow->player.tileY, ow->player.dir)) {
-                    Vector2 tip = { (float)(ow->npcs[i].tileX * tilePixels) + tilePixels * 0.5f,
-                                    (float)(ow->npcs[i].tileY * tilePixels) - 4.0f + bob };
-                    PHDrawBubbleLabel(interactGlyph, 16, tip, 1.0f, 0xF40 + i);
+            // Touch cue on whatever Jan is facing: a breathing ink frame
+            // around the interactable's own tile (the thing to tap), same
+            // primitive as the battle actor highlight. Only while the
+            // player is still learning — tutorial island and the first
+            // stay in the colony — so it never becomes a nag.
+            float now = (float)GetTime();
+            if (FieldShowTouchCues(ow)) {
+                for (int i = 0; i < ow->npcCount; i++) {
+                    if (NpcIsInteractable(&ow->npcs[i], ow->player.tileX, ow->player.tileY, ow->player.dir)) {
+                        PHDrawBreathingFrame(TileRectAt(ow->npcs[i].tileX, ow->npcs[i].tileY),
+                                             now, gPH.ink, 1.0f, 0xF40 + i);
+                    }
                 }
-            }
-            for (int i = 0; i < ow->objectCount; i++) {
-                if (FieldObjectIsInteractable(&ow->objects[i], ow->player.tileX, ow->player.tileY, ow->player.dir)) {
-                    Vector2 tip = { (float)(ow->objects[i].tileX * tilePixels) + tilePixels * 0.5f,
-                                    (float)(ow->objects[i].tileY * tilePixels) - 4.0f + bob };
-                    PHDrawBubbleLabel(interactGlyph, 16, tip, 1.0f, 0xF80 + i);
+                for (int i = 0; i < ow->objectCount; i++) {
+                    if (FieldObjectIsInteractable(&ow->objects[i], ow->player.tileX, ow->player.tileY, ow->player.dir)) {
+                        PHDrawBreathingFrame(TileRectAt(ow->objects[i].tileX, ow->objects[i].tileY),
+                                             now, gPH.ink, 1.0f, 0xF80 + i);
+                    }
                 }
             }
             int surpriseSlot = -1;
@@ -2816,18 +2838,22 @@ void FieldDraw(const FieldState *ow)
                         isRanged = (mv->range == RANGE_RANGED);
                     }
                 }
-                Color warn = isRanged ? (Color){ 90, 220, 255, 255}
-                                      : (Color){255, 160,  60, 255};
-                float pulse = 0.5f + 0.5f * sinf((float)GetTime() * 5.0f);
-                unsigned char ringA = (unsigned char)(140 + 80 * pulse);
-                Color ring = { warn.r, warn.g, warn.b, ringA };
+                // Ranged keeps the cool water-blue, melee the warm coral,
+                // both pulled from the paper-harbor palette so the loop
+                // reads as ink, not a HUD box.
+                Color warn = isRanged ? gPH.waterDark : gPH.roof;
+                float pulse = 0.5f + 0.5f * sinf(now * 5.0f);
+                Color ring  = Fade(warn, 0.65f + 0.35f * pulse);
 
-                // Pulsing outline on the enemy tile.
-                Rectangle er = { (float)(e->tileX * tilePixels) + 1.0f,
-                                 (float)(e->tileY * tilePixels) + 1.0f,
-                                 (float)tilePixels - 2.0f,
-                                 (float)tilePixels - 2.0f };
-                DrawRectangleLinesEx(er, 2.0f, ring);
+                // Pulsing hand-inked loop on the enemy tile — swells ~3px
+                // per side in step with the alpha so it never sits still.
+                float ein = 4.0f - 3.0f * pulse;
+                Rectangle er = { (float)(e->tileX * tilePixels) + ein,
+                                 (float)(e->tileY * tilePixels) + ein,
+                                 (float)tilePixels - ein * 2.0f,
+                                 (float)tilePixels - ein * 2.0f };
+                DrawRectangleRounded(er, 0.25f, 6, Fade(warn, 0.14f + 0.10f * pulse));
+                PHDrawInkFrame(er, 1.5f, 2.5f, ring, 0xF20);
 
                 // Ranged: crosshair-like reticle ticks on each side of the tile.
                 if (isRanged) {
@@ -2835,40 +2861,23 @@ void FieldDraw(const FieldState *ow)
                     float cy = er.y + er.height * 0.5f;
                     float reach = er.width * 0.45f;
                     float tick  = er.width * 0.10f;
-                    DrawLineEx((Vector2){cx - reach, cy},
-                               (Vector2){cx - reach + tick, cy}, 2.0f, ring);
-                    DrawLineEx((Vector2){cx + reach - tick, cy},
-                               (Vector2){cx + reach, cy}, 2.0f, ring);
-                    DrawLineEx((Vector2){cx, cy - reach},
-                               (Vector2){cx, cy - reach + tick}, 2.0f, ring);
-                    DrawLineEx((Vector2){cx, cy + reach - tick},
-                               (Vector2){cx, cy + reach}, 2.0f, ring);
+                    PHWobbleLine((Vector2){cx - reach, cy},
+                                 (Vector2){cx - reach + tick, cy}, 0.6f, 2.0f, ring, 0xF21);
+                    PHWobbleLine((Vector2){cx + reach - tick, cy},
+                                 (Vector2){cx + reach, cy}, 0.6f, 2.0f, ring, 0xF22);
+                    PHWobbleLine((Vector2){cx, cy - reach},
+                                 (Vector2){cx, cy - reach + tick}, 0.6f, 2.0f, ring, 0xF23);
+                    PHWobbleLine((Vector2){cx, cy + reach - tick},
+                                 (Vector2){cx, cy + reach}, 0.6f, 2.0f, ring, 0xF24);
                 }
 
-                // Floating "Z!" prompt above the enemy, color-matched, with a
-                // small glyph to reinforce melee vs ranged intent.
-                int px = e->tileX * tilePixels + tilePixels / 2 - 10;
-                int py = e->tileY * tilePixels - 22
-                         + (int)(sinf((float)GetTime() * 3.0f) * 1.5f);
-                DrawText("Z!", px, py, 18, warn);
-
-                if (isRanged) {
-                    // Chevron arrow points at the target (downward, since the
-                    // prompt floats above the enemy tile).
-                    float ax = (float)(px + 26);
-                    float ay = (float)(py + 6);
-                    DrawTriangle((Vector2){ax - 5.0f, ay - 5.0f},
-                                 (Vector2){ax + 5.0f, ay - 5.0f},
-                                 (Vector2){ax,         ay + 5.0f}, warn);
-                } else {
-                    // Small knife glyph — diamond body + tip.
-                    float kx = (float)(px + 26);
-                    float ky = (float)(py + 6);
-                    DrawTriangle((Vector2){kx - 4.0f, ky - 2.0f},
-                                 (Vector2){kx,         ky - 6.0f},
-                                 (Vector2){kx + 4.0f, ky - 2.0f}, warn);
-                    DrawRectangle((int)(kx - 2), (int)(ky - 2), 4, 6, warn);
-                }
+                // Speech bubble above the enemy naming the opening. Touch-
+                // first: the player taps the enemy, so no key name here.
+                float bob = sinf(now * 3.0f) * 2.0f;
+                Vector2 tip = { (float)(e->tileX * tilePixels) + tilePixels * 0.5f,
+                                (float)(e->tileY * tilePixels) - 4.0f + bob };
+                PHDrawBubbleLabel(Str(isRanged ? "ui.sneak.ranged" : "ui.sneak.melee"),
+                                  16, tip, 1.0f, 0xF30);
             }
         }
     EndMode2D();

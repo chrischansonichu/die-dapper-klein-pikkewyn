@@ -160,6 +160,19 @@ void PHDrawBubbleLabel(const char *text, int fontSize, Vector2 tailTip,
     DrawText(text, (int)(r.x + padX), (int)(r.y + padY), fontSize, ink);
 }
 
+void PHDrawBreathingFrame(Rectangle tile, float t, Color c, float alpha,
+                          int seed)
+{
+    float breathe = 0.5f + 0.5f * sinf(t * 2.5f);
+    float inset = 4.0f - 3.0f * breathe;
+    Rectangle r = { tile.x + inset, tile.y + inset,
+                    tile.width - inset * 2.0f, tile.height - inset * 2.0f };
+    DrawRectangleRounded(r, 0.25f, 6,
+                         Fade(gPH.panel, (0.18f + 0.10f * breathe) * alpha));
+    PHDrawInkFrame(r, 1.5f, 2.0f + 1.0f * breathe,
+                   Fade(c, (0.75f + 0.25f * breathe) * alpha), seed);
+}
+
 void PHDrawPaperGrain(Rectangle rect)
 {
     if (gPHGrain.id == 0) return;

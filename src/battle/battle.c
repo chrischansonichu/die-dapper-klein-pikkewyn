@@ -1469,17 +1469,10 @@ void BattleDrawWorldOverlay(const BattleContext *ctx, const TileMap *map)
     }
     float now = (float)GetTime();
     if (actor && actor->alive) {
-        // Grows and shrinks ~3px each side over a ~2.5s cycle, and the
-        // ink thickens as it swells — a static loop read as scenery.
-        float breathe = 0.5f + 0.5f * sinf(now * 2.5f);
-        float inset = 4.0f - 3.0f * breathe;
-        Rectangle ar = { (float)(actor->tileX * tp) + inset,
-                         (float)(actor->tileY * tp) + inset,
-                         (float)tp - inset * 2.0f, (float)tp - inset * 2.0f };
-        DrawRectangleRounded(ar, 0.25f, 6,
-                             Fade(gPH.panel, 0.18f + 0.10f * breathe));
-        PHDrawInkFrame(ar, 1.5f, 2.0f + 1.0f * breathe,
-                       Fade(gPH.ink, 0.75f + 0.25f * breathe), 0xB10);
+        PHDrawBreathingFrame((Rectangle){ (float)(actor->tileX * tp),
+                                          (float)(actor->tileY * tp),
+                                          (float)tp, (float)tp },
+                             now, gPH.ink, 1.0f, 0xB10);
     }
 
     // Target cursor + "tap this" affordances.
@@ -1491,14 +1484,10 @@ void BattleDrawWorldOverlay(const BattleContext *ctx, const TileMap *map)
             mv = GetMoveDef(actor->moveIds[ctx->selectedMove]);
         }
         float pulse = 0.5f + 0.5f * sinf(now * 5.0f);
-        float bob   = sinf(now * 3.0f) * 2.0f;
 
-        // Every enemy the selected move can reach gets a coral ink loop
-        // (the palette's roof accent — warm, but not the UI's gold) and a
-        // small parchment speech bubble saying TAP with a tail pointing at
-        // the sprite. Without this, a first-time player has picked an
-        // attack and gets no in-world cue that the enemy itself is the
-        // thing to tap (the top hint strip alone proved easy to miss).
+        // Every enemy the selected move can reach gets a pulsing coral ink
+        // loop (the palette's roof accent — warm, but not the UI's gold).
+        // The top hint strip says "tap an enemy"; the loop shows which.
         for (int i = 0; i < ctx->enemyCount; i++) {
             const Combatant *e = &ctx->enemies[i];
             if (!e->alive) continue;
@@ -1514,9 +1503,6 @@ void BattleDrawWorldOverlay(const BattleContext *ctx, const TileMap *map)
             PHDrawInkFrame(er, 1.5f, 2.5f,
                            Fade(gPH.roof, 0.65f + 0.35f * pulse), 0xB20 + i);
 
-            Vector2 tip = { (float)(e->tileX * tp) + tp * 0.5f,
-                            (float)(e->tileY * tp) - 4.0f + bob };
-            PHDrawBubbleLabel(Str("ui.tap"), 16, tip, 1.0f, 0xB40 + i);
         }
 
         // The cursor tile itself — a heavier ink loop so the current pick
