@@ -48,9 +48,10 @@ interact with them.
 
 ### Screenshots
 
-![Overworld](screenshots/screenshot001.png "Overworld")
-![Battle Screen](screenshots/screenshot002.png "Battle screen")
-![Level completion](screenshots/screenshot003.png "Level completion")
+![Penguin Village](screenshots/screenshot000.png "Penguin Village")
+![Battle Screen](screenshots/screenshot001.png "Battle screen")
+![Level 2](screenshots/screenshot002.png "Level 2")
+![Character Screen](screenshots/screenshot003.png "Level completion")
 
 ### Developers
 
