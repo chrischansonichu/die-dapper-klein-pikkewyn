@@ -145,23 +145,47 @@ static inline int InvTileSize(void) {
     int contentW = InvContentW();
     return (contentW - (cols - 1) * INV_TILE_GAP) / cols;
 }
-static inline Rectangle InvTileRect(int gridTop, int index) {
-    int cols = InvGridCols();
-    int tile = InvTileSize();
+// Items-tab grid. The bag holds up to INVENTORY_MAX_ITEMS stacks and the
+// tab has no vertical scroll, so the grid is sized to fit ALL of them between
+// the member strip and the panel bottom: 8 columns x 2 rows on landscape.
+// The tile is the smaller of the width-fit and height-fit sizes, and the grid
+// is centred horizontally when the height constraint leaves slack. The old
+// 4-col big-tile layout put row 2 at y~325 with 161px tiles, which ran
+// straight off the 420px panel bottom as soon as a 5th stack showed up.
+#define INV_ITEM_GRID_COLS  8
+#define INV_ITEM_GRID_GAP   8
+
+static inline int InvItemGridRows(void) {
+    return (INVENTORY_MAX_ITEMS + INV_ITEM_GRID_COLS - 1) / INV_ITEM_GRID_COLS;
+}
+static inline int InvItemTileSize(int gridTop) {
+    int cols = INV_ITEM_GRID_COLS;
+    int rows = InvItemGridRows();
+    int availH = InvPanelY() + InvPanelH() - 12 - gridTop;
+    int tileW = (InvContentW() - (cols - 1) * INV_ITEM_GRID_GAP) / cols;
+    int tileH = (availH - (rows - 1) * INV_ITEM_GRID_GAP) / rows;
+    int tile = tileW < tileH ? tileW : tileH;
+    if (tile < 44) tile = 44;   // never below the touch-target minimum
+    return tile;
+}
+static inline Rectangle InvItemTileRect(int gridTop, int index) {
+    int cols = INV_ITEM_GRID_COLS;
+    int tile = InvItemTileSize(gridTop);
+    int gridW = cols * tile + (cols - 1) * INV_ITEM_GRID_GAP;
+    int startX = InvContentX() + (InvContentW() - gridW) / 2;
     int col = index % cols;
     int row = index / cols;
     return (Rectangle){
-        (float)(InvContentX() + col * (tile + INV_TILE_GAP)),
-        (float)(gridTop + row * (tile + INV_TILE_GAP)),
+        (float)(startX + col * (tile + INV_ITEM_GRID_GAP)),
+        (float)(gridTop + row * (tile + INV_ITEM_GRID_GAP)),
         (float)tile, (float)tile
     };
 }
 
 // Armor-bag tiles run smaller than the items-grid tiles. There are at most 8
-// armor entries (INVENTORY_MAX_ARMORS), so the items-tab's 4-col big-tile
+// armor entries (INVENTORY_MAX_ARMORS), so a 4-col big-tile
 // layout produced one or two oversized icons floating in dead space. 6 cols
-// at <=80px reads tighter and the player can tap individual pieces; the items
-// tab keeps its big tiles because it shows up to 16 stacks.
+// at <=80px reads tighter and the player can tap individual pieces.
 static inline Rectangle InvArmorBagTileRect(int gridTop, int index) {
     int cols = 6;
     int contentW = InvContentW();
@@ -690,7 +714,7 @@ bool InventoryUIUpdate(InventoryUI *ui, Party *party, DiscardUI *discard)
             Rectangle ms_i = MemberStripRect();
             int gridTop_i = (int)(ms_i.y + ms_i.height) + 14;
             for (int i = 0; i < n && i < INVENTORY_MAX_ITEMS; i++) {
-                if (TouchTapInRect(InvTileRect(gridTop_i, i))) {
+                if (TouchTapInRect(InvItemTileRect(gridTop_i, i))) {
                     ui->cursor = i;
                     UseItemOnMember(ui, party);
                     break;
@@ -1077,7 +1101,7 @@ static void DrawItemsTab(const InventoryUI *ui, const Party *party)
 
     int popupAnchorIdx = -1;
     for (int i = 0; i < inv->itemCount; i++) {
-        Rectangle r = InvTileRect(gridTop, i);
+        Rectangle r = InvItemTileRect(gridTop, i);
         const ItemDef *it = GetItemDef(inv->items[i].itemId);
         char qty[8];
         snprintf(qty, sizeof(qty), "x%d", inv->items[i].count);
@@ -1098,7 +1122,7 @@ static void DrawItemsTab(const InventoryUI *ui, const Party *party)
         } else {
             snprintf(body, sizeof(body), "%s", it->desc);
         }
-        DrawInfoPopup(InvTileRect(gridTop, popupAnchorIdx), it->name, body);
+        DrawInfoPopup(InvItemTileRect(gridTop, popupAnchorIdx), it->name, body);
     }
 }
 
