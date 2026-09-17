@@ -49,6 +49,19 @@ void PHWobbleLine(Vector2 a, Vector2 b, float jitter, float thickness,
 // screen space. `seed` stabilizes the border wobble per call site.
 void PHDrawPanel(Rectangle rect, int seed);
 
+// Hand-drawn ink loop around a rect: four wobbled edges with brush "overshoot"
+// at the corners, so it reads as a quick pen stroke rather than a UI box.
+// `c` is the stroke colour (pass an alpha for pulsing). `seed` stabilizes the
+// wobble per call site.
+void PHDrawInkFrame(Rectangle rect, float jitter, float thickness, Color c,
+                    int seed);
+
+// Small parchment speech-bubble label ("TAP", etc.) with a ragged ink border
+// and a tail pointing down at `tailTip` (world or screen space — whatever
+// the caller is drawing in). `alpha` fades the whole badge (0..1).
+void PHDrawBubbleLabel(const char *text, int fontSize, Vector2 tailTip,
+                       float alpha, int seed);
+
 // Blits the baked paper-grain texture over the given rect. Typically called
 // once at the end of a screen's Draw with rect = {0, 0, screenW, screenH}.
 // Costs a single GPU draw.

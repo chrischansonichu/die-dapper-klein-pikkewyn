@@ -2782,19 +2782,22 @@ void FieldDraw(const FieldState *ow)
             int tilePixels = TILE_SIZE * TILE_SCALE;
             // Touch-first game: the marker says what to actually do. A mouse
             // click counts as a tap on desktop (and Z still works silently).
-            const char *interactGlyph = "TAP";
+            // Same parchment speech bubble the battle target picker uses,
+            // bobbing gently so it reads as a prompt rather than a label.
+            const char *interactGlyph = Str("ui.tap");
+            float bob = sinf((float)GetTime() * 3.0f) * 2.0f;
             for (int i = 0; i < ow->npcCount; i++) {
                 if (NpcIsInteractable(&ow->npcs[i], ow->player.tileX, ow->player.tileY, ow->player.dir)) {
-                    int px = ow->npcs[i].tileX * tilePixels + tilePixels / 2 - 6;
-                    int py = ow->npcs[i].tileY * tilePixels - 18;
-                    DrawText(interactGlyph, px, py, 20, YELLOW);
+                    Vector2 tip = { (float)(ow->npcs[i].tileX * tilePixels) + tilePixels * 0.5f,
+                                    (float)(ow->npcs[i].tileY * tilePixels) - 4.0f + bob };
+                    PHDrawBubbleLabel(interactGlyph, 16, tip, 1.0f, 0xF40 + i);
                 }
             }
             for (int i = 0; i < ow->objectCount; i++) {
                 if (FieldObjectIsInteractable(&ow->objects[i], ow->player.tileX, ow->player.tileY, ow->player.dir)) {
-                    int px = ow->objects[i].tileX * tilePixels + tilePixels / 2 - 6;
-                    int py = ow->objects[i].tileY * tilePixels - 18;
-                    DrawText(interactGlyph, px, py, 20, YELLOW);
+                    Vector2 tip = { (float)(ow->objects[i].tileX * tilePixels) + tilePixels * 0.5f,
+                                    (float)(ow->objects[i].tileY * tilePixels) - 4.0f + bob };
+                    PHDrawBubbleLabel(interactGlyph, 16, tip, 1.0f, 0xF80 + i);
                 }
             }
             int surpriseSlot = -1;

@@ -1457,41 +1457,48 @@ void BattleDrawWorldOverlay(const BattleContext *ctx, const TileMap *map)
         }
     }
 
-    // Current actor highlight.
+    // Current actor highlight — a hand-inked loop around the tile with a
+    // faint warm parchment wash inside. Ink-on-pastel contrasts on every
+    // tile type (the old flat yellow box vanished on sand and fought the
+    // palette everywhere else). Breathes slowly so the eye finds it.
     const Combatant *actor = NULL;
     if (ctx->currentTurn < ctx->turnCount) {
         const TurnEntry *te = &ctx->turnOrder[ctx->currentTurn];
         actor = te->isEnemy ? &ctx->enemies[te->idx]
                             : &ctx->party->members[te->idx];
     }
+    float now = (float)GetTime();
     if (actor && actor->alive) {
-        DrawRectangleLinesEx(
-            (Rectangle){ (float)(actor->tileX * tp),
-                         (float)(actor->tileY * tp),
-                         (float)tp, (float)tp },
-            3, YELLOW);
+        // Grows and shrinks ~3px each side over a ~2.5s cycle, and the
+        // ink thickens as it swells — a static loop read as scenery.
+        float breathe = 0.5f + 0.5f * sinf(now * 2.5f);
+        float inset = 4.0f - 3.0f * breathe;
+        Rectangle ar = { (float)(actor->tileX * tp) + inset,
+                         (float)(actor->tileY * tp) + inset,
+                         (float)tp - inset * 2.0f, (float)tp - inset * 2.0f };
+        DrawRectangleRounded(ar, 0.25f, 6,
+                             Fade(gPH.panel, 0.18f + 0.10f * breathe));
+        PHDrawInkFrame(ar, 1.5f, 2.0f + 1.0f * breathe,
+                       Fade(gPH.ink, 0.75f + 0.25f * breathe), 0xB10);
     }
 
-    // Target cursor.
+    // Target cursor + "tap this" affordances.
     if (ctx->state == BS_TARGET_SELECT) {
-        DrawRectangleLinesEx(
-            (Rectangle){ (float)(ctx->targetTile.x * tp),
-                         (float)(ctx->targetTile.y * tp),
-                         (float)tp, (float)tp },
-            3, (Color){240, 180, 60, 255});
-
-        // "Tap this" affordance on every enemy the selected move can reach —
-        // a pulsing gold outline plus a bobbing TAP label with a chevron
-        // pointing down at the sprite. Without this, a first-time player has
-        // picked an attack and gets no in-world cue that the enemy itself is
-        // the thing to tap (the top hint strip alone proved easy to miss).
         const MoveDef *mv = NULL;
         if (actor && ctx->selectedMove >= 0 &&
             ctx->selectedMove < CREATURE_MAX_MOVES &&
             actor->moveIds[ctx->selectedMove] >= 0) {
             mv = GetMoveDef(actor->moveIds[ctx->selectedMove]);
         }
-        float pulse = 0.5f + 0.5f * sinf((float)GetTime() * 5.0f);
+        float pulse = 0.5f + 0.5f * sinf(now * 5.0f);
+        float bob   = sinf(now * 3.0f) * 2.0f;
+
+        // Every enemy the selected move can reach gets a coral ink loop
+        // (the palette's roof accent — warm, but not the UI's gold) and a
+        // small parchment speech bubble saying TAP with a tail pointing at
+        // the sprite. Without this, a first-time player has picked an
+        // attack and gets no in-world cue that the enemy itself is the
+        // thing to tap (the top hint strip alone proved easy to miss).
         for (int i = 0; i < ctx->enemyCount; i++) {
             const Combatant *e = &ctx->enemies[i];
             if (!e->alive) continue;
@@ -1499,27 +1506,26 @@ void BattleDrawWorldOverlay(const BattleContext *ctx, const TileMap *map)
                 !TileMoveReaches(map, TileOf(actor), TileOf(e), mv->range))
                 continue;
 
-            unsigned char ringA = (unsigned char)(140 + 90 * pulse);
-            Color gold = {240, 200, 70, ringA};
-            Rectangle er = { (float)(e->tileX * tp) + 2.0f,
-                             (float)(e->tileY * tp) + 2.0f,
-                             (float)tp - 4.0f, (float)tp - 4.0f };
-            DrawRectangleLinesEx(er, 3.0f, gold);
+            float ein = 4.0f - 3.0f * pulse;
+            Rectangle er = { (float)(e->tileX * tp) + ein,
+                             (float)(e->tileY * tp) + ein,
+                             (float)tp - ein * 2.0f, (float)tp - ein * 2.0f };
+            DrawRectangleRounded(er, 0.25f, 6, Fade(gPH.roof, 0.14f + 0.10f * pulse));
+            PHDrawInkFrame(er, 1.5f, 2.5f,
+                           Fade(gPH.roof, 0.65f + 0.35f * pulse), 0xB20 + i);
 
-            const char *lbl = "TAP";
-            int fs = 18;
-            int lw = MeasureText(lbl, fs);
-            int lx = e->tileX * tp + tp / 2 - lw / 2;
-            int ly = e->tileY * tp - 28
-                     + (int)(sinf((float)GetTime() * 3.0f) * 2.0f);
-            DrawText(lbl, lx + 1, ly + 1, fs, (Color){40, 25, 8, 220});
-            DrawText(lbl, lx, ly, fs, (Color){255, 220, 110, 255});
-            float axc = (float)(e->tileX * tp) + tp * 0.5f;
-            float ay  = (float)(ly + fs + 2);
-            DrawTriangle((Vector2){axc - 6.0f, ay},
-                         (Vector2){axc + 6.0f, ay},
-                         (Vector2){axc, ay + 7.0f}, gold);
+            Vector2 tip = { (float)(e->tileX * tp) + tp * 0.5f,
+                            (float)(e->tileY * tp) - 4.0f + bob };
+            PHDrawBubbleLabel(Str("ui.tap"), 16, tip, 1.0f, 0xB40 + i);
         }
+
+        // The cursor tile itself — a heavier ink loop so the current pick
+        // stands out from the reachable set when several enemies are lit.
+        float cout = 1.0f + 2.0f * pulse;
+        Rectangle cr = { (float)(ctx->targetTile.x * tp) - cout,
+                         (float)(ctx->targetTile.y * tp) - cout,
+                         (float)tp + cout * 2.0f, (float)tp + cout * 2.0f };
+        PHDrawInkFrame(cr, 1.8f, 3.0f, gPH.ink, 0xB30);
     }
 
     // Attack effect (slash / projectile / ring) — drawn on top of tile

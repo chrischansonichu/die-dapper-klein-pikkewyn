@@ -111,6 +111,55 @@ void PHDrawPanel(Rectangle rect, int seed)
     PHWobbleLine((Vector2){x0, y1}, (Vector2){x0, y0}, 2.0f, 2.0f, gPH.ink, seed + 4);
 }
 
+void PHDrawInkFrame(Rectangle rect, float jitter, float thickness, Color c,
+                    int seed)
+{
+    // Corners overshoot by a couple of px in alternating directions so the
+    // strokes visibly cross, like a pen loop drawn in four quick passes.
+    float o = thickness * 0.9f;
+    float x0 = rect.x, y0 = rect.y;
+    float x1 = rect.x + rect.width;
+    float y1 = rect.y + rect.height;
+    PHWobbleLine((Vector2){x0 - o, y0}, (Vector2){x1 + o, y0}, jitter, thickness, c, seed + 1);
+    PHWobbleLine((Vector2){x1, y0 - o}, (Vector2){x1, y1 + o}, jitter, thickness, c, seed + 2);
+    PHWobbleLine((Vector2){x1 + o, y1}, (Vector2){x0 - o, y1}, jitter, thickness, c, seed + 3);
+    PHWobbleLine((Vector2){x0, y1 + o}, (Vector2){x0, y0 - o}, jitter, thickness, c, seed + 4);
+}
+
+void PHDrawBubbleLabel(const char *text, int fontSize, Vector2 tailTip,
+                       float alpha, int seed)
+{
+    if (text == NULL || text[0] == '\0') return;
+    float padX = 7.0f, padY = 3.0f;
+    float tailH = 7.0f, tailW = 10.0f;
+    float tw = (float)MeasureText(text, fontSize);
+    float bw = tw + padX * 2.0f;
+    float bh = (float)fontSize + padY * 2.0f;
+    Rectangle r = { tailTip.x - bw * 0.5f, tailTip.y - tailH - bh, bw, bh };
+
+    Color fill = Fade(gPH.panel, alpha);
+    Color ink  = Fade(gPH.ink, alpha);
+    Color shadow = Fade(gPH.inkDark, 0.18f * alpha);
+
+    // Soft drop shadow so the paper lifts off the tile art.
+    DrawRectangleRounded((Rectangle){r.x + 1.5f, r.y + 2.0f, r.width, r.height},
+                         0.45f, 6, shadow);
+    DrawRectangleRounded(r, 0.45f, 6, fill);
+
+    // Tail — parchment triangle over the border, then its two inked sides.
+    Vector2 tl = { tailTip.x - tailW * 0.5f, r.y + r.height - 0.5f };
+    Vector2 tr = { tailTip.x + tailW * 0.5f, r.y + r.height - 0.5f };
+    DrawTriangle(tl, tailTip, tr, fill);
+    PHDrawInkFrame(r, 1.2f, 1.8f, ink, seed);
+    // Re-cover the border segment under the tail so it opens into the tail.
+    DrawTriangle((Vector2){tl.x + 1.5f, tl.y - 1.5f}, (Vector2){tailTip.x, tailTip.y - 1.0f},
+                 (Vector2){tr.x - 1.5f, tr.y - 1.5f}, fill);
+    PHWobbleLine(tl, tailTip, 0.8f, 1.8f, ink, seed + 7);
+    PHWobbleLine(tailTip, tr, 0.8f, 1.8f, ink, seed + 8);
+
+    DrawText(text, (int)(r.x + padX), (int)(r.y + padY), fontSize, ink);
+}
+
 void PHDrawPaperGrain(Rectangle rect)
 {
     if (gPHGrain.id == 0) return;

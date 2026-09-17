@@ -369,6 +369,7 @@ warp.blocked_captain = The way back is blocked - you can't leave the Captain ali
 # Battle & field UI
 # ---------------------------------------------------------------------------
 battle.hint.target = Tap an enemy to attack
+ui.tap = TAP
 battle.victory = Victory!
 battle.defeat = Defeated...
 hint.field = Swipe to move   Tap to interact
