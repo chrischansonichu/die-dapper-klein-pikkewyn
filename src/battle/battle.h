@@ -83,6 +83,12 @@ typedef struct BattleContext {
     // these post-battle to decide whether a temp seal stays or leaves.
     int tempAllyPartyIdx;
 
+    // Short notice shown over the action / move menu, e.g. "No ally in range"
+    // when a refused move leaves the player on the menu to pick again.
+    // Points at a string-table entry; hidden once menuNoticeT runs out.
+    const char *menuNotice;
+    float       menuNoticeT;
+
     char  narration[NARRATION_LEN];
     // Queued follow-up narration page. ConsumeMoveUse stashes a "Weapon broke!"
     // message here when a weapon hits 0 dur; the BS_NARRATION advance handler

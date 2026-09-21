@@ -128,9 +128,13 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
         }
         int janLevel = (ow->gs->party.count > 0) ? ow->gs->party.members[0].level : 1;
         if (ow->gs->party.count < PARTY_MAX) {
-            PartyAddMember(&ow->gs->party, CREATURE_SEAL, janLevel);
+            GameStateAddMember(ow->gs, CREATURE_SEAL, janLevel);
             n->active = false;
-            return StrPages("seal.join", pages, NPC_MAX_DIALOGUE_PAGES);
+            int joinPages = StrPages("seal.join", pages, NPC_MAX_DIALOGUE_PAGES);
+            if (joinPages < NPC_MAX_DIALOGUE_PAGES) {
+                pages[joinPages++] = Str("party.leader.tip");
+            }
+            return joinPages;
         }
         pages[0] = Str("seal.full");
         return 1;
@@ -303,7 +307,7 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
     }
 
     // --- Level 2 hook: once the Captain has fallen, the village elder's job
-    // is the Lappies briefing — where the lokasie is, who took him, and that
+    // is the Pierie briefing — where the lokasie is, who took him, and that
     // the east gate is open. First talk latches BRIEFED; later talks repeat
     // the short version so the player can always re-read the objective.
     if (n->type == NPC_PENGUIN_ELDER &&
@@ -897,7 +901,8 @@ static int FindSurpriseTarget(const FieldState *ow, int px, int py,
     if (outMoveSlot) *outMoveSlot = -1;
 
     if (ow->gs->party.count <= 0) return -1;
-    const Combatant *jan = &ow->gs->party.members[0];
+    // The party leader is the one on the field, so the leader's kit decides.
+    const Combatant *jan = &ow->gs->party.members[PartyLeaderIdx(&ow->gs->party)];
 
     // Pick Jan's strongest usable MELEE and RANGED moves. Weapons (FishingHook,
     // SeaUrchinSpike, ShellThrow) slot into whichever list their .range says;
@@ -1239,9 +1244,8 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
         int janLevel = ow->gs->party.count > 0
                          ? ow->gs->party.members[0].level : 1;
         int allyCreatureId = CREATURE_SEAL; // only captive type today
-        int newIdx = ow->gs->party.count;
-        PartyAddMember(&ow->gs->party, allyCreatureId, janLevel);
-        if (newIdx < ow->gs->party.count) {
+        int newIdx = GameStateAddMember(ow->gs, allyCreatureId, janLevel);
+        if (newIdx >= 0) {
             CombatantAddStatus(&ow->gs->party.members[newIdx], STATUS_BOUND);
             ow->gs->tempAllyPartyIdx = newIdx;
             ow->gs->tempAllyNpcIdx   = allyNpcIdx;
@@ -1304,9 +1308,10 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
         preferTX = (int)(sx / clusterCount);
         preferTY = (int)(sy / clusterCount);
     }
+    int leaderIdx = PartyLeaderIdx(&ow->gs->party);
     for (int i = 0; i < ow->gs->party.count; i++) {
         Combatant *m = &ow->gs->party.members[i];
-        if (i == 0) {
+        if (i == leaderIdx) {
             m->tileX = ow->player.tileX;
             m->tileY = ow->player.tileY;
             continue;
@@ -1468,7 +1473,7 @@ static int DropInventoryOnRescue(Inventory *inv, int *outItems, int *outWeapons)
 static void ResolveBattleEnd(FieldState *ow, int result)
 {
     BattleContext *ctx = &ow->battle;
-    const char *ptrs[DROP_MSG_PAGES + 3];
+    const char *ptrs[DROP_MSG_PAGES + 5];
     int pageCount = 0;
 
     if (result == 1 /* victory */) {
@@ -1548,6 +1553,10 @@ static void ResolveBattleEnd(FieldState *ow, int result)
             if (pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0]))) {
                 ptrs[pageCount++] = Str("victory.captain");
             }
+            if (GameStateCompleteDungeon(ow->gs, DUNGEON_DONE_HARBOR) &&
+                pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0]))) {
+                ptrs[pageCount++] = Str("victory.skillpoint");
+            }
         }
     } else if (result == 3 /* fled */) {
         // Sync enemy tile positions back to the field so the aggro cluster
@@ -1581,6 +1590,9 @@ static void ResolveBattleEnd(FieldState *ow, int result)
             snprintf(gRescueGreet, RESCUE_GREET_LEN,
                      Str("seal.greet"), ally->name);
             ptrs[pageCount++] = gRescueGreet;
+            if (pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0]))) {
+                ptrs[pageCount++] = Str("party.leader.tip");
+            }
         } else {
             PartyRemoveMember(&ow->gs->party, partyIdx);
         }
@@ -1764,6 +1776,12 @@ void FieldUpdate(FieldState *ow, float dt)
     // also receive taps. Calling it again here would clear the tapReady
     // flag mid-frame and silently eat field taps.
 
+    // The field sprite wears the party leader's look (Status screen choice).
+    if (ow->gs->party.count > 0) {
+        const Combatant *lead = &ow->gs->party.members[PartyLeaderIdx(&ow->gs->party)];
+        if (lead->def) ow->player.creatureId = lead->def->id;
+    }
+
     // In battle: BattleUpdate owns input. Once it finishes, resolve drops and
     // return to FIELD_FREE.
     if (ow->mode == FIELD_BATTLE) {
@@ -1783,7 +1801,8 @@ void FieldUpdate(FieldState *ow, float dt)
         // delta between combatant state and the field sprite, seed a slide,
         // and advance moveFrames + animFrame each frame.
         if (ow->gs->party.count > 0) {
-            const Combatant *jan = &ow->gs->party.members[0];
+            // The field sprite is the party leader's stand-in during battle.
+            const Combatant *jan = &ow->gs->party.members[PartyLeaderIdx(&ow->gs->party)];
             Player *pl = &ow->player;
             if (pl->moving) {
                 pl->moveFrames++;
@@ -2142,7 +2161,7 @@ void FieldUpdate(FieldState *ow, float dt)
     }
 
     // Level 2 opener: the first time Jan is back in the village after the
-    // Captain, the news lands before he can take a step — Lappies is gone.
+    // Captain, the news lands before he can take a step — Pierie is gone.
     // The elder then carries the details (hub.elder.lok) and the east gate
     // is already open (map_authored builds it off captainDefeated).
     if (ow->gs->currentMapId == MAP_OVERWORLD_HUB &&
@@ -2636,7 +2655,9 @@ static void DrawPartyFollowersInBattle(const FieldState *ow)
 {
     if (ow->mode != FIELD_BATTLE) return;
     int tp = TILE_SIZE * TILE_SCALE;
-    for (int i = 1; i < ow->gs->party.count; i++) {
+    int leaderIdx = PartyLeaderIdx(&ow->gs->party);
+    for (int i = 0; i < ow->gs->party.count; i++) {
+        if (i == leaderIdx) continue;   // drawn by PlayerDraw
         const Combatant *m = &ow->gs->party.members[i];
         if (!m->alive) continue;
         // Idle bob — same treatment as the overworld draws so followers
@@ -2764,8 +2785,18 @@ void FieldDraw(const FieldState *ow)
             }
         }
 
-        for (int i = 0; i < ow->enemyCount; i++)
-            EnemyDraw(&ow->enemies[i]);
+        for (int i = 0; i < ow->enemyCount; i++) {
+            // During a fight, enemies outside the encounter draw faded so
+            // the player can see who is actually in the battle.
+            bool sidelined = false;
+            if (ow->mode == FIELD_BATTLE) {
+                sidelined = true;
+                for (int k = 0; k < ow->battle.enemyCount; k++) {
+                    if (ow->battle.enemyFieldIdx[k] == i) { sidelined = false; break; }
+                }
+            }
+            EnemyDraw(&ow->enemies[i], sidelined);
+        }
 
         for (int i = 0; i < ow->npcCount; i++) {
             // In battle, the rescued captive's combatant sprite stands on his
@@ -2832,7 +2863,7 @@ void FieldDraw(const FieldState *ow)
                 // cyan palette + a chevron arrow that points at the target.
                 bool isRanged = false;
                 if (surpriseSlot >= 0 && ow->gs->party.count > 0) {
-                    const Combatant *jan = &ow->gs->party.members[0];
+                    const Combatant *jan = &ow->gs->party.members[PartyLeaderIdx(&ow->gs->party)];
                     if (jan->moveIds[surpriseSlot] >= 0) {
                         const MoveDef *mv = GetMoveDef(jan->moveIds[surpriseSlot]);
                         isRanged = (mv->range == RANGE_RANGED);
@@ -2885,7 +2916,7 @@ void FieldDraw(const FieldState *ow)
     // HUD (screen space). Portrait uses a larger panel and bigger text —
     // previous 14pt-in-160px layout read as "clipped Jan text" on mobile.
     if (ow->gs->party.count > 0) {
-        const Combatant *jan = &ow->gs->party.members[0];
+        const Combatant *jan = &ow->gs->party.members[PartyLeaderIdx(&ow->gs->party)];
 #if SCREEN_PORTRAIT
         int px = 12, py = 12, pw = 240, ph = 78;
         int nameF = 22, xpF = 14, barPad = 8;

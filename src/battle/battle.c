@@ -31,6 +31,32 @@ static TilePos TileOf(const Combatant *c)
     return (TilePos){ c->tileX, c->tileY };
 }
 
+// TileMoveReaches from the actor's tile, plus the actor's skills: the melee
+// reach skill extends RANGE_MELEE by a tile. The extended tile needs LOS so
+// the longer swing can't pass through a wall.
+static bool ActorMoveReaches(const TileMap *m, const Combatant *actor,
+                             TilePos target, int moveRange)
+{
+    TilePos from = TileOf(actor);
+    if (TileMoveReaches(m, from, target, moveRange)) return true;
+    if (moveRange == RANGE_MELEE &&
+        CombatantHasSkill(actor, SKILL_FX_MELEE_REACH)) {
+        return TileChebyshev(from, target) <= 1 + SKILL_MELEE_REACH_BONUS &&
+               TileHasLOS(m, from, target);
+    }
+    return false;
+}
+
+// A RANGE_ALLY move can pick `ally`: a living party member other than the
+// actor, in reach, and not roped (a bound captive is pinned to their tile).
+static bool AllyMoveCanTarget(const TileMap *m, const Combatant *actor,
+                              const Combatant *ally)
+{
+    if (!ally || ally == actor || !ally->alive) return false;
+    if (CombatantHasStatus(ally, STATUS_BOUND)) return false;
+    return ActorMoveReaches(m, actor, TileOf(ally), RANGE_ALLY);
+}
+
 // Phase-2 enrage one-shot. Boss creatures flagged `canEnrage` flip once when
 // their HP first crosses 50% — ATK jumps to 150%, the `enraged` latch prevents
 // re-trigger. Narration is appended by the caller via AppendEnrageLine so the
@@ -54,13 +80,24 @@ static void AppendEnrageLine(char *buf, const Combatant *t)
              " %s bellows — \"You'll not take this ship!\"", t->name);
 }
 
+// Append a one-name printf-style line ("%s is dazed!") to a narration buffer.
+static void AppendNarration(char *buf, const char *fmt, const char *name)
+{
+    size_t len = strlen(buf);
+    if (len >= NARRATION_LEN - 2) return;
+    buf[len++] = ' ';   // the .lang loader trims values, so the joiner lives here
+    snprintf(buf + len, NARRATION_LEN - len, fmt, name);
+}
+
 // Ranged weapons swung at melee distance (Chebyshev ≤ 1) do half damage — a
 // thrown shell to the face has no arc to pick up speed. Non-ranged moves are
 // pass-through. Always floors to at least 1 so a glancing hit still registers.
+// The point-blank skill removes the penalty.
 static int ApplyRangeFalloff(int dmg, const Combatant *actor,
                              const Combatant *target, const MoveDef *mv)
 {
     if (!mv || mv->range != RANGE_RANGED) return dmg;
+    if (CombatantHasSkill(actor, SKILL_FX_POINT_BLANK)) return dmg;
     if (TileChebyshev(TileOf(actor), TileOf(target)) > 1) return dmg;
     int reduced = dmg / 2;
     if (reduced < 1) reduced = 1;
@@ -311,7 +348,7 @@ static int AIPickBestMove(const BattleContext *ctx, const TileMap *m,
         if (mv->power <= 0) continue;
         if (targetPartyIdx >= 0 && (mv->range == RANGE_MELEE || mv->range == RANGE_RANGED)) {
             TilePos tp = TileOf(&ctx->party->members[targetPartyIdx]);
-            if (!TileMoveReaches(m, TileOf(actor), tp, mv->range)) continue;
+            if (!ActorMoveReaches(m, actor, tp, mv->range)) continue;
         }
         if (mv->power > bestPow) { bestPow = mv->power; bestMove = i; }
     }
@@ -354,6 +391,7 @@ static BattleState TrySelectMove(BattleContext *ctx, const TileMap *m, int slot)
 
     const MoveDef *mv = GetMoveDef(actor->moveIds[slot]);
     ctx->selectedMove = slot;
+    ctx->menuNoticeT  = 0.0f;
 
     // Remember this slot for the player actor so the move-menu highlight
     // returns here next turn instead of drifting to whatever slot another
@@ -378,11 +416,29 @@ static BattleState TrySelectMove(BattleContext *ctx, const TileMap *m, int slot)
     TilePos actorTile = TileOf(actor);
     TilePos best      = actorTile;
     int bestDist      = 0x7fffffff;
+    if (mv->range == RANGE_ALLY) {
+        // Ally moves seed on the nearest friend instead of the nearest foe.
+        // With no friend in reach the move is refused — stay on the menu.
+        for (int i = 0; i < ctx->party->count; i++) {
+            const Combatant *c = &ctx->party->members[i];
+            if (!AllyMoveCanTarget(m, actor, c)) continue;
+            int d = TileChebyshev(actorTile, TileOf(c));
+            if (d < bestDist) { bestDist = d; best = TileOf(c); }
+        }
+        if (bestDist == 0x7fffffff) {
+            ctx->selectedMove = -1;
+            ctx->menuNotice   = Str("battle.ally.norange");
+            ctx->menuNoticeT  = 2.0f;
+            return BS_ACTION_MENU;
+        }
+        ctx->targetTile = best;
+        return BS_TARGET_SELECT;
+    }
     if (actorIsEn) {
         for (int i = 0; i < ctx->party->count; i++) {
             const Combatant *c = &ctx->party->members[i];
             if (!c->alive) continue;
-            if (!TileMoveReaches(m, actorTile, TileOf(c), mv->range)) continue;
+            if (!ActorMoveReaches(m, actor, TileOf(c), mv->range)) continue;
             int d = TileChebyshev(actorTile, TileOf(c));
             if (d < bestDist) { bestDist = d; best = TileOf(c); }
         }
@@ -390,7 +446,7 @@ static BattleState TrySelectMove(BattleContext *ctx, const TileMap *m, int slot)
         for (int i = 0; i < ctx->enemyCount; i++) {
             const Combatant *c = &ctx->enemies[i];
             if (!c->alive) continue;
-            if (!TileMoveReaches(m, actorTile, TileOf(c), mv->range)) continue;
+            if (!ActorMoveReaches(m, actor, TileOf(c), mv->range)) continue;
             int d = TileChebyshev(actorTile, TileOf(c));
             if (d < bestDist) { bestDist = d; best = TileOf(c); }
         }
@@ -669,7 +725,7 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
 
     // Reach check against the actual tile — MELEE must be ≤ 1 chebyshev,
     // RANGED must be ≤ 5 with LOS. AOE/SELF are handled elsewhere.
-    if (!TileMoveReaches(m, TileOf(actor), TileOf(target), mv->range)) {
+    if (!ActorMoveReaches(m, actor, TileOf(target), mv->range)) {
         snprintf(ctx->narration, NARRATION_LEN,
                  "%s swung %s but couldn't reach %s!",
                  actor->name, mv->name, target->name);
@@ -729,6 +785,41 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
     bool enraged = TryEnrage(target);
     if (enraged) ApplyEnragePhase2(ctx, m, target);
 
+    // Flipper Slap and friends: a landed hostile hit may daze the target.
+    bool stunned = false;
+    if (mv->effect == MOVE_FX_STUN && !friendly && target->hp > 0 &&
+        GetRandomValue(1, 100) <= MOVE_STUN_CHANCE_PCT) {
+        CombatantAddStatus(target, STATUS_STUNNED);
+        stunned = true;
+    }
+
+    // Split Shot skill: a ranged hit also strikes one enemy next to the
+    // target for a share of the damage. Picks the weakest neighbour so the
+    // extra hit finishes things off. No second hit roll, no friendly fire.
+    Combatant *splitTarget = NULL;
+    int splitIdx = -1, splitDmg = 0;
+    if (!actorIsEn && targetIsEnemy && mv->range == RANGE_RANGED &&
+        CombatantHasSkill(actor, SKILL_FX_SPLIT_SHOT)) {
+        for (int i = 0; i < ctx->enemyCount; i++) {
+            Combatant *e = &ctx->enemies[i];
+            if (!e->alive || e == target) continue;
+            if (TileChebyshev(TileOf(e), TileOf(target)) > 1) continue;
+            if (!splitTarget || e->hp < splitTarget->hp) { splitTarget = e; splitIdx = i; }
+        }
+        if (splitTarget) {
+            splitDmg = (dmg * SKILL_SPLIT_SHOT_PCT) / 100;
+            if (splitDmg < 1) splitDmg = 1;
+            splitTarget->hp -= splitDmg;
+            if (te->idx >= 0 && te->idx < PARTY_MAX)
+                splitTarget->damageTakenFrom[te->idx] += splitDmg;
+            if (TryEnrage(splitTarget)) ApplyEnragePhase2(ctx, m, splitTarget);
+            if (splitTarget->hp <= 0) {
+                splitTarget->hp    = 0;
+                splitTarget->alive = false;
+            }
+        }
+    }
+
     if (target->hp <= 0) {
         target->hp    = 0;
         target->alive = false;
@@ -758,10 +849,112 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
                      "%s used %s! Dealt %d dmg.", actor->name, mv->name, dmg);
     }
     if (enraged) AppendEnrageLine(ctx->narration, target);
+    if (stunned) AppendNarration(ctx->narration, Str("battle.stun.applied"), target->name);
+    if (splitTarget) {
+        size_t len = strlen(ctx->narration);
+        if (len < NARRATION_LEN - 2) {
+            ctx->narration[len++] = ' ';
+            snprintf(ctx->narration + len, NARRATION_LEN - len,
+                     Str(splitTarget->alive ? "battle.split.hit" : "battle.split.ko"),
+                     splitTarget->name, splitDmg);
+        }
+        // Single-slot faint anim: only chain it when the main target stands,
+        // else the main target's faint already owns the slot.
+        if (!splitTarget->alive && target->alive)
+            BattleAnimQueueFaint(&ctx->anim, true, splitIdx);
+    }
     // Consume LAST so any "weapon broke" append from ConsumeMoveUse lands
     // on top of the kill/hit narration set above. Previously this ran before
     // the snprintfs, and the kill message clobbered the break notice.
     ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
+}
+
+// RANGE_ALLY moves — Swap Places and To the Rescue. Player-only today: no
+// CreatureDef carries them, so `actor` is always a party member.
+static void ExecuteAllyMove(BattleContext *ctx, const TileMap *m)
+{
+    TurnEntry *te    = &ctx->turnOrder[ctx->currentTurn];
+    Combatant *actor = GetCurrentActor(ctx);
+    const MoveDef *mv = GetMoveDef(actor->moveIds[ctx->selectedMove]);
+    int tilePx = TILE_SIZE * TILE_SCALE;
+
+    bool targetIsEnemy = false;
+    int  targetIdx = -1;
+    Combatant *ally = OccupantAtTile(ctx, ctx->targetTile, &targetIsEnemy, &targetIdx);
+    if (!ally || targetIsEnemy != te->isEnemy || !AllyMoveCanTarget(m, actor, ally)) {
+        snprintf(ctx->narration, NARRATION_LEN, Str("battle.ally.nofriend"),
+                 actor->name, mv->name);
+        return;
+    }
+
+    if (mv->effect == MOVE_FX_SWAP_ALLY) {
+        int ax = actor->tileX, ay = actor->tileY;
+        actor->tileX = ally->tileX;  actor->tileY = ally->tileY;
+        ally->tileX  = ax;           ally->tileY  = ay;
+        CombatantStartMoveAnim(actor, ax, ay, tilePx, BATTLE_MOVE_ANIM_DUR);
+        CombatantStartMoveAnim(ally, actor->tileX, actor->tileY, tilePx, BATTLE_MOVE_ANIM_DUR);
+        snprintf(ctx->narration, NARRATION_LEN, Str("battle.swap.done"),
+                 actor->name, ally->name);
+        ConsumeMoveUse(ctx, te->isEnemy, ctx->selectedMove);
+        return;
+    }
+
+    // To the Rescue: land on the free tile next to the ally that is closest
+    // to the actor. Already adjacent → stay put and just strike.
+    TilePos from = TileOf(actor);
+    if (TileChebyshev(from, TileOf(ally)) > 1) {
+        TilePos best = from;
+        int bestDist = 0x7fffffff;
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                TilePos tp = { ally->tileX + dx, ally->tileY + dy };
+                if (!CombatTileWalkable(m, ctx, actor, tp.x, tp.y)) continue;
+                int d = TileChebyshev(from, tp);
+                if (d < bestDist) { bestDist = d; best = tp; }
+            }
+        }
+        if (bestDist == 0x7fffffff) {
+            snprintf(ctx->narration, NARRATION_LEN, Str("battle.rescue.noroom"),
+                     actor->name, ally->name);
+            return;
+        }
+        actor->tileX = best.x;
+        actor->tileY = best.y;
+        CombatantStartMoveAnim(actor, from.x, from.y, tilePx, BATTLE_MOVE_ANIM_DUR);
+    }
+
+    // Strike every enemy on the eight tiles around the actor's new tile.
+    int totalDmg = 0, hits = 0, lastIdx = -1;
+    bool lastKilled = false;
+    Combatant *enragedTarget = NULL;
+    for (int i = 0; i < ctx->enemyCount; i++) {
+        Combatant *t = &ctx->enemies[i];
+        if (!t->alive) continue;
+        if (TileChebyshev(TileOf(actor), TileOf(t)) > 1) continue;
+        if (!RollHit(actor, t)) continue;
+        int dmg = CalculateDamage(actor, t, mv);
+        t->hp -= dmg;
+        if (te->idx >= 0 && te->idx < PARTY_MAX) t->damageTakenFrom[te->idx] += dmg;
+        totalDmg += dmg; hits++; lastIdx = i; lastKilled = (t->hp <= 0);
+        if (!enragedTarget && TryEnrage(t)) {
+            enragedTarget = t;
+            ApplyEnragePhase2(ctx, m, t);
+        }
+        if (t->hp <= 0) { t->hp = 0; t->alive = false; }
+    }
+    if (hits > 0) {
+        PlayAttackAnimFor(ctx, mv, actor, te->isEnemy, te->idx,
+                          &ctx->enemies[lastIdx], true, lastIdx);
+        if (lastKilled) BattleAnimQueueFaint(&ctx->anim, true, lastIdx);
+        snprintf(ctx->narration, NARRATION_LEN, Str("battle.rescue.hit"),
+                 actor->name, ally->name, totalDmg, hits);
+    } else {
+        snprintf(ctx->narration, NARRATION_LEN, Str("battle.rescue.nohit"),
+                 actor->name, ally->name);
+    }
+    if (enragedTarget) AppendEnrageLine(ctx->narration, enragedTarget);
+    ConsumeMoveUse(ctx, te->isEnemy, ctx->selectedMove);
 }
 
 static void ExecuteAction(BattleContext *ctx, const TileMap *m)
@@ -777,6 +970,11 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
     }
 
     const MoveDef *mv = GetMoveDef(actor->moveIds[ctx->selectedMove]);
+
+    if (mv->range == RANGE_ALLY) {
+        ExecuteAllyMove(ctx, m);
+        return;
+    }
 
     if (mv->power == 0) {
         if (mv->range == RANGE_SELF) {
@@ -944,6 +1142,8 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
     ctx->targetTile       = (TilePos){0, 0};
     ctx->xpNarrationShown = false;
     ctx->pendingBreakMsg[0] = '\0';
+    ctx->menuNotice       = NULL;
+    ctx->menuNoticeT      = 0.0f;
     ctx->preemptiveAttack = preemptive;
     ctx->menu             = (BattleMenuState){0};
     ctx->anim             = (BattleAnim){0};
@@ -952,31 +1152,33 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
     BuildTurnOrder(ctx);
 
     if (preemptive && party->count > 0 && ctx->enemyCount > 0) {
-        Combatant *jan = &party->members[0];
+        // The party leader walks the field, so the leader lands the sneak.
+        int leaderIdx = PartyLeaderIdx(party);
+        Combatant *lead = &party->members[leaderIdx];
         int targetIdx = ctx->preemptiveTargetIdx;
         if (targetIdx < 0 || targetIdx >= ctx->enemyCount) targetIdx = 0;
         Combatant *target = &ctx->enemies[targetIdx];
         int slot = ctx->preemptiveMoveSlot;
-        if (slot < 0 || slot >= CREATURE_MAX_MOVES || jan->moveIds[slot] < 0)
+        if (slot < 0 || slot >= CREATURE_MAX_MOVES || lead->moveIds[slot] < 0)
             slot = 0; // Tackle fallback
-        if (jan->alive && target->alive) {
-            const MoveDef *mv = GetMoveDef(jan->moveIds[slot]);
-            int dmg = CalculateDamage(jan, target, mv);
-            dmg = (dmg * WeaponPowerBonusPct(jan->moveUpgradeLevel[slot])) / 100;
-            dmg = ApplyRangeFalloff(dmg, jan, target, mv);
+        if (lead->alive && target->alive) {
+            const MoveDef *mv = GetMoveDef(lead->moveIds[slot]);
+            int dmg = CalculateDamage(lead, target, mv);
+            dmg = (dmg * WeaponPowerBonusPct(lead->moveUpgradeLevel[slot])) / 100;
+            dmg = ApplyRangeFalloff(dmg, lead, target, mv);
+            if (CombatantHasSkill(lead, SKILL_FX_SNEAK_DAMAGE))
+                dmg = (dmg * SKILL_SNEAK_DAMAGE_PCT) / 100;
             target->hp -= dmg;
-            // Jan is party slot 0 by construction — the sneak opens the aggro
-            // ledger on the enemy that was ambushed.
-            target->damageTakenFrom[0] += dmg;
+            // The sneak opens the aggro ledger on the enemy that was ambushed.
+            target->damageTakenFrom[leaderIdx] += dmg;
             // Consumable-weapon durability is spent on the sneak too, matching
             // how the regular FIGHT path treats weapon use.
-            ConsumePlayerWeapon(jan, slot, &party->inventory);
+            ConsumePlayerWeapon(lead, slot, &party->inventory);
             bool enraged = TryEnrage(target);
             const char *verb = (mv->range == RANGE_RANGED) ? "sniped" : "ambushed";
             // Kick off the attack overlay so the sneak reads visually, not
             // just as a wall of text on the preemptive narration panel.
-            // Party slot 0 (Jan) is always the sneak attacker.
-            PlayAttackAnimFor(ctx, mv, jan, false, 0,
+            PlayAttackAnimFor(ctx, mv, lead, false, leaderIdx,
                               target, true, targetIdx);
             if (target->hp <= 0) {
                 target->hp    = 0;
@@ -984,11 +1186,11 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
                 BattleAnimQueueFaint(&ctx->anim, true, targetIdx);
                 snprintf(ctx->narration, NARRATION_LEN,
                          "Surprise %s! %s's %s dealt %d and took down %s!",
-                         verb, jan->name, mv->name, dmg, target->name);
+                         verb, lead->name, mv->name, dmg, target->name);
             } else {
                 snprintf(ctx->narration, NARRATION_LEN,
                          "Surprise %s! %s's %s dealt %d damage to %s!",
-                         verb, jan->name, mv->name, dmg, target->name);
+                         verb, lead->name, mv->name, dmg, target->name);
             }
             if (enraged) AppendEnrageLine(ctx->narration, target);
         }
@@ -1038,6 +1240,7 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
     ctx->map = map;
 
     BattleAnimUpdate(&ctx->anim, dt);
+    if (ctx->menuNoticeT > 0.0f) ctx->menuNoticeT -= dt;
 
     // Advance per-combatant move tweens for everyone on the board. Keeping
     // this before the state machine means BS_MOVE_PHASE / BS_ENEMY_MOVING see
@@ -1075,6 +1278,13 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
         if (actor && CombatantHasStatus(actor, STATUS_BOUND)) {
             snprintf(ctx->narration, NARRATION_LEN,
                      "%s struggles against the ropes!", actor->name);
+            ctx->state = BS_NARRATION;
+            break;
+        }
+        if (actor && CombatantHasStatus(actor, STATUS_STUNNED)) {
+            // Dazed: lose this turn, then shake it off.
+            CombatantClearStatus(actor, STATUS_STUNNED);
+            snprintf(ctx->narration, NARRATION_LEN, Str("battle.stun.skip"), actor->name);
             ctx->state = BS_NARRATION;
             break;
         }
@@ -1297,8 +1507,8 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
                             nx < map->width && ny < map->height;
             bool inRange = true;
             if (inBounds && actor && mv) {
-                inRange = TileMoveReaches(map, TileOf(actor),
-                                          (TilePos){nx, ny}, mv->range);
+                inRange = ActorMoveReaches(map, actor,
+                                           (TilePos){nx, ny}, mv->range);
             }
             if (inBounds && inRange) {
                 ctx->targetTile.x = nx;
@@ -1324,8 +1534,8 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
             if (ScreenTapToTile(map, camera, tapPos, &tx, &ty)) {
                 bool inRange = true;
                 if (actor && mv) {
-                    inRange = TileMoveReaches(map, TileOf(actor),
-                                              (TilePos){tx, ty}, mv->range);
+                    inRange = ActorMoveReaches(map, actor,
+                                               (TilePos){tx, ty}, mv->range);
                 }
                 if (inRange) {
                     if (tx == ctx->targetTile.x && ty == ctx->targetTile.y) {
@@ -1345,10 +1555,24 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
         break;
     }
 
-    case BS_EXECUTE:
+    case BS_EXECUTE: {
+        // Ally moves only commit on a friend. A confirm on an empty tile
+        // bounces back to targeting so a stray tap can't burn the turn.
+        Combatant *actor = GetCurrentActor(ctx);
+        if (actor && !CurrentActorIsEnemy(ctx) && ctx->selectedMove >= 0 &&
+            actor->moveIds[ctx->selectedMove] >= 0 &&
+            GetMoveDef(actor->moveIds[ctx->selectedMove])->range == RANGE_ALLY) {
+            bool isEnemy = false;
+            Combatant *ally = OccupantAtTile(ctx, ctx->targetTile, &isEnemy, NULL);
+            if (!ally || isEnemy || !AllyMoveCanTarget(map, actor, ally)) {
+                ctx->state = BS_TARGET_SELECT;
+                break;
+            }
+        }
         ExecuteAction(ctx, map);
         ctx->state = BattleAnimDone(&ctx->anim) ? BS_NARRATION : BS_ANIM;
         break;
+    }
 
     case BS_ANIM:
         if (BattleAnimDone(&ctx->anim)) ctx->state = BS_NARRATION;
@@ -1432,9 +1656,29 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
 
 // World-space overlays: reachable-tile tint, actor highlight, target cursor.
 // Caller is responsible for wrapping the call in BeginMode2D(camera).
+// Three small stars circling over a dazed combatant's head.
+static void DrawStunStars(const Combatant *c, int tp)
+{
+    if (!c->alive || !CombatantHasStatus(c, STATUS_STUNNED)) return;
+    Vector2 pos = CombatantVisualPixelPos(c, tp);
+    float cx = pos.x + tp * 0.5f;
+    float cy = pos.y + tp * 0.08f;
+    float t  = (float)GetTime() * 3.0f;
+    for (int i = 0; i < 3; i++) {
+        float ang = t + (float)i * 2.0944f;
+        float sx = cx + cosf(ang) * tp * 0.26f;
+        float sy = cy + sinf(ang) * tp * 0.08f;
+        DrawCircle((int)sx, (int)sy, tp * 0.06f, (Color){0xE8, 0xC2, 0x5A, 255});
+        DrawCircleLines((int)sx, (int)sy, tp * 0.06f, gPH.ink);
+    }
+}
+
 void BattleDrawWorldOverlay(const BattleContext *ctx, const TileMap *map)
 {
     int tp = TILE_SIZE * TILE_SCALE;
+
+    for (int i = 0; i < ctx->enemyCount; i++)   DrawStunStars(&ctx->enemies[i], tp);
+    for (int i = 0; i < ctx->party->count; i++) DrawStunStars(&ctx->party->members[i], tp);
 
     // Reachable-tile hints during MOVE phase (orthogonal neighbours within
     // budget). Just the four immediate neighbours — good enough UX for a
@@ -1488,20 +1732,27 @@ void BattleDrawWorldOverlay(const BattleContext *ctx, const TileMap *map)
         // Every enemy the selected move can reach gets a pulsing coral ink
         // loop (the palette's roof accent — warm, but not the UI's gold).
         // The top hint strip says "tap an enemy"; the loop shows which.
-        for (int i = 0; i < ctx->enemyCount; i++) {
-            const Combatant *e = &ctx->enemies[i];
+        // Ally moves light up friends instead, in the water-blue accent.
+        bool allyMove = (mv && mv->range == RANGE_ALLY);
+        int  litCount = allyMove ? ctx->party->count : ctx->enemyCount;
+        Color litCol  = allyMove ? gPH.waterDark : gPH.roof;
+        for (int i = 0; i < litCount; i++) {
+            const Combatant *e = allyMove ? &ctx->party->members[i] : &ctx->enemies[i];
             if (!e->alive) continue;
-            if (map && actor && mv &&
-                !TileMoveReaches(map, TileOf(actor), TileOf(e), mv->range))
+            if (allyMove) {
+                if (!map || !actor || !AllyMoveCanTarget(map, actor, e)) continue;
+            } else if (map && actor && mv &&
+                       !ActorMoveReaches(map, actor, TileOf(e), mv->range)) {
                 continue;
+            }
 
             float ein = 4.0f - 3.0f * pulse;
             Rectangle er = { (float)(e->tileX * tp) + ein,
                              (float)(e->tileY * tp) + ein,
                              (float)tp - ein * 2.0f, (float)tp - ein * 2.0f };
-            DrawRectangleRounded(er, 0.25f, 6, Fade(gPH.roof, 0.14f + 0.10f * pulse));
+            DrawRectangleRounded(er, 0.25f, 6, Fade(litCol, 0.14f + 0.10f * pulse));
             PHDrawInkFrame(er, 1.5f, 2.5f,
-                           Fade(gPH.roof, 0.65f + 0.35f * pulse), 0xB20 + i);
+                           Fade(litCol, 0.65f + 0.35f * pulse), 0xB20 + i);
 
         }
 
@@ -1658,6 +1909,23 @@ static void DrawRosters(const BattleContext *ctx)
     }
 }
 
+// Ink toast centred just above the bottom menu panel. Fades over its last
+// half second.
+static void DrawMenuNotice(const BattleContext *ctx)
+{
+    if (!ctx->menuNotice || ctx->menuNoticeT <= 0.0f) return;
+    float alpha = ctx->menuNoticeT < 0.5f ? ctx->menuNoticeT / 0.5f : 1.0f;
+    int fontSize = 20, padX = 16, padY = 8;
+    int tw = MeasureText(ctx->menuNotice, fontSize);
+    Rectangle r = { (GetScreenWidth() - tw) * 0.5f - padX,
+                    // 110 = the menu panel height (PANEL_H in battle_menu.c)
+                    (float)(GetScreenHeight() - 110 - fontSize - padY * 2 - 10),
+                    (float)(tw + padX * 2), (float)(fontSize + padY * 2) };
+    DrawRectangleRounded(r, 0.35f, 6, Fade(gPH.ink, 0.88f * alpha));
+    DrawText(ctx->menuNotice, (int)r.x + padX, (int)r.y + padY, fontSize,
+             Fade(gPH.bg, alpha));
+}
+
 void BattleDrawUI(const BattleContext *ctx)
 {
     DrawRosters(ctx);
@@ -1673,6 +1941,7 @@ void BattleDrawUI(const BattleContext *ctx)
     }
     case BS_ACTION_MENU:
         BattleMenuDrawRoot(&ctx->menu, ctx->movedThisTurn);
+        DrawMenuNotice(ctx);
         break;
     case BS_MOVE_SELECT: {
         Combatant *actor =
@@ -1682,6 +1951,7 @@ void BattleDrawUI(const BattleContext *ctx)
                     ctx->turnOrder[ctx->currentTurn].idx]
                 : NULL;
         BattleMenuDrawMoveSelect(&ctx->menu, actor, true);
+        DrawMenuNotice(ctx);
         break;
     }
     case BS_ITEM_SELECT:
@@ -1697,6 +1967,14 @@ void BattleDrawUI(const BattleContext *ctx)
         int fontSize = 20;
         DrawRectangle(0, 0, sw, th, (Color){0x3C, 0x28, 0x14, 220});
         const char *hint = Str("battle.hint.target");
+        if (ctx->currentTurn < ctx->turnCount && ctx->selectedMove >= 0 &&
+            !ctx->turnOrder[ctx->currentTurn].isEnemy) {
+            const Combatant *actor =
+                &ctx->party->members[ctx->turnOrder[ctx->currentTurn].idx];
+            int moveId = actor->moveIds[ctx->selectedMove];
+            if (moveId >= 0 && GetMoveDef(moveId)->range == RANGE_ALLY)
+                hint = Str("battle.hint.ally");
+        }
         DrawText(hint, 14, (th - fontSize) / 2, fontSize,
                  (Color){0xF7, 0xEF, 0xD9, 240});
         DrawBackIconButton(TargetBackRect());

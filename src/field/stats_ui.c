@@ -4,11 +4,14 @@
 #include "../data/move_defs.h"
 #include "../data/creature_defs.h"
 #include "../data/armor_defs.h"
+#include "../data/skill_defs.h"
 #include "../battle/battle_sprites.h"
 #include "../render/paper_harbor.h"
 #include "../screen_layout.h"
 #include "../systems/modal_close.h"
+#include "../systems/strings.h"
 #include "../systems/touch_input.h"
+#include "../systems/ui_button.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -29,6 +32,9 @@
 // sprite the battle uses, so members are told apart by face and not only
 // by a name string. Right: a header with a large portrait, then stats on
 // the left and the move list on the right, at readable sizes.
+//
+// The Stats / Skills chips on the title row swap the region under the header:
+// Skills shows the member's three skill trees and spends skill points.
 //----------------------------------------------------------------------------------
 
 static const char *kClassNames[CLASS_COUNT] = {
@@ -76,18 +82,97 @@ static Rectangle MemberRowRect(int i)
 static inline int DetailX(void) { return ContentX() + CARD_W + 24; }
 static inline int DetailW(void) { return PanelX() + PanelW() - 20 - DetailX(); }
 
+// Tab chips sit on the title row, right of "STATUS".
+#define TAB_W      96
+#define TAB_H      30
+#define TAB_GAP    8
+
+static Rectangle TabRect(int tab)
+{
+    int x = ContentX() + 110 + tab * (TAB_W + TAB_GAP);
+    return (Rectangle){ (float)x, (float)(PanelY() + 7), (float)TAB_W, (float)TAB_H };
+}
+
+// Skills tab geometry, shared by draw + tap hit-test. Three tree columns of
+// SKILL_TIERS_PER_TREE node cards under the header, then a detail strip with
+// the selected node's text and the Learn button.
+#define NODE_H     38
+#define NODE_GAP   6
+#define TREE_GAP   10
+#define LEARN_W    104
+#define LEARN_H    44
+
+static inline int SkillsTopY(void) { return PanelY() + 44 + 84 + 10; }
+
+static Rectangle SkillNodeRect(int tree, int tier)
+{
+    int colW = (DetailW() - (SKILL_TREES_PER_CLASS - 1) * TREE_GAP) / SKILL_TREES_PER_CLASS;
+    int x = DetailX() + tree * (colW + TREE_GAP);
+    int y = SkillsTopY() + FS_BODY + 8 + tier * (NODE_H + NODE_GAP);
+    return (Rectangle){ (float)x, (float)y, (float)colW, (float)NODE_H };
+}
+
+static inline int SkillDetailY(void)
+{
+    Rectangle last = SkillNodeRect(0, SKILL_TIERS_PER_TREE - 1);
+    return (int)(last.y + last.height) + 10;
+}
+
+static Rectangle LearnButtonRect(void)
+{
+    int x = DetailX() + DetailW() - LEARN_W;
+    return (Rectangle){ (float)x, (float)SkillDetailY(), (float)LEARN_W, (float)LEARN_H };
+}
+
+// "Make leader" button — right side of the header, stats tab only.
+#define LEADER_W   132
+#define LEADER_H   40
+
+static Rectangle LeaderButtonRect(void)
+{
+    int x = DetailX() + DetailW() - LEADER_W;
+    return (Rectangle){ (float)x, (float)(PanelY() + 44 + 40), (float)LEADER_W, (float)LEADER_H };
+}
+
+static const SkillClassDef *MemberSkillClass(const Combatant *m)
+{
+    if (!m->def) return NULL;
+    return GetSkillClassDef(SkillClassForCreature(m->def->id));
+}
+
+// Default selection for a member: the next node of the first tree that can
+// take a point, else the top of the first tree.
+static void SelectDefaultSkill(StatsUI *ui, const Combatant *m)
+{
+    ui->skillTree = 0;
+    ui->skillTier = 0;
+    for (int t = 0; t < SKILL_TREES_PER_CLASS; t++) {
+        if (CombatantCanBuySkill(m, t)) {
+            ui->skillTree = t;
+            ui->skillTier = m->skillRanks[t];
+            return;
+        }
+    }
+}
+
 void StatsUIInit(StatsUI *ui)
 {
-    ui->active = false;
-    ui->cursor = 0;
+    ui->active    = false;
+    ui->cursor    = 0;
+    ui->tab       = STATS_TAB_STATS;
+    ui->skillTree = 0;
+    ui->skillTier = 0;
 }
 
 bool StatsUIIsOpen(const StatsUI *ui) { return ui->active; }
 
 void StatsUIOpen(StatsUI *ui)
 {
-    ui->active = true;
-    ui->cursor = 0;
+    ui->active    = true;
+    ui->cursor    = 0;
+    ui->tab       = STATS_TAB_STATS;
+    ui->skillTree = 0;
+    ui->skillTier = 0;
 }
 
 void StatsUIClose(StatsUI *ui)
@@ -110,19 +195,69 @@ bool StatsUIUpdate(StatsUI *ui, Party *party)
     if (TouchGestureStartedIn(PanelRect())) TouchConsumeGesture();
 
     int n = party->count;
-    if (n > 0) {
-        if (IsKeyPressed(KEY_UP)    || IsKeyPressed(KEY_W)
-         || IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A))
-            ui->cursor = (ui->cursor - 1 + n) % n;
-        if (IsKeyPressed(KEY_DOWN)  || IsKeyPressed(KEY_S)
-         || IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D))
-            ui->cursor = (ui->cursor + 1) % n;
-        if (ui->cursor >= n) ui->cursor = n - 1;
-        for (int i = 0; i < n; i++) {
-            if (TouchTapInRect(MemberRowRect(i))) {
-                ui->cursor = i;
-                break;
+    if (n <= 0) return ui->active;
+
+    int prevCursor = ui->cursor;
+    int prevTab    = ui->tab;
+    bool skills    = (ui->tab == STATS_TAB_SKILLS);
+
+    if (IsKeyPressed(KEY_TAB)) ui->tab = (ui->tab + 1) % STATS_TAB_COUNT;
+    for (int t = 0; t < STATS_TAB_COUNT; t++) {
+        if (TouchTapInRect(TabRect(t))) ui->tab = t;
+    }
+
+    // Up/down always walks the party. Left/right does too on the stats tab;
+    // on the skills tab it walks the trees instead.
+    bool prev = IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_W);
+    bool next = IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S);
+    bool left  = IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A);
+    bool right = IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D);
+    if (!skills) {
+        prev = prev || left;
+        next = next || right;
+    }
+    if (prev) ui->cursor = (ui->cursor - 1 + n) % n;
+    if (next) ui->cursor = (ui->cursor + 1) % n;
+    if (ui->cursor >= n) ui->cursor = n - 1;
+    for (int i = 0; i < n; i++) {
+        if (TouchTapInRect(MemberRowRect(i))) {
+            ui->cursor = i;
+            break;
+        }
+    }
+
+    Combatant *m = &party->members[ui->cursor];
+    if (ui->cursor != prevCursor || ui->tab != prevTab) {
+        SelectDefaultSkill(ui, m);
+        return ui->active;
+    }
+
+    if (!skills && (IsKeyPressed(KEY_L) || TouchTapInRect(LeaderButtonRect()))) {
+        PartySetLeader(party, ui->cursor);
+    }
+
+    if (skills && MemberSkillClass(m)) {
+        if (left || right) {
+            int step = right ? 1 : SKILL_TREES_PER_CLASS - 1;
+            ui->skillTree = (ui->skillTree + step) % SKILL_TREES_PER_CLASS;
+            int rank = m->skillRanks[ui->skillTree];
+            ui->skillTier = rank < SKILL_TIERS_PER_TREE ? rank : SKILL_TIERS_PER_TREE - 1;
+        }
+        for (int t = 0; t < SKILL_TREES_PER_CLASS; t++) {
+            for (int k = 0; k < SKILL_TIERS_PER_TREE; k++) {
+                if (TouchTapInRect(SkillNodeRect(t, k))) {
+                    ui->skillTree = t;
+                    ui->skillTier = k;
+                }
             }
+        }
+        // Learn only buys the selected node when it is the tree's next one,
+        // so the button always matches the text the player just read.
+        bool isNext = (ui->skillTier == m->skillRanks[ui->skillTree]);
+        bool learn  = IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_Z)
+                   || TouchTapInRect(LearnButtonRect());
+        if (learn && isNext && CombatantBuySkill(m, ui->skillTree)) {
+            SelectDefaultSkill(ui, m);
         }
     }
 
@@ -184,6 +319,27 @@ static void DrawMemberCards(const StatsUI *ui, const Party *party)
         float pct = m->maxHp > 0 ? (float)m->hp / (float)m->maxHp : 0.0f;
         DrawBar(tx, (int)r.y + CARD_H - 16, (int)(r.x + r.width) - tx - 10, 8,
                 pct, (Color){110, 160, 80, 255});
+
+        // Leader pennant on the portrait's top-left corner.
+        if (i == PartyLeaderIdx(party)) {
+            float fx = pr.x - 2.0f, fy = pr.y - 4.0f;
+            DrawLineEx((Vector2){ fx, fy }, (Vector2){ fx, fy + 20.0f }, 2.5f, gPH.ink);
+            DrawTriangle((Vector2){ fx, fy }, (Vector2){ fx, fy + 11.0f },
+                         (Vector2){ fx + 14.0f, fy + 5.5f }, gPH.roof);
+            DrawLineEx((Vector2){ fx, fy }, (Vector2){ fx + 14.0f, fy + 5.5f }, 1.5f, gPH.ink);
+            DrawLineEx((Vector2){ fx, fy + 11.0f }, (Vector2){ fx + 14.0f, fy + 5.5f }, 1.5f, gPH.ink);
+        }
+
+        // Unspent skill points — a coral "+N" chip in the card's corner.
+        if (m->skillPoints > 0) {
+            char pts[16];
+            snprintf(pts, sizeof(pts), "+%d", m->skillPoints);
+            int pw = MeasureText(pts, FS_SMALL) + 12;
+            Rectangle chip = { r.x + r.width - pw - 8.0f, r.y + 8.0f, (float)pw, 18.0f };
+            DrawRectangleRounded(chip, 0.5f, 4, gPH.roof);
+            DrawRectangleRoundedLinesEx(chip, 0.5f, 4, 1.5f, gPH.ink);
+            DrawText(pts, (int)chip.x + 6, (int)chip.y + 3, FS_SMALL, gPH.ink);
+        }
     }
 }
 
@@ -228,7 +384,7 @@ static void DrawStatsBlock(const Combatant *m, int x, int y, int w)
     y += FS_BODY + 26;
 
     struct { const char *label; int value; } stats[4] = {
-        { "ATK", m->atk }, { "DEF", m->defense },
+        { "ATK", m->atk }, { "DEF", CombatantBaseDefense(m) },
         { "SPD", m->spd }, { "DEX", m->dex },
     };
     int chipGap = 10;
@@ -253,14 +409,14 @@ static void DrawMovesBlock(const Combatant *m, int x, int y, int w)
     DrawText("Moves", x, y, FS_HEAD, gPH.ink);
     y += FS_HEAD + 8;
     char buf[64];
-    const int rowH = 26;
+    const int rowH = 22;   // 7 slots + 3 group titles must fit the panel
     for (int g = 0; g < MOVE_GROUP_COUNT; g++) {
         DrawText(kGroupTitle[g], x, y, FS_SMALL, gPH.inkLight);
         y += FS_SMALL + 4;
         int rowCount = MoveGroupSlotCount(g);
         for (int n = 0; n < rowCount; n++) {
             int slot = MOVE_GROUP_SLOT(g, n);
-            Rectangle ic = { (float)x, (float)y, 22.0f, 22.0f };
+            Rectangle ic = { (float)x, (float)y, 20.0f, 20.0f };
             if (m->moveIds[slot] < 0) {
                 DrawRectangleRoundedLinesEx(ic, 0.3f, 4, 1.0f, gPH.inkLight);
                 DrawText("--", x + 30, y + 2, FS_BODY, gPH.inkLight);
@@ -268,7 +424,7 @@ static void DrawMovesBlock(const Combatant *m, int x, int y, int w)
                 const MoveDef *mv = GetMoveDef(m->moveIds[slot]);
                 DrawRectangleRounded(ic, 0.3f, 4, gPH.panel);
                 DrawRectangleRoundedLinesEx(ic, 0.3f, 4, 1.0f, gPH.ink);
-                DrawMoveIcon((Rectangle){ ic.x + 2, ic.y + 2, 18.0f, 18.0f },
+                DrawMoveIcon((Rectangle){ ic.x + 2, ic.y + 2, 16.0f, 16.0f },
                              m->moveIds[slot]);
                 DrawText(mv->name, x + 30, y + 2, FS_BODY, gPH.ink);
                 if (mv->isWeapon) {
@@ -286,6 +442,108 @@ static void DrawMovesBlock(const Combatant *m, int x, int y, int w)
     }
 }
 
+// Draw `text` word-wrapped to `maxW` pixels, at most `maxLines` lines.
+static void DrawWrapped(const char *text, int x, int y, int maxW, int fontSize,
+                        int maxLines, Color col)
+{
+    char line[160] = { 0 };
+    int  lineLen = 0;
+    int  lines   = 0;
+    const char *p = text;
+    while (*p && lines < maxLines) {
+        const char *wordEnd = p;
+        while (*wordEnd && *wordEnd != ' ') wordEnd++;
+        int wordLen = (int)(wordEnd - p);
+        char trial[160];
+        snprintf(trial, sizeof(trial), "%s%s%.*s", line, lineLen > 0 ? " " : "", wordLen, p);
+        if (lineLen > 0 && MeasureText(trial, fontSize) > maxW) {
+            DrawText(line, x, y + lines * (fontSize + 4), fontSize, col);
+            lines++;
+            line[0] = '\0';
+            lineLen = 0;
+            continue;   // retry this word on the fresh line
+        }
+        snprintf(line, sizeof(line), "%s", trial);
+        lineLen = (int)strlen(line);
+        p = wordEnd;
+        while (*p == ' ') p++;
+    }
+    if (lineLen > 0 && lines < maxLines)
+        DrawText(line, x, y + lines * (fontSize + 4), fontSize, col);
+}
+
+// Skills tab: three tree columns, then the selected node's text + Learn.
+static void DrawSkillsBlock(const StatsUI *ui, const Combatant *m)
+{
+    const SkillClassDef *cls = MemberSkillClass(m);
+    int x = DetailX();
+    if (!cls) {
+        DrawText(Str("skill.ui.none"), x, SkillsTopY(), FS_BODY, gPH.inkLight);
+        return;
+    }
+
+    for (int t = 0; t < SKILL_TREES_PER_CLASS; t++) {
+        const SkillTreeDef *tree = &cls->trees[t];
+        Rectangle top = SkillNodeRect(t, 0);
+        DrawText(Str(tree->nameKey), (int)top.x + 2, SkillsTopY(), FS_BODY, gPH.ink);
+
+        int rank = m->skillRanks[t];
+        for (int k = 0; k < SKILL_TIERS_PER_TREE; k++) {
+            const SkillNodeDef *node = &tree->nodes[k];
+            Rectangle r = SkillNodeRect(t, k);
+            bool owned = k < rank;
+            bool isNext = (k == rank) && SkillNodeIsReady(node);
+            bool sel = (ui->skillTree == t && ui->skillTier == k);
+
+            // Rail joining this node to the one above — inked once owned.
+            if (k > 0) {
+                float cx = r.x + 16.0f;
+                DrawLineEx((Vector2){ cx, r.y - NODE_GAP }, (Vector2){ cx, r.y },
+                           3.0f, owned ? gPH.ink : gPH.inkLight);
+            }
+
+            Color fill = owned  ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 170}
+                       : isNext ? gPH.panel
+                                : (Color){0, 0, 0, 22};
+            DrawRectangleRounded(r, 0.25f, 6, fill);
+            DrawRectangleRoundedLinesEx(r, 0.25f, 6, sel ? 3.0f : 1.5f,
+                                        (sel || owned || isNext) ? gPH.ink : gPH.inkLight);
+
+            const char *name = node->nameKey ? Str(node->nameKey) : Str("skill.ui.unknown");
+            DrawText(name, (int)r.x + 10, (int)r.y + (NODE_H - FS_SMALL) / 2, FS_SMALL,
+                     (owned || isNext) ? gPH.ink : gPH.inkLight);
+        }
+    }
+
+    // Detail strip for the selected node.
+    const SkillNodeDef *node = &cls->trees[ui->skillTree].nodes[ui->skillTier];
+    int rank   = m->skillRanks[ui->skillTree];
+    bool owned = ui->skillTier < rank;
+    bool ready = SkillNodeIsReady(node);
+    int dy     = SkillDetailY();
+    int textW  = DetailW() - LEARN_W - 16;
+
+    const char *name = node->nameKey ? Str(node->nameKey) : Str("skill.ui.unknown");
+    DrawText(name, x, dy, FS_BODY, gPH.ink);
+
+    const char *desc = NULL;
+    if (!node->descKey)           desc = Str("skill.ui.unknown.desc");
+    else                          desc = Str(node->descKey);
+    DrawWrapped(desc, x, dy + FS_BODY + 4, textW, FS_SMALL, 2, gPH.inkLight);
+
+    const char *state = NULL;
+    if (owned)                          state = Str("skill.ui.owned");
+    else if (!ready)                    state = Str("skill.ui.notready");
+    else if (ui->skillTier > rank)      state = Str("skill.ui.locked");
+    else if (m->skillPoints <= 0)       state = Str("skill.ui.nopoints");
+    if (state) {
+        DrawText(state, x, dy + FS_BODY + 4 + 2 * (FS_SMALL + 4), FS_SMALL, gPH.ink);
+    }
+
+    bool canLearn = !owned && ui->skillTier == rank && CombatantCanBuySkill(m, ui->skillTree);
+    DrawChunkyButton(LearnButtonRect(), Str("skill.ui.learn"), 18, canLearn, canLearn);
+}
+
 void StatsUIDraw(const StatsUI *ui, const Party *party)
 {
     if (!ui->active) return;
@@ -295,6 +553,26 @@ void StatsUIDraw(const StatsUI *ui, const Party *party)
     ModalCloseButtonDraw(PanelRect());
 
     DrawText("STATUS", ContentX(), PanelY() + 12, FS_HEAD, gPH.ink);
+
+    // Tab chips. The skills chip turns coral while anyone has a point to spend.
+    bool pointsWaiting = false;
+    for (int i = 0; i < party->count; i++) {
+        if (party->members[i].skillPoints > 0) pointsWaiting = true;
+    }
+    const char *tabLabels[STATS_TAB_COUNT] = { Str("skill.ui.tab.stats"), Str("skill.ui.tab.skills") };
+    for (int t = 0; t < STATS_TAB_COUNT; t++) {
+        Rectangle tr = TabRect(t);
+        bool on = (ui->tab == t);
+        bool nudge = (t == STATS_TAB_SKILLS) && pointsWaiting && !on;
+        DrawRectangleRounded(tr, 0.4f, 6,
+                             on    ? (Color){gPH.roof.r, gPH.roof.g, gPH.roof.b, 90}
+                           : nudge ? gPH.roof
+                                   : (Color){0, 0, 0, 22});
+        DrawRectangleRoundedLinesEx(tr, 0.4f, 6, on ? 2.5f : 1.5f, on ? gPH.ink : gPH.inkLight);
+        int lw = MeasureText(tabLabels[t], FS_BODY);
+        DrawText(tabLabels[t], (int)(tr.x + (tr.width - lw) * 0.5f),
+                 (int)(tr.y + (tr.height - FS_BODY) * 0.5f), FS_BODY, gPH.ink);
+    }
 
     if (party->count <= 0) {
         DrawText("(No party members)", ContentX(), PanelY() + 60, FS_BODY, gPH.inkLight);
@@ -316,6 +594,29 @@ void StatsUIDraw(const StatsUI *ui, const Party *party)
     int dx = DetailX();
     int dw = DetailW();
     int y  = DrawHeader(m, dx, PanelY() + 44);
+
+    if (ui->tab == STATS_TAB_SKILLS) {
+        // Skill class + points counter, right-aligned beside the header.
+        const SkillClassDef *cls = MemberSkillClass(m);
+        if (cls) {
+            const char *clsName = Str(cls->nameKey);
+            int cw = MeasureText(clsName, FS_HEAD);
+            DrawText(clsName, dx + dw - cw, PanelY() + 44 + 10, FS_HEAD, gPH.ink);
+            char pts[48];
+            snprintf(pts, sizeof(pts), Str("skill.ui.points"), m->skillPoints);
+            int pw = MeasureText(pts, FS_LABEL);
+            DrawText(pts, dx + dw - pw, PanelY() + 44 + 40, FS_LABEL, gPH.inkLight);
+        }
+        DrawSkillsBlock(ui, m);
+        return;
+    }
+
+    // Leader control. The current leader shows a greyed "LEADER" plate;
+    // anyone else who can lead gets the live button.
+    bool isLeader = (idx == PartyLeaderIdx(party));
+    DrawChunkyButton(LeaderButtonRect(),
+                     Str(isLeader ? "party.leader.is" : "party.leader.make"), 16,
+                     false, !isLeader && PartyCanLead(party, idx));
 
     int statsW = (dw - 30) / 2;
     if (statsW > 230) statsW = 230;

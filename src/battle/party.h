@@ -15,6 +15,11 @@ typedef struct Party {
     Combatant members[PARTY_MAX];
     int       count;
     int       activeIndex;   // who is currently acting in battle
+    // Party leader: the member who walks the field and makes the sneak
+    // attack. Chosen on the Status screen. Read it through PartyLeaderIdx,
+    // which falls back to slot 0. Jan (slot 0) stays the protagonist for the
+    // defeat rule whoever leads.
+    int       leaderIdx;
     Inventory inventory;     // shared bag (items + unequipped weapons)
     // Default battle-grid cell for each member. Populated by the field
     // LAYOUT tab; read by BattleInit to seed SetupGridPositions. Default is
@@ -28,6 +33,13 @@ void PartyAddMember(Party *p, int creatureId, int level);
 // down. Used to drop a temp ally (e.g., unrescued captive) after a battle.
 // Returns true on success.
 bool PartyRemoveMember(Party *p, int idx);
+// Index of the party leader. Falls back to slot 0 when the stored leader is
+// out of range, fainted or roped.
+int  PartyLeaderIdx(const Party *p);
+// True if member idx may lead (in range, alive, not roped).
+bool PartyCanLead(const Party *p, int idx);
+// Make idx the leader. Returns false (no change) when PartyCanLead is false.
+bool PartySetLeader(Party *p, int idx);
 bool PartyAllFainted(const Party *p);
 // Defeat condition for the run: true if Jan (slot 0) is down OR the whole
 // party is fainted. Other members can fall and the fight keeps going, but

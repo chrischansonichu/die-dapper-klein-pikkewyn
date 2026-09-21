@@ -32,6 +32,27 @@ bool PartyRemoveMember(Party *p, int idx)
     }
     p->count--;
     if (p->activeIndex >= p->count) p->activeIndex = 0;
+    if (p->leaderIdx == idx)     p->leaderIdx = 0;
+    else if (p->leaderIdx > idx) p->leaderIdx--;
+    return true;
+}
+
+bool PartyCanLead(const Party *p, int idx)
+{
+    if (idx < 0 || idx >= p->count) return false;
+    const Combatant *c = &p->members[idx];
+    return c->alive && !CombatantHasStatus(c, STATUS_BOUND);
+}
+
+int PartyLeaderIdx(const Party *p)
+{
+    return PartyCanLead(p, p->leaderIdx) ? p->leaderIdx : 0;
+}
+
+bool PartySetLeader(Party *p, int idx)
+{
+    if (!PartyCanLead(p, idx)) return false;
+    p->leaderIdx = idx;
     return true;
 }
 

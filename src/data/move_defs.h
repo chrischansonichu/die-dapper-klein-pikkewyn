@@ -9,14 +9,30 @@
 
 #define MOVE_NAME_LEN  32
 #define MOVE_DESC_LEN  64
-#define MOVE_COUNT     11
+#define MOVE_COUNT     14
 
 typedef enum MoveRange {
     RANGE_MELEE = 0,    // must be in front column, hits adjacent enemy
     RANGE_RANGED,       // can attack from anywhere, pick any enemy
     RANGE_AOE,          // hits all enemies
     RANGE_SELF,         // targets self / entire party
+    RANGE_ALLY,         // pick a living ally (not self) within RANGED_MOVE_REACH; no LOS needed
 } MoveRange;
+
+// Chebyshev reach of RANGE_RANGED moves. RANGE_ALLY moves share it, so a
+// friend is "in range" exactly when a thrown weapon would be.
+#define RANGED_MOVE_REACH 3
+
+// Extra behaviour on top of the plain damage / status paths. MOVE_FX_NONE
+// for every ordinary move.
+typedef enum MoveEffect {
+    MOVE_FX_NONE = 0,
+    MOVE_FX_STUN,          // on hit, MOVE_STUN_CHANCE_PCT to stun the target for one turn
+    MOVE_FX_SWAP_ALLY,     // actor and the chosen ally trade tiles
+    MOVE_FX_RESCUE_ALLY,   // actor jumps next to the chosen ally, then hits every adjacent enemy
+} MoveEffect;
+
+#define MOVE_STUN_CHANCE_PCT 50
 
 // Attack class: HOW an attack is delivered — melee swing, ranged throw/shot,
 // or magic (sonic/water calls). Orthogonal to MoveRange, which is the
@@ -83,7 +99,14 @@ typedef struct MoveDef {
     // combatant. Used for the Captain's Boarding Charge so the boss can chase
     // the player into the railing on the F7 ship arena.
     int            dashTiles;
+    MoveEffect     effect;
 } MoveDef;
+
+// Ids of the skill-granted moves (see skill_defs.c). Older moves are still
+// referenced by bare number across the code base.
+#define MOVE_FLIPPER_SLAP  11
+#define MOVE_SWAP_PLACES   12
+#define MOVE_TO_THE_RESCUE 13
 
 // Forward declaration - defined in move_defs.c
 extern const MoveDef gMoveDefs[MOVE_COUNT];

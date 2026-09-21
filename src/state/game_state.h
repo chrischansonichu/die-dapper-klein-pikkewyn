@@ -55,7 +55,7 @@
 // once the Captain has fallen. One-shot scenes, hidden-item gates, and the
 // friendly residents' first conversations each get a bit. Bits 62-63 are
 // reserved; the next level needs a second flag word.
-#define STORY_FLAG_LOK_NEWS          (1ull << 45)  // hub scene: Lappies is missing
+#define STORY_FLAG_LOK_NEWS          (1ull << 45)  // hub scene: Pierie is missing
 #define STORY_FLAG_LOK_BRIEFED       (1ull << 46)  // elder's briefing — gate explained
 #define STORY_FLAG_LOK_ARRIVED       (1ull << 47)  // S1 beach arrival narration shown
 #define STORY_FLAG_LOK_CHEST_S2      (1ull << 48)  // drum-alley chest (Kettie) looted
@@ -73,6 +73,11 @@
 #define STORY_FLAG_LOK_LEDGER_READ   (1ull << 60)  // S4 runners' ledger read
 #define STORY_FLAG_LOK_SIGN_READ     (1ull << 61)  // S1 welcome sign read
 #define STORY_FLAG_HUB_LEFT          (1ull << 62)  // first warp out of the hub taken — touch cues stop
+
+// Finished dungeons, one bit each, stored in GameState.dungeonsCompleted.
+// Same rule as the story flags: never renumber, only append — saves keep them.
+#define DUNGEON_DONE_HARBOR   (1u << 0)   // Captain beaten on Harbor F7
+#define DUNGEON_DONE_LOKASIE  (1u << 1)   // Sinkbaai finale (not built yet)
 
 //----------------------------------------------------------------------------------
 // GameState - persistent state that survives map transitions and battles.
@@ -167,11 +172,25 @@ typedef struct GameState {
     // read logbooks, lit lanterns, opened alcove chests. Survives save/load.
     uint64_t storyFlags;
 
+    // Bitmask of DUNGEON_DONE_*. Each new bit pays every party member one
+    // skill point (GameStateCompleteDungeon). Saved; captainDefeated is
+    // rebuilt from it on load.
+    uint32_t dungeonsCompleted;
+
     // Additional persistent state lands here in later phases:
     //   Roster    dismissedMembers;
 } GameState;
 
 // Fresh game: seeds the party with Jan + starter items, lands them in the hub.
 void GameStateInit(GameState *gs);
+
+// Mark a dungeon finished. The first time a bit is set, every current party
+// member earns one skill point. Returns true only on that first time.
+bool GameStateCompleteDungeon(GameState *gs, uint32_t dungeonBit);
+
+// PartyAddMember plus skill-point catch-up: a recruit starts with one point
+// per dungeon the party has already finished, so late joiners keep pace.
+// Returns the new member's party index, or -1 if the party is full.
+int  GameStateAddMember(GameState *gs, int creatureId, int level);
 
 #endif // GAME_STATE_H

@@ -59,18 +59,21 @@ static Rectangle RootButtonRect(int i)
 
 // Indexed [col][row] to match kGridSlot, defined below in this file. Duplicated
 // here so helpers above don't need a forward decl.
-static const int kGridSlot[3][2] = {
-    {0, 3}, {1, 2}, {4, 5}
+// -1 = no cell (the 7th slot leaves one hole in the 4x2 grid).
+#define GRID_COLS_N 4
+#define GRID_ROWS_N 2
+static const int kGridSlot[GRID_COLS_N][GRID_ROWS_N] = {
+    {0, 3}, {1, 2}, {4, 5}, {6, -1}
 };
 
-// Move-select cells are now a single horizontal row of 6 icon tiles, matching
+// Move-select cells are now a single horizontal row of icon tiles (one per slot), matching
 // the inventory's equipped weapons row pattern. The kGridSlot[col][row]
 // mapping is preserved for keyboard navigation and code that still talks in
-// (col,row); each (col,row) pair maps to a flat slot index 0..5 along the row.
+// (col,row); each (col,row) pair maps to a flat slot index along the row.
 static int GridSlotToFlat(int col, int row)
 {
     int slot = kGridSlot[col][row];
-    return slot;  // already a flat 0..5 slot index
+    return slot;  // already a flat slot index
 }
 
 static Rectangle MoveSlotRect(int slot)
@@ -90,7 +93,7 @@ static Rectangle MoveSlotRect(int slot)
 #else
     int gap = 8, margin = 16;
     int totalW = PANEL_W - 2 * margin - 80; // reserve room for BACK chip
-    int tileW = (totalW - 5 * gap) / 6;
+    int tileW = (totalW - (CREATURE_MAX_MOVES - 1) * gap) / CREATURE_MAX_MOVES;
     int tileH = PANEL_H - 24;
     if (tileH > tileW + 18) tileH = tileW + 18;
     int startX = margin;
@@ -209,8 +212,8 @@ static int SlotGroupOf(int slot)
 
 static void SlotToGrid(int slot, int *col, int *row)
 {
-    for (int c = 0; c < 3; c++) {
-        for (int r = 0; r < 2; r++) {
+    for (int c = 0; c < GRID_COLS_N; c++) {
+        for (int r = 0; r < GRID_ROWS_N; r++) {
             if (kGridSlot[c][r] == slot) { *col = c; *row = r; return; }
         }
     }
@@ -223,11 +226,11 @@ static int FindNonEmptySlot(const Combatant *actor, int startCol, int startRow,
                             int dcol, int drow)
 {
     int c = startCol, r = startRow;
-    for (int step = 0; step < 6; step++) {
-        c = (c + dcol + 3) % 3;
-        r = (r + drow + 2) % 2;
+    for (int step = 0; step < GRID_COLS_N * GRID_ROWS_N; step++) {
+        c = (c + dcol + GRID_COLS_N) % GRID_COLS_N;
+        r = (r + drow + GRID_ROWS_N) % GRID_ROWS_N;
         int slot = kGridSlot[c][r];
-        if (actor->moveIds[slot] >= 0) return slot;
+        if (slot >= 0 && actor->moveIds[slot] >= 0) return slot;
     }
     return kGridSlot[startCol][startRow]; // fallback — all empty, stay put
 }
@@ -276,8 +279,9 @@ int BattleMenuUpdateMoveSelect(BattleMenuState *m, const Combatant *actor)
     // Tap a cell → select that move directly.
     if (TouchGestureStartedIn(PanelRect())) TouchConsumeGesture();
     if (TouchTapInRect(BackButtonRect())) return -2;
-    for (int c = 0; c < 3; c++) {
-        for (int r = 0; r < 2; r++) {
+    for (int c = 0; c < GRID_COLS_N; c++) {
+        for (int r = 0; r < GRID_ROWS_N; r++) {
+            if (kGridSlot[c][r] < 0) continue;
             if (TouchTapInRect(MoveCellRect(c, r))) {
                 int slot = kGridSlot[c][r];
                 if (actor->moveIds[slot] < 0) return -1;
@@ -333,11 +337,11 @@ void BattleMenuDrawMoveSelect(const BattleMenuState *m, const Combatant *actor, 
 {
     PHDrawPanel((Rectangle){PANEL_X, PANEL_Y, PANEL_W, PANEL_H}, 0xA02);
 
-    // Single horizontal row of 6 move tiles, matching the inventory's
+    // Single horizontal row of move tiles, matching the inventory's
     // equipped-weapons strip exactly. Each tile shows the procedural move
     // icon, the move name, and a durability badge for weapons. Disabled
     // (broken / out-of-range) tiles dim and ignore taps.
-    for (int slot = 0; slot < 6; slot++) {
+    for (int slot = 0; slot < CREATURE_MAX_MOVES; slot++) {
         Rectangle r = MoveSlotRect(slot);
         int moveId = actor->moveIds[slot];
         // No "currently selected" wash — tap directly commits the move; the

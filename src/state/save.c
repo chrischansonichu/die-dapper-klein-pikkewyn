@@ -27,7 +27,12 @@
 //   longer match anything in MapId, so v6 saves are rejected as stale.
 // Bumped 7 → 8 (2026-09-09): GameState gained `rescueResumeMapId` so the
 //   easy-mode resume slot knows which dungeon (harbor vs lokasie) it belongs to.
-#define SAVE_VERSION 8u
+// Bumped 8 → 9 (2026-09-21): skill trees. CombatantSave gained `skillPoints`
+//   + `skillRanks[]`; SaveData gained `dungeonsCompleted`, which also restores
+//   `captainDefeated` (it was never saved — a reload brought the Captain back).
+//   Same bump: a third Special move slot (CREATURE_MAX_MOVES 6 → 7) and the
+//   party `leaderIdx`.
+#define SAVE_VERSION 9u
 
 // Flat per-combatant record. creatureId lets us re-resolve the CreatureDef
 // pointer on load. We snapshot effective stats rather than re-deriving them
@@ -44,6 +49,8 @@ typedef struct CombatantSave {
     int32_t moveDurability[CREATURE_MAX_MOVES];
     int32_t moveUpgradeLevel[CREATURE_MAX_MOVES];
     int32_t alive;
+    int32_t skillPoints;
+    int32_t skillRanks[SKILL_TREES_PER_CLASS];
 } CombatantSave;
 
 typedef struct SaveData {
@@ -67,8 +74,10 @@ typedef struct SaveData {
     int32_t  rescueResumeMapId;
     int32_t  blacksmithScrap;
     uint64_t storyFlags;
+    uint32_t dungeonsCompleted;
 
     int32_t       partyCount;
+    int32_t       leaderIdx;
     CombatantSave members[PARTY_MAX];
     GridPos       preferredCell[PARTY_MAX];
 
@@ -93,6 +102,10 @@ static void PackCombatant(CombatantSave *out, const Combatant *c)
     out->xpToNext    = c->xpToNext;
     out->statusFlags = c->statusFlags;
     out->alive       = c->alive ? 1 : 0;
+    out->skillPoints = c->skillPoints;
+    for (int i = 0; i < SKILL_TREES_PER_CLASS; i++) {
+        out->skillRanks[i] = c->skillRanks[i];
+    }
     for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
         out->moveIds[i]          = c->moveIds[i];
         out->moveDurability[i]   = c->moveDurability[i];
@@ -120,6 +133,13 @@ static void UnpackCombatant(Combatant *c, const CombatantSave *in)
     c->xpToNext    = in->xpToNext;
     c->statusFlags = in->statusFlags;
     c->alive       = in->alive != 0;
+    c->skillPoints = in->skillPoints < 0 ? 0 : in->skillPoints;
+    for (int i = 0; i < SKILL_TREES_PER_CLASS; i++) {
+        int rank = in->skillRanks[i];
+        if (rank < 0) rank = 0;
+        if (rank > SKILL_TIERS_PER_TREE) rank = SKILL_TIERS_PER_TREE;
+        c->skillRanks[i] = rank;
+    }
     for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
         c->moveIds[i]          = in->moveIds[i];
         c->moveDurability[i]   = in->moveDurability[i];
@@ -147,8 +167,10 @@ bool SaveGame(const GameState *gs, int playerTileX, int playerTileY, int playerD
     s.rescueResumeMapId = gs->rescueResumeMapId;
     s.blacksmithScrap   = gs->blacksmithScrap;
     s.storyFlags        = gs->storyFlags;
+    s.dungeonsCompleted = gs->dungeonsCompleted;
 
     s.partyCount = gs->party.count;
+    s.leaderIdx  = gs->party.leaderIdx;
     for (int i = 0; i < gs->party.count && i < PARTY_MAX; i++) {
         PackCombatant(&s.members[i], &gs->party.members[i]);
         s.preferredCell[i] = gs->party.preferredCell[i];
@@ -203,6 +225,8 @@ bool LoadGame(GameState *gs, int *outPlayerX, int *outPlayerY, int *outPlayerDir
     gs->rescueSourceMapId = -1;
     gs->blacksmithScrap   = s.blacksmithScrap;
     gs->storyFlags        = s.storyFlags;
+    gs->dungeonsCompleted = s.dungeonsCompleted;
+    gs->captainDefeated   = (s.dungeonsCompleted & DUNGEON_DONE_HARBOR) != 0;
 
     PartyInit(&gs->party);
     int n = s.partyCount;
@@ -212,6 +236,7 @@ bool LoadGame(GameState *gs, int *outPlayerX, int *outPlayerY, int *outPlayerDir
         gs->party.preferredCell[i] = s.preferredCell[i];
     }
     gs->party.count = n;
+    gs->party.leaderIdx = (s.leaderIdx >= 0 && s.leaderIdx < n) ? s.leaderIdx : 0;
     gs->party.inventory = s.inventory;
 
     if (outPlayerX)   *outPlayerX   = s.playerTileX;

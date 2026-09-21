@@ -5,6 +5,7 @@
 #include "raylib.h"  // Vector2 (used by the move-tween visual-pos helper)
 #include "../data/creature_defs.h"
 #include "../data/move_defs.h"
+#include "../data/skill_defs.h"
 
 // Max party slots the aggro table has to hold. This mirrors PARTY_MAX in
 // party.h; redeclared here so combatant.h doesn't have to include party.h
@@ -26,6 +27,8 @@
 typedef enum CombatantStatus {
     STATUS_NONE  = 0,
     STATUS_BOUND = 1 << 0,
+    // Dazed: the combatant loses its next turn, then the flag clears.
+    STATUS_STUNNED = 1 << 1,
 } CombatantStatus;
 
 typedef struct Combatant {
@@ -78,6 +81,11 @@ typedef struct Combatant {
     // current battle. Enemy AI uses this to focus the party member who has
     // hit hardest. Zeroed in CombatantInit so fresh battles start clean.
     int   damageTakenFrom[COMBATANT_PARTY_MAX];
+    // Skill trees (party members only — see skill_defs.h). skillPoints is the
+    // unspent pool; skillRanks[t] is how many nodes of tree t are owned,
+    // counted from the top, since a tree fills in order.
+    int   skillPoints;
+    int   skillRanks[SKILL_TREES_PER_CLASS];
     // Per-combatant tile-step tween. When a combatant moves one tile, tileX/Y
     // snap to the new position *now* (game logic stays integer-grid), and the
     // tween animates the visual offset from the previous tile back to zero.
@@ -134,6 +142,26 @@ void CombatantEquipArmor(Combatant *c, int armorId, int *outDisplaced);
 // Clear the combatant's armor slot. Writes the removed armor id to *outId
 // (-1 if slot was already empty).
 void CombatantUnequipArmor(Combatant *c, int *outId);
+
+// True if the combatant owns a skill node with the given effect. Always false
+// for creatures without a skill class (every enemy).
+bool CombatantHasSkill(const Combatant *c, SkillEffect fx);
+
+// True if the next node of `tree` exists, has a runtime effect, and the
+// combatant has a point to pay for it.
+bool CombatantCanBuySkill(const Combatant *c, int tree);
+
+// Spend one point on the next node of `tree`. Returns false (and changes
+// nothing) when CombatantCanBuySkill is false.
+bool CombatantBuySkill(Combatant *c, int tree);
+
+// Put every move granted by an owned skill node into a free Special slot.
+// Safe to call any time; moves already slotted are left alone.
+void CombatantSyncSkillMoves(Combatant *c);
+
+// Base defense plus the skill bonus — the value before armor and defMod.
+// Use this anywhere DEF is shown or fed into damage math.
+int  CombatantBaseDefense(const Combatant *c);
 
 // Apply a healing amount to c->hp, capped at c->maxHp. Returns actual HP restored.
 int  CombatantHeal(Combatant *c, int amount);

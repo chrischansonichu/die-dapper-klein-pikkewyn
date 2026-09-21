@@ -99,6 +99,9 @@ bool EnemyUpdate(FieldEnemy *e, const TileMap *map,
                  const struct FieldState *ow, int selfIdx);
 
 // Draw inside BeginMode2D.
-void EnemyDraw(const FieldEnemy *e);
+// `sidelined` = a battle is running and this enemy is not in it. Drawn faded,
+// without the idle bob or alert mark, so the player can tell at a glance who
+// is part of the fight and who is just standing near it.
+void EnemyDraw(const FieldEnemy *e, bool sidelined);
 
 #endif // ENEMY_H

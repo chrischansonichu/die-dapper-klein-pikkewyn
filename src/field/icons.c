@@ -317,6 +317,45 @@ void DrawMoveIcon(Rectangle r, int moveId)
             }
         } break;
 
+        case 11: { // Flipper Slap — a flipper blade with three daze stars
+            Color flip = (Color){0x3A, 0x3F, 0x4A, 255};
+            DrawEllipse((int)(cx - size * 0.06f), (int)(cy + size * 0.06f),
+                        size * 0.30f, size * 0.13f, flip);
+            Color star = (Color){0xE8, 0xC2, 0x5A, 255};
+            for (int i = 0; i < 3; i++) {
+                float sx = cx + (i - 1) * size * 0.20f + size * 0.06f;
+                float sy = cy - size * 0.24f - ((i == 1) ? size * 0.08f : 0.0f);
+                DrawCircle((int)sx, (int)sy, size * 0.06f, star);
+                DrawCircleLines((int)sx, (int)sy, size * 0.06f, gPH.ink);
+            }
+        } break;
+
+        case 12: { // Swap Places — two dots with opposed arrows between them
+            Color a = gPH.waterDark, b = gPH.roof;
+            DrawCircle((int)(cx - size * 0.24f), (int)cy, size * 0.11f, a);
+            DrawCircle((int)(cx + size * 0.24f), (int)cy, size * 0.11f, b);
+            float ay = cy - size * 0.24f, by = cy + size * 0.24f;
+            DrawLineEx((Vector2){ cx - size * 0.22f, ay }, (Vector2){ cx + size * 0.22f, ay }, 2.5f, gPH.ink);
+            DrawTriangle((Vector2){ cx + size * 0.30f, ay },
+                         (Vector2){ cx + size * 0.16f, ay - size * 0.08f },
+                         (Vector2){ cx + size * 0.16f, ay + size * 0.08f }, gPH.ink);
+            DrawLineEx((Vector2){ cx + size * 0.22f, by }, (Vector2){ cx - size * 0.22f, by }, 2.5f, gPH.ink);
+            DrawTriangle((Vector2){ cx - size * 0.30f, by },
+                         (Vector2){ cx - size * 0.16f, by + size * 0.08f },
+                         (Vector2){ cx - size * 0.16f, by - size * 0.08f }, gPH.ink);
+        } break;
+
+        case 13: { // To the Rescue — a friend dot ringed by an impact burst
+            DrawCircle((int)cx, (int)cy, size * 0.12f, gPH.roof);
+            DrawCircleLines((int)cx, (int)cy, size * 0.12f, gPH.ink);
+            for (int i = 0; i < 8; i++) {
+                float ang = (float)i * 0.785398f;
+                Vector2 p0 = { cx + cosf(ang) * size * 0.20f, cy + sinf(ang) * size * 0.20f };
+                Vector2 p1 = { cx + cosf(ang) * size * 0.36f, cy + sinf(ang) * size * 0.36f };
+                DrawLineEx(p0, p1, 2.5f, gPH.ink);
+            }
+        } break;
+
         default: {
             DrawCircle((int)cx, (int)cy, size * 0.20f, gPH.panel);
             DrawCircleLines((int)cx, (int)cy, size * 0.20f, gPH.ink);

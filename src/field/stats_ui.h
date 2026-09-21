@@ -11,9 +11,18 @@
 // still persisted for save-format stability but is no longer user-editable.
 //----------------------------------------------------------------------------------
 
+typedef enum StatsTab {
+    STATS_TAB_STATS = 0,
+    STATS_TAB_SKILLS,    // skill trees — spend points earned from dungeons
+    STATS_TAB_COUNT,
+} StatsTab;
+
 typedef struct StatsUI {
     bool active;
-    int  cursor;   // party index being inspected
+    int  cursor;     // party index being inspected
+    int  tab;        // StatsTab
+    int  skillTree;  // selected node on the skills tab
+    int  skillTier;
 } StatsUI;
 
 void StatsUIInit(StatsUI *ui);

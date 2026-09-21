@@ -1,5 +1,7 @@
 #include "player.h"
 #include "field.h"
+#include "../battle/battle_sprites.h"
+#include "../data/creature_defs.h"
 #include "../render/paper_harbor.h"
 #include "../systems/touch_input.h"
 #include <math.h>
@@ -24,6 +26,7 @@ void PlayerInit(Player *p, int startTileX, int startTileY)
     p->onWater        = false;
     p->dryingFrames   = 0;
     p->turnDelayFrames = 0;
+    p->creatureId      = CREATURE_JAN;
 }
 
 // Map current key state to a direction index (0=down 1=left 2=right 3=up),
@@ -217,6 +220,103 @@ static void DrawJanRounded(float px, float py, float sz, int dir, int frame)
                   (int)footW, (int)footH, orange);
 }
 
+// Rounded procedural Cape fur seal for when Seal leads the party. Same
+// palette as the NPC DrawSeal in npc.c, but with all four facings and a
+// two-frame galumph: on frame 1 the body lifts and the front flippers swap.
+//   left/right — side profile, head forward, tail fin trailing
+//   down       — facing the camera: face, whiskers, flippers splayed
+//   up         — facing away: plain head, tail fins toward the camera
+static void DrawSealRounded(float px, float py, float sz, int dir, int frame)
+{
+    const Color body  = (Color){0xA8, 0x7E, 0x54, 255};
+    const Color dark  = gPH.ink;
+    const Color belly = (Color){0xE0, 0xC0, 0x98, 255};
+
+    float cx   = px + sz * 0.5f;
+    float lift = (frame == 1) ? -sz * 0.04f : 0.0f;   // galumph hop
+    float step = (frame == 1) ? 1.0f : -1.0f;         // flipper swap
+
+    if (dir == 1 || dir == 2) {
+        float side   = (dir == 1) ? -1.0f : 1.0f;
+        float bodyCy = py + sz * 0.68f + lift;
+
+        // Tail fin trails behind the body. Drawn in both windings: mirroring
+        // by `side` flips the vertex order, and real raylib culls back faces.
+        DrawTriangle(
+            (Vector2){cx - sz * 0.38f * side, bodyCy - sz * 0.10f},
+            (Vector2){cx - sz * 0.55f * side, bodyCy + sz * 0.02f - lift},
+            (Vector2){cx - sz * 0.38f * side, bodyCy + sz * 0.12f}, dark);
+        DrawTriangle(
+            (Vector2){cx - sz * 0.38f * side, bodyCy + sz * 0.12f},
+            (Vector2){cx - sz * 0.55f * side, bodyCy + sz * 0.02f - lift},
+            (Vector2){cx - sz * 0.38f * side, bodyCy - sz * 0.10f}, dark);
+
+        DrawEllipse((int)cx, (int)bodyCy, sz * 0.40f, sz * 0.21f, body);
+        DrawEllipse((int)cx, (int)(bodyCy + sz * 0.05f), sz * 0.28f, sz * 0.11f, belly);
+
+        // Front flipper reaches forward on one frame, pushes back on the other.
+        float flipX = cx + sz * (0.12f + 0.08f * step) * side;
+        DrawEllipse((int)flipX, (int)(py + sz * 0.84f), sz * 0.12f, sz * 0.05f, dark);
+
+        // Head, snout, eye, whiskers.
+        float headCx = cx + sz * 0.20f * side;
+        float headCy = py + sz * 0.40f + lift;
+        DrawCircle((int)headCx, (int)headCy, sz * 0.21f, body);
+        float sx = headCx + sz * 0.15f * side;
+        float sy = headCy + sz * 0.06f;
+        DrawCircle((int)sx, (int)sy, sz * 0.10f, belly);
+        DrawCircle((int)(sx + sz * 0.08f * side), (int)(sy - sz * 0.02f), sz * 0.03f, gPH.inkDark);
+        DrawCircle((int)(headCx + sz * 0.07f * side), (int)(headCy - sz * 0.05f), sz * 0.035f, gPH.inkDark);
+        for (int i = -1; i <= 1; i++) {
+            DrawLineEx((Vector2){ sx, sy + i * 2.0f },
+                       (Vector2){ sx + sz * 0.13f * side, sy + i * 4.0f }, 1.0f, dark);
+        }
+        return;
+    }
+
+    // Front / back views share the upright pear shape.
+    float bodyCy = py + sz * 0.66f + lift;
+    bool  front  = (dir == 0);
+
+    // Tail fins poke out below the body when walking away from the camera.
+    if (!front) {
+        for (int k = -1; k <= 1; k += 2) {
+            float tx = cx + k * sz * 0.10f;
+            DrawEllipse((int)(tx + k * step * sz * 0.02f), (int)(py + sz * 0.90f),
+                        sz * 0.08f, sz * 0.05f, dark);
+        }
+    }
+
+    // Side flippers — one forward, one back, swapping each frame.
+    for (int k = -1; k <= 1; k += 2) {
+        float fy = bodyCy + sz * 0.10f + k * step * sz * 0.04f;
+        DrawEllipse((int)(cx + k * sz * 0.33f), (int)fy, sz * 0.11f, sz * 0.055f, dark);
+    }
+
+    DrawEllipse((int)cx, (int)bodyCy, sz * 0.30f, sz * 0.24f, body);
+    if (front) DrawEllipse((int)cx, (int)(bodyCy + sz * 0.05f), sz * 0.19f, sz * 0.15f, belly);
+
+    float headCy = py + sz * 0.38f + lift;
+    DrawCircle((int)cx, (int)headCy, sz * 0.22f, body);
+    // Ear nubs.
+    DrawCircle((int)(cx - sz * 0.19f), (int)(headCy - sz * 0.08f), sz * 0.04f, body);
+    DrawCircle((int)(cx + sz * 0.19f), (int)(headCy - sz * 0.08f), sz * 0.04f, body);
+
+    if (front) {
+        DrawCircle((int)(cx - sz * 0.09f), (int)(headCy - sz * 0.03f), sz * 0.035f, gPH.inkDark);
+        DrawCircle((int)(cx + sz * 0.09f), (int)(headCy - sz * 0.03f), sz * 0.035f, gPH.inkDark);
+        float sy = headCy + sz * 0.08f;
+        DrawEllipse((int)cx, (int)sy, sz * 0.12f, sz * 0.08f, belly);
+        DrawCircle((int)cx, (int)(sy - sz * 0.03f), sz * 0.03f, gPH.inkDark);
+        for (int k = -1; k <= 1; k += 2) {
+            for (int i = -1; i <= 1; i++) {
+                DrawLineEx((Vector2){ cx + k * sz * 0.06f, sy + i * 2.0f },
+                           (Vector2){ cx + k * sz * 0.22f, sy + i * 4.0f }, 1.0f, dark);
+            }
+        }
+    }
+}
+
 void PlayerDraw(const Player *p)
 {
     int tilePixels = TILE_SIZE * TILE_SCALE;
@@ -256,7 +356,17 @@ void PlayerDraw(const Player *p)
                     sz * 0.30f, sz * 0.09f, (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 90});
     }
 
-    DrawJanRounded(px, py, sz, p->dir, p->animFrame);
+    // Jan and Seal have full directional walk sprites. Any other leader
+    // borrows their battle sprite, mirrored when heading left, with a hop.
+    if (p->creatureId == CREATURE_JAN) {
+        DrawJanRounded(px, py, sz, p->dir, p->animFrame);
+    } else if (p->creatureId == CREATURE_SEAL) {
+        DrawSealRounded(px, py, sz, p->dir, p->animFrame);
+    } else {
+        float hop = (p->moving && p->animFrame == 1) ? -2.0f : 0.0f;
+        DrawCombatantSprite(p->creatureId, (Rectangle){ px, py + hop, sz, sz },
+                            p->dir == 1, 1.0f, 0.0f, 0.0f, false);
+    }
 
     // Swimming: water line over the legs + two animated wake arcs.
     if (p->onWater) {

@@ -44,6 +44,8 @@ void CombatantInit(Combatant *c, int creatureId, int level)
     c->enraged        = false;
     c->forcedMoveSlot = -1;
     for (int i = 0; i < COMBATANT_PARTY_MAX; i++) c->damageTakenFrom[i] = 0;
+    c->skillPoints = 0;
+    for (int i = 0; i < SKILL_TREES_PER_CLASS; i++) c->skillRanks[i] = 0;
     c->moveAnim.dx       = 0.0f;
     c->moveAnim.dy       = 0.0f;
     c->moveAnim.startDx  = 0.0f;
@@ -86,7 +88,7 @@ int CalculateDamage(const Combatant *attacker, const Combatant *defender, const 
 {
     if (move->power == 0) return 0;
     int effectiveAtk = attacker->atk * attacker->atkMod / 100;
-    int baseDef      = defender->defense;
+    int baseDef      = CombatantBaseDefense(defender);
     if (defender->armorItemId >= 0)
         baseDef += GetArmorDef(defender->armorItemId)->defBonus;
     int effectiveDef = baseDef * defender->defMod / 100;
@@ -99,6 +101,70 @@ int CalculateDamage(const Combatant *attacker, const Combatant *defender, const 
     int variance = GetRandomValue(-(base / 6), base / 6);
     int dmg      = base + variance;
     return dmg < 1 ? 1 : dmg;
+}
+
+bool CombatantHasSkill(const Combatant *c, SkillEffect fx)
+{
+    if (!c->def || fx == SKILL_FX_NONE) return false;
+    const SkillClassDef *cls = GetSkillClassDef(SkillClassForCreature(c->def->id));
+    if (!cls) return false;
+    for (int t = 0; t < SKILL_TREES_PER_CLASS; t++) {
+        for (int n = 0; n < c->skillRanks[t] && n < SKILL_TIERS_PER_TREE; n++) {
+            if (cls->trees[t].nodes[n].effect == fx) return true;
+        }
+    }
+    return false;
+}
+
+bool CombatantCanBuySkill(const Combatant *c, int tree)
+{
+    if (!c->def || c->skillPoints <= 0) return false;
+    if (tree < 0 || tree >= SKILL_TREES_PER_CLASS) return false;
+    const SkillClassDef *cls = GetSkillClassDef(SkillClassForCreature(c->def->id));
+    if (!cls) return false;
+    int rank = c->skillRanks[tree];
+    if (rank < 0 || rank >= SKILL_TIERS_PER_TREE) return false;
+    return SkillNodeIsReady(&cls->trees[tree].nodes[rank]);
+}
+
+bool CombatantBuySkill(Combatant *c, int tree)
+{
+    if (!CombatantCanBuySkill(c, tree)) return false;
+    c->skillRanks[tree]++;
+    c->skillPoints--;
+    CombatantSyncSkillMoves(c);
+    return true;
+}
+
+void CombatantSyncSkillMoves(Combatant *c)
+{
+    if (!c->def) return;
+    const SkillClassDef *cls = GetSkillClassDef(SkillClassForCreature(c->def->id));
+    if (!cls) return;
+    for (int t = 0; t < SKILL_TREES_PER_CLASS; t++) {
+        for (int n = 0; n < c->skillRanks[t] && n < SKILL_TIERS_PER_TREE; n++) {
+            int moveId = SkillGrantedMove(cls->trees[t].nodes[n].effect);
+            if (moveId < 0) continue;
+            bool have = false;
+            int  freeSlot = -1;
+            for (int k = 0; k < MOVE_SLOTS_SPECIAL; k++) {
+                int slot = MOVE_GROUP_SLOT(MOVE_GROUP_SPECIAL, k);
+                if (c->moveIds[slot] == moveId) have = true;
+                if (c->moveIds[slot] < 0 && freeSlot < 0) freeSlot = slot;
+            }
+            if (have || freeSlot < 0) continue;
+            c->moveIds[freeSlot]          = moveId;
+            c->moveDurability[freeSlot]   = GetMoveDef(moveId)->defaultDurability;
+            c->moveUpgradeLevel[freeSlot] = 0;
+        }
+    }
+}
+
+int CombatantBaseDefense(const Combatant *c)
+{
+    int def = c->defense;
+    if (CombatantHasSkill(c, SKILL_FX_DEFENSE)) def += SKILL_DEFENSE_BONUS;
+    return def;
 }
 
 int CombatantXpReward(const Combatant *c)

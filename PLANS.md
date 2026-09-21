@@ -34,6 +34,49 @@ the natural place to add:
   ways" promise — a hook that can also pull items/enemies closer, a
   net that binds instead of damages.
 
+## Classes and skill trees
+
+Two party classes, by archetype: **fighter** (Jan, Seal) and **caster**
+(Pierie). Those words never show in-game — the player sees "Wave Rider"
+and "Tide Caller" (`skill.class.*` in en.lang; names are provisional).
+Each class has three trees, three nodes each, bought top to bottom. Every
+party member earns **one skill point per finished dungeon**
+(`GameStateCompleteDungeon`); a late recruit starts with one point per
+dungeon already finished. Spend them in Status → Skills. Table:
+`src/data/skill_defs.c`. A node with `SKILL_FX_NONE` is a placeholder — it
+cannot be bought and it gates the nodes under it.
+
+Wave Rider trees (✔ = built):
+
+| Riptide (damage) | Breakwater (protect) | Skimmer (ranged) |
+| --- | --- | --- |
+| ✔ Ambush — sneak attack ×1.5 | ✔ Thick Skin — +3 DEF | ✔ Close Shot — no half damage for ranged at melee distance |
+| ✔ Long Reach — melee reaches 2 tiles (needs LOS) | ✔ Swap Places — move: trade tiles with an ally ≤ 3 tiles away (same as ranged weapons) | ✔ Split Shot — ranged hits also deal 50% to the weakest enemy next to the target |
+| ✔ Flipper Slap — move: half-power Tackle, 50% chance to stun one turn | ✔ To the Rescue — move: jump next to an ally ≤ 3 tiles away (same as ranged weapons), hit all adjacent enemies, no friendly fire | Through Walls — ranged ignores LOS (undecided) |
+
+Move-granting nodes put their move in a Special slot
+(`CombatantSyncSkillMoves`); Special slots went 2 → 3 so all three fit.
+Ally moves use `RANGE_ALLY` + `MoveDef.effect`. Stun is `STATUS_STUNNED`.
+
+**Party leader** (`Party.leaderIdx`, read via `PartyLeaderIdx`): picked on
+the Status screen. The leader walks the field, makes the sneak attack (so
+Ambush now works for Seal too) and shows in the HUD. Jan in slot 0 is still
+the protagonist: if Jan falls the fight is lost, whoever leads.
+
+Open:
+
+- Jan and Seal have directional field walk sprites (`player.c`). Any
+  later leader (Pierie) needs one too — until then they borrow the battle
+  sprite.
+- Stun works on bosses at the same 50%. A resist for `canEnrage` creatures
+  is parked — add it only if the Captain gets stun-locked.
+- Tide Caller trees (Roar / Mend / Undertow) are names only.
+- The lokasie finale must call `GameStateCompleteDungeon(gs,
+  DUNGEON_DONE_LOKASIE)`, map Pierie's creature id to
+  `SKILL_CLASS_CALLER` in `SkillClassForCreature`, and append
+  `party.leader.tip` to the join dialogue.
+- No respec yet. Points are permanent.
+
 ## Magic
 
 Unlocks at the **end of level 2** — no player magic before that.
@@ -53,7 +96,7 @@ still open — see "Next" below.
   (beach) → Die Stege (alleys) → Die Sloot (storm-water ditch) → Die
   Werf (scrap yard) → Die Hoofpad (tar road) → Sangoma se Erf (the
   compound). Opens from the hub's east gate once the Captain is beaten;
-  the news scene (Lappies missing) plays on the first hub visit after.
+  the news scene (Pierie missing) plays on the first hub visit after.
 - Opponents are the **sangoma's crew**, not the residents: Skollie
   (Kettie), Lookout (Kettie, stands watch), Yard Boss (Knobkierie), Brak
   (yard dog), plus the perlemoen poachers from Level 1 in the surf.
@@ -70,11 +113,11 @@ still open — see "Next" below.
   tier 1). Both fill the last empty cells of the class×type grid and are
   meant to keep mattering: blunt for locks/crates, ranged blunt for
   knocking things down (bells, lanterns, hanging stuff) in later levels.
-- **Next:** the finale in the rondavel. Jan has to rescue **Lappies**
+- **Next:** the finale in the rondavel. Jan has to rescue **Pierie**
   from the **sangoma**. In the course of it the rescued penguin **gains
   some magic** (the sangoma's work rubbing off) — this is how magic
   enters the party, timed with the "magic at end of level 2" unlock
-  above. Lappies presumably joins as the first magic-class ally
+  above. Pierie presumably joins as the first magic-class ally
   (party/recruit flow already exists via the seal). Sangoma as an
   ambiguous figure, not a cartoon villain — worth writing carefully;
   Ouma's line ("a good man once, before the yard boys started paying

@@ -32,6 +32,7 @@ typedef struct Player {
     bool      onWater;        // last-resolved tile is a water tile — draw as swimming
     int       dryingFrames;   // >0 = paused after stepping from water onto land
     int       turnDelayFrames;// >0 = facing just changed; hold through delay to commit to movement
+    int       creatureId;     // party leader's creature — picks the sprite (field.c keeps it current)
 } Player;
 
 void PlayerInit(Player *p, int startTileX, int startTileY);

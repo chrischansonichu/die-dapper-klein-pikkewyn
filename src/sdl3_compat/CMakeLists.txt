@@ -119,6 +119,7 @@ set(GAME_SOURCES
     ../data/item_defs.c
     ../data/lore_text.c
     ../data/move_defs.c
+    ../data/skill_defs.c
     ../data/room_templates.c
     ../dev/style_preview.c
     ../field/blacksmith_ui.c

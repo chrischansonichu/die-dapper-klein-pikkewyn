@@ -8,14 +8,16 @@
 //----------------------------------------------------------------------------------
 
 #define CREATURE_NAME_LEN 32
-// Move slots: asymmetric layout, 6 total.
-//   [Atk0, Item0, Item1, Item2, Spec0, Spec1]
+// Move slots: asymmetric layout, 7 total.
+//   [Atk0, Item0, Item1, Item2, Spec0, Spec1, Spec2]
 // Group sizes are independent so the columns can grow separately — the game
 // intentionally has one basic-attack slot (Tackle) and more item-attack slots
 // where thrown/wielded weapons live. Empty slots hold moveId = -1.
 #define MOVE_SLOTS_ATTACK      1
 #define MOVE_SLOTS_ITEM_ATTACK 3
-#define MOVE_SLOTS_SPECIAL     2
+// 3 specials: a fighter-class member can own three skill-granted moves
+// (see skill_defs.h), and each one needs a slot.
+#define MOVE_SLOTS_SPECIAL     3
 #define CREATURE_MAX_MOVES (MOVE_SLOTS_ATTACK + MOVE_SLOTS_ITEM_ATTACK + MOVE_SLOTS_SPECIAL)
 
 // Per-group slot counts and flat-index offsets. `group` is a MoveGroup value
@@ -59,7 +61,7 @@ typedef struct CreatureDef {
     int           baseSpd;
     int           baseDex;
     // Fixed-layout move slots. -1 = empty. Flat order is
-    // [Atk0, Item0, Item1, Item2, Spec0, Spec1]; use MOVE_GROUP_SLOT to
+    // [Atk0, Item0, Item1, Item2, Spec0, Spec1, Spec2]; use MOVE_GROUP_SLOT to
     // index a particular group's nth slot.
     int           moveIds[CREATURE_MAX_MOVES];
     // Sprite size multiplier. 1.0 = default cell size. Boss creatures use >1

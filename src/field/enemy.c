@@ -314,9 +314,13 @@ bool EnemyUpdate(FieldEnemy *e, const TileMap *map,
     return false;
 }
 
-void EnemyDraw(const FieldEnemy *e)
+// Opacity of an enemy that is near a battle but not part of it.
+#define ENEMY_SIDELINED_ALPHA 0.38f
+
+void EnemyDraw(const FieldEnemy *e, bool sidelined)
 {
     if (!e->active) return;
+    float alpha = sidelined ? ENEMY_SIDELINED_ALPHA : 1.0f;
 
     const int tile = TILE_SIZE * TILE_SCALE;
 
@@ -332,7 +336,7 @@ void EnemyDraw(const FieldEnemy *e)
 
     // Idle bob — sailors breathe while patrolling / during battle action
     // menus. Phase-offset per tile so neighboring sailors don't sync.
-    if (!e->moving && e->dryingFrames == 0) {
+    if (!sidelined && !e->moving && e->dryingFrames == 0) {
         float phase = (float)GetTime() * 2.2f +
                       (float)e->tileX * 0.7f + (float)e->tileY * 1.3f;
         fpy += sinf(phase) * 0.9f;
@@ -347,7 +351,7 @@ void EnemyDraw(const FieldEnemy *e)
     if (!e->onWater) {
         DrawEllipse((int)cx, (int)(top + sz * 0.94f),
                     sz * 0.30f, sz * 0.09f,
-                    (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, 90});
+                    (Color){gPH.ink.r, gPH.ink.g, gPH.ink.b, (unsigned char)(90 * alpha)});
     }
 
     // Procedural rounded sailor — same visual family as the Elder Penguin
@@ -364,7 +368,7 @@ void EnemyDraw(const FieldEnemy *e)
     float scaledY = top + (sz - scaledH);
     Rectangle dst = { scaledX, scaledY, scaledW, scaledH };
     EnemySpritesDrawSailor(e->creatureId, dst, e->dir, e->animFrame,
-                           1.0f, false);
+                           alpha, false);
 
     // Swimming: hide the legs with a water band + wake arcs. Drawn last so it
     // layers over the body but under the alert marker.
@@ -398,7 +402,7 @@ void EnemyDraw(const FieldEnemy *e)
     }
 
     // "!" when alerted
-    if (e->aiState == ENEMY_ALERTED) {
+    if (!sidelined && e->aiState == ENEMY_ALERTED) {
         DrawText("!", (int)cx - 4, (int)top - 18, 20, YELLOW);
     }
 }

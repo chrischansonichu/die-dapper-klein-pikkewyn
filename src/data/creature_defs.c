@@ -7,7 +7,7 @@
 // rewarding combat rather than trivializing it.
 const CreatureDef gCreatureDefs[CREATURE_DEF_COUNT] = {
     // Move slots: [Attack0, Item0, Item1, Item2, Special0, Special1].  -1 = empty.
-    // id,                   name,              class,         HP  ATK DEF SPD DEX  { Atk0  Item0 Item1 Item2 Sp0   Sp1 }  scale enrage
+    // id,                   name,              class,         HP  ATK DEF SPD DEX  { Atk0  Item0 Item1 Item2 Sp0   Sp1  Sp2 }  scale enrage
     // Slot 4 (index 4) on Jan / Seal used to hold WaveCall (move id 4).
     // WaveCall was removed from move_defs as never useful; both creatures
     // now leave that special slot empty. IDs 5/6/7 (ColonyRoar / Harpoon /
@@ -15,32 +15,32 @@ const CreatureDef gCreatureDefs[CREATURE_DEF_COUNT] = {
     // Jan's item slots start empty — the tutorial hands him the ShellThrow
     // (Ryno's gift) and FishingHook (ruin cache) in-fiction. Saves restore
     // equipped moves from the save record, so this only shapes new games.
-    { CREATURE_JAN,          "Jan",             CLASS_PENGUIN, 10, 3,  2,  6,  3,   {   0,   -1,   -1,   -1,   -1,  -1}, 1.0f, false },
-    { CREATURE_DECKHAND,     "Deckhand",        CLASS_HUMAN,    8, 2,  2,  3,  1,   {   0,    1,   -1,   -1,   -1,  -1}, 1.0f, false },
-    { CREATURE_BOSUN,        "Bosun",           CLASS_HUMAN,   20, 4,  4,  2,  1,   {   0,    1,    2,   -1,   -1,  -1}, 1.0f, false },
-    { CREATURE_FIRST_MATE,   "First Mate",      CLASS_HUMAN,   45, 8,  6,  2,  1,   {   0,    2,    3,   -1,    4,  -1}, 1.0f, false },
-    { CREATURE_SEAL,         "Seal",            CLASS_PINNIPED,24, 7,  5,  3,  2,   {   0,    2,   -1,   -1,   -1,  -1}, 1.0f, false },
-    { CREATURE_POACHER,      "Abalone Poacher", CLASS_DIVER,   14, 3,  3,  4,  2,   {   0,    1,   -1,   -1,   -1,  -1}, 1.0f, false },
+    { CREATURE_JAN,          "Jan",             CLASS_PENGUIN, 10, 3,  2,  6,  3,   {   0,   -1,   -1,   -1,   -1,  -1,  -1}, 1.0f, false },
+    { CREATURE_DECKHAND,     "Deckhand",        CLASS_HUMAN,    8, 2,  2,  3,  1,   {   0,    1,   -1,   -1,   -1,  -1,  -1}, 1.0f, false },
+    { CREATURE_BOSUN,        "Bosun",           CLASS_HUMAN,   20, 4,  4,  2,  1,   {   0,    1,    2,   -1,   -1,  -1,  -1}, 1.0f, false },
+    { CREATURE_FIRST_MATE,   "First Mate",      CLASS_HUMAN,   45, 8,  6,  2,  1,   {   0,    2,    3,   -1,    4,  -1,  -1}, 1.0f, false },
+    { CREATURE_SEAL,         "Seal",            CLASS_PINNIPED,24, 7,  5,  3,  2,   {   0,    2,   -1,   -1,   -1,  -1,  -1}, 1.0f, false },
+    { CREATURE_POACHER,      "Abalone Poacher", CLASS_DIVER,   14, 3,  3,  4,  2,   {   0,    1,   -1,   -1,   -1,  -1,  -1}, 1.0f, false },
     // Boss variant. Slot 0 holds BoardingCharge (id 7) — a dash-and-strike
     // melee replacement for Tackle. Item-attack slots: ShellThrow (2),
     // Harpoon (5), and an empty slot. Specials: ColonyRoar (4) +
     // CannonVolley (8) — CrashingTide is dropped because the volley fills
     // the same AOE niche and is force-fired on phase-2 enrage. canEnrage=true
     // unlocks the one-shot phase-2 buff + summon + telegraph at 50% HP.
-    { CREATURE_CAPTAIN_BOSS, "Captain",         CLASS_HUMAN,   85, 10, 7,  2,  1,   {   7,    2,    5,   -1,    4,   8}, 1.5f, true  },
+    { CREATURE_CAPTAIN_BOSS, "Captain",         CLASS_HUMAN,   85, 10, 7,  2,  1,   {   7,    2,    5,   -1,    4,   8,  -1}, 1.5f, true  },
     // Tutorial practice fight. Quick but fragile — it usually gets the first
     // peck in (SPD 7 beats Jan's 6) so the player sees damage taken once,
     // then folds in two hits. Penguin growth curve: it's a seabird.
-    { CREATURE_KELP_GULL,    "Kelp Gull",       CLASS_PENGUIN,  7, 2,  1,  7,  2,   {   0,   -1,   -1,   -1,   -1,  -1}, 1.0f, false },
+    { CREATURE_KELP_GULL,    "Kelp Gull",       CLASS_PENGUIN,  7, 2,  1,  7,  2,   {   0,   -1,   -1,   -1,   -1,  -1,  -1}, 1.0f, false },
     // Level 2 — lokasie crew. Placed at levels 7-9 (Jan arrives ~10 after the
     // Captain). Skollies are the deckhands of this level; lookouts are quick
     // and shoot first (Kettie, id 10); the yard boss swings a Knobkierie (id
     // 9) and is the tanky mid-boss of stages 4 and 5. The brak is a fast,
     // fragile biter that nearly always moves first.
-    { CREATURE_SKOLLIE,      "Skollie",         CLASS_HUMAN,    9, 2,  2,  4,  2,   {   0,   10,   -1,   -1,   -1,  -1}, 1.0f, false },
-    { CREATURE_LOOKOUT,      "Lookout",         CLASS_HUMAN,    7, 3,  1,  6,  3,   {   0,   10,   -1,   -1,   -1,  -1}, 1.0f, false },
-    { CREATURE_YARD_BOSS,    "Yard Boss",       CLASS_HUMAN,   22, 4,  5,  2,  1,   {   0,    9,   -1,   -1,   -1,  -1}, 1.2f, false },
-    { CREATURE_BRAK,         "Brak",            CLASS_CANINE,   8, 3,  1,  7,  3,   {   0,   -1,   -1,   -1,   -1,  -1}, 0.9f, false },
+    { CREATURE_SKOLLIE,      "Skollie",         CLASS_HUMAN,    9, 2,  2,  4,  2,   {   0,   10,   -1,   -1,   -1,  -1,  -1}, 1.0f, false },
+    { CREATURE_LOOKOUT,      "Lookout",         CLASS_HUMAN,    7, 3,  1,  6,  3,   {   0,   10,   -1,   -1,   -1,  -1,  -1}, 1.0f, false },
+    { CREATURE_YARD_BOSS,    "Yard Boss",       CLASS_HUMAN,   22, 4,  5,  2,  1,   {   0,    9,   -1,   -1,   -1,  -1,  -1}, 1.2f, false },
+    { CREATURE_BRAK,         "Brak",            CLASS_CANINE,   8, 3,  1,  7,  3,   {   0,   -1,   -1,   -1,   -1,  -1,  -1}, 0.9f, false },
 };
 
 // Penguins grow nimbly (high DEX, modest power). Humans are bulky and hit hard

@@ -34,6 +34,13 @@ const MoveDef gMoveDefs[MOVE_COUNT] = {
     // them, so the player sees them used before owning one.
     { 9, "Knobkierie",     "A hardwood club with a heavy knob", 110, RANGE_MELEE,  20, true,  8, MOVE_GROUP_ITEM_ATTACK, ATTACK_CLASS_MELEE,  DMG_BLUNT,   false, 2,         0 },
     { 10, "Kettie",        "Forked stick, rubber, a pocket of stones", 90, RANGE_RANGED, 18, true, 5, MOVE_GROUP_ITEM_ATTACK, ATTACK_CLASS_RANGED, DMG_BLUNT, false, 1,     0 },
+    // Skill-granted moves (skill_defs.c) — never in a CreatureDef; a skill
+    // node puts them into a Special slot. Flipper Slap is a half-power Tackle
+    // (20 vs 40) that can stun. The two RANGE_ALLY moves target a friend:
+    // Swap Places has no damage; To the Rescue's power is per adjacent enemy.
+    { MOVE_FLIPPER_SLAP,  "Flipper Slap",  "A light slap that can daze",     20, RANGE_MELEE, -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_MELEE, DMG_BLUNT, false, 0, 0, MOVE_FX_STUN },
+    { MOVE_SWAP_PLACES,   "Swap Places",   "Trade places with a friend",      0, RANGE_ALLY,  -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_NONE,  DMG_NONE,  false, 0, 0, MOVE_FX_SWAP_ALLY },
+    { MOVE_TO_THE_RESCUE, "To the Rescue", "Rush to a friend, hit all foes near", 50, RANGE_ALLY, -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_MELEE, DMG_BLUNT, true,  0, 0, MOVE_FX_RESCUE_ALLY },
 };
 
 const char *AttackClassName(AttackClass c)
@@ -61,8 +68,12 @@ void MoveKindLabel(const MoveDef *mv, char *out, int outSize)
     const char *cs = AttackClassName(mv->attackClass);
     const char *ds = DamageTypeName(mv->damageType);
     const char *shape = (mv->range == RANGE_AOE)  ? " AOE"  :
-                        (mv->range == RANGE_SELF) ? " self" : "";
-    if (!cs) cs = "";
+                        (mv->range == RANGE_SELF) ? " self" :
+                        (mv->range == RANGE_ALLY) ? " ally" : "";
+    if (!cs) {
+        cs = "";
+        if (shape[0] == ' ') shape++;   // no class word — drop the joining space
+    }
     if (ds) snprintf(out, outSize, "%s/%s%s", cs, ds, shape);
     else    snprintf(out, outSize, "%s%s", cs, shape);
 }

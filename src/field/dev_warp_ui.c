@@ -235,6 +235,8 @@ static bool ApplyWarpRow(DevWarpUI *d, struct GameState *gs, int idx)
         // should also open the hub gate so the run reads as post-Captain.
         gs->pendingMapSeed  = 0;
         gs->captainDefeated = true;
+        // Pays the harbor skill point too, so the trees can be tested.
+        GameStateCompleteDungeon(gs, DUNGEON_DONE_HARBOR);
     }
     DevWarpUIClose(d);
     return true;

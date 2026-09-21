@@ -124,7 +124,7 @@ tut.sib.after.1 = Vlerkie: When I can dive twenty fathoms I'm coming to visit. C
 # Tutorial island — kelp blockage, gull, rescue, objectives
 # ---------------------------------------------------------------------------
 tut.kelp.cut.1 = Jan flings a shell edge-first into the tangle - once, twice. The storm-kelp parts like old rope.
-tut.kelp.cut.2 = Jan: Ha! Ma always said a shell was only good for scraping barnacles. (A sharp edge cuts what flippers can't - kelp, rope, nets. Keep one handy.)
+tut.kelp.cut.2 = Jan: Ha! Clean through! (A sharp edge cuts what flippers can't - kelp, rope, nets. Keep one handy.)
 tut.kelp.blocked.1 = A dense tangle of storm-kelp chokes the gap in the old wall. Too tough to pull apart with flippers - it needs a cutting edge, not a poke.
 
 tut.cache.equip = (Equip it before the fight: tap the round menu button in the corner, open the bag, and slot the FishingHook into an item-attack slot.)
@@ -354,6 +354,7 @@ lantern.docked = The Captain's ship bumps against the dock and a gangplank drops
 boss.taunt = Captain: "So the penguin shows his face. I've been waiting."
 victory.cache = You haul the Captain's cache of stolen fish back to the village. (+100 Rep)
 victory.captain = Captain defeated - the harbor is safe.
+victory.skillpoint = Everyone learned something from that fight. (+1 skill point each - open Status, then Skills, to spend it.)
 
 # ---------------------------------------------------------------------------
 # Warp prompts
@@ -369,6 +370,20 @@ warp.blocked_captain = The way back is blocked - you can't leave the Captain ali
 # Battle & field UI
 # ---------------------------------------------------------------------------
 battle.hint.target = Tap an enemy to attack
+battle.hint.ally = Tap a friend
+battle.ally.norange = No ally in range
+battle.stun.applied = %s is dazed!
+battle.stun.skip = %s is dazed and can't move!
+battle.split.hit = The shot split - %s took %d too.
+battle.split.ko = The shot split - %s took %d and fainted!
+battle.ally.nofriend = %s tried %s, but no friend was there.
+battle.swap.done = %s and %s swapped places!
+battle.rescue.noroom = %s couldn't find room next to %s!
+battle.rescue.hit = %s rushed to %s's side! %d dmg across %d.
+battle.rescue.nohit = %s rushed to %s's side!
+party.leader.make = MAKE LEADER
+party.leader.is = LEADER
+party.leader.tip = (New friend! Open Status and tap MAKE LEADER to choose who walks in front. The leader is the one who sneaks up on enemies.)
 ui.sneak.melee = SNEAK!
 ui.sneak.ranged = SHOOT!
 battle.victory = Victory!
@@ -383,14 +398,14 @@ hint.field = Swipe to move   Tap to interact
 # Village — the news (auto-plays on the first hub visit after the Captain)
 # ---------------------------------------------------------------------------
 lok.news.1 = The village should be cheering. It isn't. Penguins stand in knots on the plaza, talking low, and every head turns when Jan comes through the gate.
-lok.news.2 = Ryno: Boet. Thank the tides. Listen - while you were down at the harbor, little Lappies went missing. Klein Lappies, the moulting chick from the north nests. Three days now.
+lok.news.2 = Ryno: Boet. Thank the tides. Listen - while you were down at the harbor, little Pierie went missing. Klein Pierie, the moulting chick from the north nests. Three days now.
 lok.news.3 = Ryno: A fisher saw men on the beach that night, with a sack that moved. They went up the coast to Sinkbaai - the lokasie on the shore, all zinc shacks and dogs.
 lok.news.4 = Ryno: And the story going round is that a sangoma up there keeps him. For luck, they say. Whatever THAT means. The elder knows more - go and hear him, boet. Then go get that chick.
 
 # ---------------------------------------------------------------------------
 # Village elder — the briefing, and the re-talk
 # ---------------------------------------------------------------------------
-hub.elder.lok.1 = Elder: You beat the Captain and came home to bad news, Jan. I'm sorry for it. Lappies was taken from the north nests while the colony slept.
+hub.elder.lok.1 = Elder: You beat the Captain and came home to bad news, Jan. I'm sorry for it. Pierie was taken from the north nests while the colony slept.
 hub.elder.lok.2 = Elder: Sinkbaai is a day up the coast - a lokasie of zinc and dust between the dunes and the road. Good people live there, mostly. But a crew runs poached perlemoen through a yard in the middle of it.
 hub.elder.lok.3 = Elder: That crew answers to a sangoma with a hut at the top of the hill. A traditional healer - a diviner. Some say a good one, once. The rumour is the chick is kept in that hut, and the sangoma wants him for his 'luck'.
 hub.elder.lok.4 = Elder: I've had the east wall opened. Follow the coast, come ashore below the shacks, and work your way up. Take the seal - a penguin alone in those alleys is a penguin in a sack.
@@ -407,7 +422,7 @@ lok.obj.2 = Work through the alleys - and look for what's hidden in them
 lok.obj.3 = Follow the storm-water ditch east
 lok.obj.4 = Get past the yard boss and out of the scrap yard
 lok.obj.5 = Fight up the road to the sangoma's gate
-lok.obj.6 = The sangoma's hut - Lappies must be inside
+lok.obj.6 = The sangoma's hut - Pierie must be inside
 rescue.lokasie.1 = A fisher heading home found you face-down in the dunes below the lokasie and carried you all the way back to the village.
 rescue.lokasie.2 = "That place chews up penguins," he says. "Go back with your friends, and go back angry."
 
@@ -448,7 +463,7 @@ lok.wire.blocked.1 = A gap in the fence, lashed shut with wire and an old mealie
 lok.wire.cut.1 = Jan works a shell edge into the tangle. Wire pings, the sack drops, and the fence gap yawns open onto a yard nobody's swept in years.
 lok.lock.blocked.1 = A zinc shed gate, chained shut with a padlock the size of Jan's head, rusted orange. No key in the world still fits it. A hard enough klap might not need one.
 lok.lock.smash.1 = Jan swings the knobkierie with everything he's got. The padlock doesn't so much break as give up - it bursts into rust and the chain slithers off the gate.
-lok.hut.door.1 = The door is shut fast, and the air is thick with smoke and bitter herbs. Behind it, something small shifts and goes still. Lappies - it has to be.
+lok.hut.door.1 = The door is shut fast, and the air is thick with smoke and bitter herbs. Behind it, something small shifts and goes still. Pierie - it has to be.
 lok.hut.door.2 = Whatever waits inside will have to wait. Jan has come as far as this build of the story goes - the sangoma's hut opens in a later update.
 
 # ---------------------------------------------------------------------------
@@ -475,3 +490,45 @@ chest.lok_s5.flavor = Bra Vusi's back stock, it turns out, is not all cooldrink.
 lok.decor.tyres = A stack of bald tyres, warm from the sun. A very small dog has been sleeping in the top one, by the smell.
 lok.decor.scrap = Offcuts of zinc and a coil of fence wire, waiting to become somebody's roof.
 lok.decor.drums = Empty drums, rusted through at the bottom. Whatever was in them left a long time ago. Harmless.
+
+# ---------------------------------------------------------------------------
+# Skill trees (Status screen, Skills tab). Class names are never shown as
+# "warrior"/"mage" - the sea-themed names below are the only player-facing ones.
+# ---------------------------------------------------------------------------
+skill.class.rider = Wave Rider
+skill.class.caller = Tide Caller
+skill.tree.riptide = Riptide
+skill.tree.breakwater = Breakwater
+skill.tree.skimmer = Skimmer
+skill.tree.roar = Roar
+skill.tree.mend = Mend
+skill.tree.undertow = Undertow
+skill.sneak.name = Ambush
+skill.sneak.desc = Surprise attacks from behind hit much harder.
+skill.reach.name = Long Reach
+skill.reach.desc = Close-up attacks reach one block further.
+skill.def.name = Thick Skin
+skill.def.desc = Tougher hide. +3 DEF, always.
+skill.swap.name = Swap Places
+skill.swap.desc = New move: trade places with a friend up to 3 blocks away.
+skill.aid.name = To the Rescue
+skill.aid.desc = New move: rush to a friend up to 3 blocks away and hit every enemy next to you. Friends are never hurt.
+skill.blank.name = Close Shot
+skill.stun.name = Flipper Slap
+skill.stun.desc = New move: a light slap, half the hurt of a Tackle, but half the time the enemy is dazed and misses a turn.
+skill.split.name = Split Shot
+skill.split.desc = Thrown weapons also hit one enemy right next to your target, for half the damage.
+skill.blank.desc = Thrown weapons hit just as hard up close as from far away.
+skill.walls.name = Through Walls
+skill.walls.desc = Throw past walls and rocks that block the way.
+skill.ui.tab.stats = Stats
+skill.ui.tab.skills = Skills
+skill.ui.points = Skill points: %d
+skill.ui.learn = LEARN
+skill.ui.owned = Learned!
+skill.ui.locked = Learn the skill above this one first.
+skill.ui.nopoints = Finish a dungeon to earn a skill point.
+skill.ui.notready = Not ready yet - coming later.
+skill.ui.unknown = ???
+skill.ui.unknown.desc = Nobody knows what this one is yet.
+skill.ui.none = No skills to learn.
