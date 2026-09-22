@@ -40,13 +40,13 @@
   <object id="4" name="Kid" x="744" y="312">
    <point/>
   </object>
-  <object id="5" name="Poacher1" x="216" y="840">
+  <object id="5" name="Poacher1" x="264" y="840">
    <point/>
   </object>
-  <object id="6" name="Poacher2" x="1032" y="840">
+  <object id="6" name="Poacher2" x="408" y="840">
    <point/>
   </object>
-  <object id="7" name="Skollie1" x="648" y="504">
+  <object id="7" name="Skollie1" x="360" y="648">
    <point/>
   </object>
   <object id="8" name="Tyres1" x="1176" y="600">

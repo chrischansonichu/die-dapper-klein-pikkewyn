@@ -37,10 +37,10 @@ const CreatureDef gCreatureDefs[CREATURE_DEF_COUNT] = {
     // and shoot first (Kettie, id 10); the yard boss swings a Knobkierie (id
     // 9) and is the tanky mid-boss of stages 4 and 5. The brak is a fast,
     // fragile biter that nearly always moves first.
-    { CREATURE_SKOLLIE,      "Skollie",         CLASS_HUMAN,    9, 2,  2,  4,  2,   {   0,   10,   -1,   -1,   -1,  -1,  -1}, 1.0f, false },
-    { CREATURE_LOOKOUT,      "Lookout",         CLASS_HUMAN,    7, 3,  1,  6,  3,   {   0,   10,   -1,   -1,   -1,  -1,  -1}, 1.0f, false },
-    { CREATURE_YARD_BOSS,    "Yard Boss",       CLASS_HUMAN,   22, 4,  5,  2,  1,   {   0,    9,   -1,   -1,   -1,  -1,  -1}, 1.2f, false },
-    { CREATURE_BRAK,         "Brak",            CLASS_CANINE,   8, 3,  1,  7,  3,   {   0,   -1,   -1,   -1,   -1,  -1,  -1}, 0.9f, false },
+    { CREATURE_SKOLLIE,      "Skollie",         CLASS_HUMAN,   13, 3,  3,  4,  2,   {   0,   10,   -1,   -1,   -1,  -1,  -1}, 1.0f, false },
+    { CREATURE_LOOKOUT,      "Lookout",         CLASS_HUMAN,   10, 4,  2,  6,  3,   {   0,   10,   -1,   -1,   -1,  -1,  -1}, 1.0f, false },
+    { CREATURE_YARD_BOSS,    "Yard Boss",       CLASS_HUMAN,   30, 5,  6,  2,  1,   {   0,    9,   -1,   -1,   -1,  -1,  -1}, 1.2f, false },
+    { CREATURE_BRAK,         "Brak",            CLASS_CANINE,  10, 4,  2,  7,  3,   {   0,   -1,   -1,   -1,   -1,  -1,  -1}, 0.9f, false },
 };
 
 // Penguins grow nimbly (high DEX, modest power). Humans are bulky and hit hard

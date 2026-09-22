@@ -593,9 +593,8 @@ static void DrawConfirmPanel(const BlacksmithUI *b, const Party *party,
         snprintf(line2, sizeof(line2),
                  "Yields %d scrap   (stash: %d -> %d)", yield, scrap, scrap + yield);
         snprintf(line3, sizeof(line3),
-                 "%s the weapon - this can't be undone.",
-                 e->kind == 1 ? "Removes from the wielder's slot and destroys"
-                              : "Destroys");
+                 e->kind == 1 ? "Unequips and destroys it - can't be undone."
+                              : "Destroys the weapon - this can't be undone.");
     } else /* REPAIR */ {
         int cost = RepairCost(moveId, dur, upg);
         int maxDur = WeaponMaxDurability(moveId, upg);
@@ -615,9 +614,15 @@ static void DrawConfirmPanel(const BlacksmithUI *b, const Party *party,
     int line2W = MeasureText(line2, subF);
     DrawText(line2, (int)(W * 0.5f - line2W * 0.5f), promptY + promptF + 16,
              subF, gPH.ink);
-    int line3W = MeasureText(line3, subF);
+    // Step the font down until the line fits inside the panel.
+    int line3F = subF;
+    int line3W = MeasureText(line3, line3F);
+    while (line3F > 14 && line3W > (int)p.width - 40) {
+        line3F -= 2;
+        line3W = MeasureText(line3, line3F);
+    }
     DrawText(line3, (int)(W * 0.5f - line3W * 0.5f), promptY + promptF + 16 + subF + 10,
-             subF, gPH.inkLight);
+             line3F, gPH.inkLight);
 
     // Yes / No buttons centred near the bottom of the panel.
     int btnW = 220, btnH = 56, gap = 24;

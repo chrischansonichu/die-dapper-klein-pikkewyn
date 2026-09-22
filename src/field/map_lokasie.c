@@ -163,12 +163,15 @@ static Color CrewColor(int creature)
 }
 
 // Stage 1 — Strandkant. Two poachers wading the surf (they sell to the
-// yard), one skollie loitering at the fence gap. Levels sit just under the
-// Captain so a party fresh off Level 1 is challenged, not walled.
+// yard) with a skollie minding them from the tufts — one pack, west of the
+// spawn. Enemies across the level stand in packs of 2-3 inside aggro range
+// of each other (FIELD_AGGRO_RADIUS, with LOS) so fights are rarely 1v1.
+// Levels run 8 → 12 across the stages: a party fresh off the Captain (L11)
+// is challenged, not walled.
 static const EnemySpec kEnemiesS1[] = {
-    { "Poacher1",  4, 17, CREATURE_POACHER, BEHAVIOR_WANDER, 2, 7, 4, ITEM_PERLEMOEN, 35, -1, 0, 0, 0 },
-    { "Poacher2", 21, 17, CREATURE_POACHER, BEHAVIOR_WANDER, 1, 7, 4, ITEM_SARDINE,   60,  1, 30, 0, 0 },  // FishingHook
-    { "Skollie1", 13, 10, CREATURE_SKOLLIE, BEHAVIOR_WANDER, 0, 7, 4, ITEM_SNOEK,     45, 10, 25, 0, 0 },  // Kettie
+    { "Poacher1",  5, 17, CREATURE_POACHER, BEHAVIOR_WANDER, 2, 8, 4, ITEM_PERLEMOEN, 35, -1, 0, 0, 0 },
+    { "Poacher2",  8, 17, CREATURE_POACHER, BEHAVIOR_WANDER, 1, 8, 4, ITEM_SARDINE,   60,  1, 30, 0, 0 },  // FishingHook
+    { "Skollie1",  7, 13, CREATURE_SKOLLIE, BEHAVIOR_WANDER, 0, 8, 4, ITEM_SNOEK,     45, 10, 25, 0, 0 },  // Kettie
 };
 static const NpcSpec kNpcsS1[] = {
     { "Kid", 15, 6, 1, LOK_PERSONA_KID },
@@ -179,13 +182,16 @@ static const ObjSpec kObjsS1[] = {
     { "Scrap1",  1, 10, OBJ_DECOR, DECOR_SCRAP,  0 },
 };
 
-// Stage 2 — Die Stege. The lookout watches the cross street; the brak
-// roams the south lane. The drum + its chest are the first hidden item.
+// Stage 2 — Die Stege. A lookout + skollie + brak hold the cross street
+// (the first thing the player meets coming up the path); a skollie and a
+// brak loiter in the north-west yard. The drum + its chest are the first
+// hidden item.
 static const EnemySpec kEnemiesS2[] = {
-    { "Skollie1",  5,  6, CREATURE_SKOLLIE, BEHAVIOR_WANDER, 0, 7, 4, ITEM_SNOEK,       45, 10, 25, 0, 0 },
-    { "Skollie2",  9, 18, CREATURE_SKOLLIE, BEHAVIOR_WANDER, 2, 7, 4, ITEM_KRILL_SNACK, 60, -1,  0, 0, 0 },
-    { "Lookout1", 12, 12, CREATURE_LOOKOUT, BEHAVIOR_STAND,  1, 7, 6, ITEM_KRILL_SNACK, 50, 10, 35, 0, 0 },
-    { "Brak1",    20, 16, CREATURE_BRAK,    BEHAVIOR_WANDER, 0, 7, 4, ITEM_SARDINE,     30, -1,  0, 0, 0 },
+    { "Skollie1",  5,  6, CREATURE_SKOLLIE, BEHAVIOR_WANDER, 0, 8, 4, ITEM_SNOEK,       45, 10, 25, 0, 0 },
+    { "Brak1",     8,  5, CREATURE_BRAK,    BEHAVIOR_WANDER, 0, 8, 4, ITEM_SARDINE,     30, -1,  0, 0, 0 },
+    { "Lookout1", 12, 12, CREATURE_LOOKOUT, BEHAVIOR_STAND,  1, 9, 6, ITEM_KRILL_SNACK, 50, 10, 35, 0, 0 },
+    { "Skollie2", 10, 16, CREATURE_SKOLLIE, BEHAVIOR_WANDER, 2, 9, 4, ITEM_KRILL_SNACK, 60, -1,  0, 0, 0 },
+    { "Brak2",    13, 16, CREATURE_BRAK,    BEHAVIOR_WANDER, 0, 8, 4, ITEM_SARDINE,     30, -1,  0, 0, 0 },
 };
 static const ObjSpec kObjsS2[] = {
     { "Chest",  17,  4, OBJ_CHEST, CHEST_LOK_S2_DRUM, STORY_FLAG_LOK_CHEST_S2 },
@@ -194,14 +200,17 @@ static const ObjSpec kObjsS2[] = {
     { "Scrap1", 22, 22, OBJ_DECOR, DECOR_SCRAP, 0 },
 };
 
-// Stage 3 — Die Sloot. Lookouts on both banks stare at the ditch; the
-// player is fast in it but not invisible. Ouma Nomsa sits by her door.
+// Stage 3 — Die Sloot. A pack on each bank of the ditch, each around a
+// lookout; the player is fast in the water but not invisible. The fences
+// at x=14 and x=22 wall the south pack in with the exit. Ouma Nomsa sits
+// by her door, well away from both.
 static const EnemySpec kEnemiesS3[] = {
-    { "Lookout1", 12,  7, CREATURE_LOOKOUT, BEHAVIOR_STAND,  0, 8, 4, ITEM_KRILL_SNACK, 50, 10, 35, 0, 0 },
-    { "Lookout2", 18, 12, CREATURE_LOOKOUT, BEHAVIOR_STAND,  3, 8, 4, ITEM_SNOEK,       40, 10, 35, 0, 0 },
-    { "Skollie1", 16,  5, CREATURE_SKOLLIE, BEHAVIOR_WANDER, 0, 8, 4, ITEM_SNOEK,       45, 10, 25, 0, 0 },
-    { "Skollie2", 24, 13, CREATURE_SKOLLIE, BEHAVIOR_PATROL, 2, 8, 4, ITEM_SARDINE,     50, -1,  0, 2, 2 },
-    { "Brak1",     8, 14, CREATURE_BRAK,    BEHAVIOR_WANDER, 0, 8, 4, ITEM_SARDINE,     30, -1,  0, 0, 0 },
+    { "Lookout1", 12,  7, CREATURE_LOOKOUT, BEHAVIOR_STAND,  0,  9, 4, ITEM_KRILL_SNACK, 50, 10, 35, 0, 0 },
+    { "Skollie1", 16,  5, CREATURE_SKOLLIE, BEHAVIOR_WANDER, 0,  9, 4, ITEM_SNOEK,       45, 10, 25, 0, 0 },
+    { "Brak1",    14,  4, CREATURE_BRAK,    BEHAVIOR_WANDER, 0,  9, 4, ITEM_SARDINE,     30, -1,  0, 0, 0 },
+    { "Lookout2", 18, 12, CREATURE_LOOKOUT, BEHAVIOR_STAND,  3, 10, 4, ITEM_SNOEK,       40, 10, 35, 0, 0 },
+    { "Skollie2", 19, 15, CREATURE_SKOLLIE, BEHAVIOR_PATROL, 2, 10, 4, ITEM_SARDINE,     50, -1,  0, 2, 0 },
+    { "Brak2",    17, 14, CREATURE_BRAK,    BEHAVIOR_WANDER, 0,  9, 4, ITEM_SARDINE,     30, -1,  0, 0, 0 },
 };
 static const NpcSpec kNpcsS3[] = {
     { "Ouma", 4, 16, 0, LOK_PERSONA_OUMA },
@@ -213,14 +222,16 @@ static const ObjSpec kObjsS3[] = {
     { "Drums1", 26, 15, OBJ_DECOR,     DECOR_DRUMS, 0 },
 };
 
-// Stage 4 — Die Werf. The first yard boss holds the east gate and always
-// drops his Knobkierie — the key to the padlocked shed behind him, and the
-// player's first real blunt weapon.
+// Stage 4 — Die Werf. The first yard boss holds the east gate with a
+// skollie and a brak at his side, and always drops his Knobkierie — the key
+// to the padlocked shed behind him, and the player's first real blunt
+// weapon. A skollie + brak pair works the west side near the spawn.
 static const EnemySpec kEnemiesS4[] = {
-    { "YardBoss1", 21, 11, CREATURE_YARD_BOSS, BEHAVIOR_STAND,  1, 9, 5, ITEM_SNOEK,       60,  9, 100, 0, 0 },
-    { "Skollie1",  10,  4, CREATURE_SKOLLIE,   BEHAVIOR_WANDER, 0, 8, 4, ITEM_SNOEK,       45, 10,  25, 0, 0 },
-    { "Skollie2",  12, 18, CREATURE_SKOLLIE,   BEHAVIOR_WANDER, 2, 8, 4, ITEM_KRILL_SNACK, 60, -1,   0, 0, 0 },
-    { "Brak1",      6, 12, CREATURE_BRAK,      BEHAVIOR_WANDER, 0, 8, 4, ITEM_SARDINE,     30, -1,   0, 0, 0 },
+    { "YardBoss1", 21, 11, CREATURE_YARD_BOSS, BEHAVIOR_STAND,  1, 11, 5, ITEM_SNOEK,       60,  9, 100, 0, 0 },
+    { "Skollie1",  19,  9, CREATURE_SKOLLIE,   BEHAVIOR_WANDER, 0, 10, 4, ITEM_SNOEK,       45, 10,  25, 0, 0 },
+    { "Brak1",     20, 13, CREATURE_BRAK,      BEHAVIOR_WANDER, 0, 10, 4, ITEM_SARDINE,     30, -1,   0, 0, 0 },
+    { "Skollie2",  10, 11, CREATURE_SKOLLIE,   BEHAVIOR_WANDER, 2, 10, 4, ITEM_KRILL_SNACK, 60, -1,   0, 0, 0 },
+    { "Brak2",     10, 14, CREATURE_BRAK,      BEHAVIOR_WANDER, 0, 10, 4, ITEM_SARDINE,     30, -1,   0, 0, 0 },
 };
 static const ObjSpec kObjsS4[] = {
     { "Chest",   17,  5, OBJ_CHEST,   CHEST_LOK_S4_LOCK, STORY_FLAG_LOK_CHEST_S4 },
@@ -230,16 +241,18 @@ static const ObjSpec kObjsS4[] = {
     { "Scrap1",   5, 19, OBJ_DECOR,   DECOR_SCRAP, 0 },
 };
 
-// Stage 5 — Die Hoofpad. The gauntlet: everyone the crew has left, on the
-// road between the player and the sangoma's gate.
+// Stage 5 — Die Hoofpad. The gauntlet: everyone the crew has left, in
+// three packs along the road between the player and the sangoma's gate —
+// west trio, middle trio, and the yard boss with a skollie at the gate.
 static const EnemySpec kEnemiesS5[] = {
-    { "YardBoss1", 27,  8, CREATURE_YARD_BOSS, BEHAVIOR_STAND,  1, 9, 5, ITEM_SNOEK,       60,  9, 40, 0, 0 },
-    { "Skollie1",   6,  6, CREATURE_SKOLLIE,   BEHAVIOR_WANDER, 0, 8, 4, ITEM_SNOEK,       45, 10, 25, 0, 0 },
-    { "Skollie2",  14, 10, CREATURE_SKOLLIE,   BEHAVIOR_WANDER, 2, 9, 4, ITEM_KRILL_SNACK, 60, 10, 25, 0, 0 },
-    { "Lookout1",  10,  7, CREATURE_LOOKOUT,   BEHAVIOR_STAND,  0, 8, 5, ITEM_KRILL_SNACK, 50, 10, 35, 0, 0 },
-    { "Lookout2",  20, 10, CREATURE_LOOKOUT,   BEHAVIOR_STAND,  3, 9, 5, ITEM_SNOEK,       40, 10, 35, 0, 0 },
-    { "Brak1",      3, 10, CREATURE_BRAK,      BEHAVIOR_WANDER, 0, 8, 4, ITEM_SARDINE,     30, -1,  0, 0, 0 },
-    { "Brak2",     18,  5, CREATURE_BRAK,      BEHAVIOR_WANDER, 0, 9, 4, ITEM_SARDINE,     30, -1,  0, 0, 0 },
+    { "YardBoss1", 27,  8, CREATURE_YARD_BOSS, BEHAVIOR_STAND,  1, 12, 5, ITEM_SNOEK,       60,  9, 40, 0, 0 },
+    { "Skollie3",  25,  6, CREATURE_SKOLLIE,   BEHAVIOR_WANDER, 1, 11, 4, ITEM_SNOEK,       45, 10, 25, 0, 0 },
+    { "Skollie1",   6,  6, CREATURE_SKOLLIE,   BEHAVIOR_WANDER, 0, 10, 4, ITEM_SNOEK,       45, 10, 25, 0, 0 },
+    { "Lookout1",   9,  7, CREATURE_LOOKOUT,   BEHAVIOR_STAND,  0, 10, 5, ITEM_KRILL_SNACK, 50, 10, 35, 0, 0 },
+    { "Brak1",      5,  9, CREATURE_BRAK,      BEHAVIOR_WANDER, 0, 10, 4, ITEM_SARDINE,     30, -1,  0, 0, 0 },
+    { "Skollie2",  14, 10, CREATURE_SKOLLIE,   BEHAVIOR_WANDER, 2, 11, 4, ITEM_KRILL_SNACK, 60, 10, 25, 0, 0 },
+    { "Lookout2",  17,  9, CREATURE_LOOKOUT,   BEHAVIOR_STAND,  3, 11, 5, ITEM_SNOEK,       40, 10, 35, 0, 0 },
+    { "Brak2",     16,  6, CREATURE_BRAK,      BEHAVIOR_WANDER, 0, 11, 4, ITEM_SARDINE,     30, -1,  0, 0, 0 },
 };
 static const NpcSpec kNpcsS5[] = {
     { "Spaza", 12, 4, 0, LOK_PERSONA_SPAZA },

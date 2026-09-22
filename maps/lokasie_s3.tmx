@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="28" height="20" tilewidth="48" tileheight="48" infinite="0" nextlayerid="3" nextobjectid="13">
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="28" height="20" tilewidth="48" tileheight="48" infinite="0" nextlayerid="3" nextobjectid="14">
  <tileset firstgid="1" source="terrain.tsx"/>
  <tileset firstgid="289" source="tileset.tsx"/>
  <tileset firstgid="295" source="lokasie.tsx"/>
@@ -46,22 +46,25 @@
   <object id="6" name="Lookout1" x="600" y="360">
    <point/>
   </object>
-  <object id="7" name="Lookout2" x="888" y="600">
+  <object id="7" name="Skollie1" x="792" y="264">
    <point/>
   </object>
-  <object id="8" name="Skollie1" x="792" y="264">
+  <object id="8" name="Brak1" x="696" y="216">
    <point/>
   </object>
-  <object id="9" name="Skollie2" x="1176" y="648">
+  <object id="9" name="Lookout2" x="888" y="600">
    <point/>
   </object>
-  <object id="10" name="Brak1" x="408" y="696">
+  <object id="10" name="Skollie2" x="936" y="744">
    <point/>
   </object>
-  <object id="11" name="Tyres1" x="120" y="168">
+  <object id="11" name="Brak2" x="840" y="696">
    <point/>
   </object>
-  <object id="12" name="Drums1" x="1272" y="744">
+  <object id="12" name="Tyres1" x="120" y="168">
+   <point/>
+  </object>
+  <object id="13" name="Drums1" x="1272" y="744">
    <point/>
   </object>
  </objectgroup>

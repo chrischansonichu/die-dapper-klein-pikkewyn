@@ -115,6 +115,20 @@ typedef struct BattleContext {
     // successful TrySelectMove; restored when a player's turn begins.
     int   partyMoveCursor[PARTY_MAX];
 
+    // BS_MOVE_PHASE reach set: every tile the actor can still step onto
+    // this turn (orthogonal BFS within moveBudget). Rebuilt on phase entry
+    // and after each step; reachAnimT drives the ripple-in animation.
+    #define BATTLE_REACH_MAX 64
+    TilePos reachTiles[BATTLE_REACH_MAX];
+    int     reachDist[BATTLE_REACH_MAX];   // steps from the actor, 1..budget
+    int     reachCount;
+    float   reachAnimT;
+    // Queued walk: a tap on a reachable tile plans the whole path and the
+    // MOVE phase takes one step per tween until movePathLen is spent.
+    TilePos movePath[BATTLE_REACH_MAX];
+    int     movePathLen;
+    int     movePathPos;
+
     // BS_ENEMY_MOVING scratch. The state machine consumes one tile per tween
     // completion so the camera can follow the enemy step-by-step; these hold
     // the per-turn budget + target.

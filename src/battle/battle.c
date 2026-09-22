@@ -185,6 +185,96 @@ static bool CombatTileWalkable(const TileMap *m, const BattleContext *ctx,
     return true;
 }
 
+// Fill ctx->reachTiles with every tile the actor can reach in `budget`
+// orthogonal steps through walkable, unoccupied tiles. Plain BFS; the
+// visited set is a small on-stack grid keyed by offset from the actor.
+static void BuildReachSet(BattleContext *ctx, const TileMap *m,
+                          const Combatant *actor, int budget)
+{
+    ctx->reachCount = 0;
+    ctx->reachAnimT = 0.0f;
+    if (!actor || budget <= 0) return;
+    enum { R = 8, W = 2 * R + 1 };
+    if (budget > R) budget = R;
+    unsigned char seen[W * W];
+    memset(seen, 0, sizeof(seen));
+    TilePos queue[W * W];
+    int     dist[W * W];
+    int head = 0, tail = 0;
+    queue[tail] = TileOf(actor); dist[tail] = 0; tail++;
+    seen[R * W + R] = 1;
+    static const int ndx[4] = { 1, -1, 0, 0 };
+    static const int ndy[4] = { 0, 0, 1, -1 };
+    while (head < tail) {
+        TilePos cur = queue[head];
+        int d = dist[head];
+        head++;
+        if (d >= budget) continue;
+        for (int i = 0; i < 4; i++) {
+            TilePos n = { cur.x + ndx[i], cur.y + ndy[i] };
+            int ox = n.x - actor->tileX + R, oy = n.y - actor->tileY + R;
+            if (ox < 0 || oy < 0 || ox >= W || oy >= W) continue;
+            if (seen[oy * W + ox]) continue;
+            seen[oy * W + ox] = 1;
+            if (!CombatTileWalkable(m, ctx, actor, n.x, n.y)) continue;
+            queue[tail] = n; dist[tail] = d + 1; tail++;
+            if (ctx->reachCount < BATTLE_REACH_MAX) {
+                ctx->reachTiles[ctx->reachCount] = n;
+                ctx->reachDist[ctx->reachCount]  = d + 1;
+                ctx->reachCount++;
+            }
+        }
+    }
+}
+
+// Shortest orthogonal path from the actor to `goal` through walkable,
+// unoccupied tiles, at most `budget` steps. Writes the tiles after the start
+// into out[] and returns the step count, or 0 when no path fits.
+static int FindReachPath(const BattleContext *ctx, const TileMap *m,
+                         const Combatant *actor, TilePos goal, int budget,
+                         TilePos *out, int outMax)
+{
+    enum { R = 8, W = 2 * R + 1 };
+    if (budget > R) budget = R;
+    int gx = goal.x - actor->tileX + R, gy = goal.y - actor->tileY + R;
+    if (gx < 0 || gy < 0 || gx >= W || gy >= W) return 0;
+    short parent[W * W];
+    for (int i = 0; i < W * W; i++) parent[i] = -1;
+    short queue[W * W];
+    unsigned char dist[W * W];
+    int head = 0, tail = 0;
+    int start = R * W + R;
+    queue[tail++] = (short)start; parent[start] = (short)start; dist[start] = 0;
+    static const int ndx[4] = { 1, -1, 0, 0 };
+    static const int ndy[4] = { 0, 0, 1, -1 };
+    int goalIdx = gy * W + gx;
+    while (head < tail && parent[goalIdx] < 0) {
+        int cur = queue[head++];
+        if (dist[cur] >= budget) continue;
+        int cx = cur % W, cy = cur / W;
+        for (int i = 0; i < 4; i++) {
+            int nx = cx + ndx[i], ny = cy + ndy[i];
+            if (nx < 0 || ny < 0 || nx >= W || ny >= W) continue;
+            int ni = ny * W + nx;
+            if (parent[ni] >= 0) continue;
+            if (!CombatTileWalkable(m, ctx, actor,
+                                    actor->tileX + nx - R, actor->tileY + ny - R)) continue;
+            parent[ni] = (short)cur;
+            dist[ni]   = (unsigned char)(dist[cur] + 1);
+            queue[tail++] = (short)ni;
+        }
+    }
+    if (parent[goalIdx] < 0) return 0;
+    int len = dist[goalIdx];
+    if (len > outMax) return 0;
+    int cur = goalIdx;
+    for (int i = len - 1; i >= 0; i--) {
+        out[i] = (TilePos){ actor->tileX + cur % W - R, actor->tileY + cur / W - R };
+        cur = parent[cur];
+    }
+    return len;
+}
+
 // ---------- AI ----------
 
 // Deterministic aggro-based party-target selection:
@@ -346,13 +436,35 @@ static int AIPickBestMove(const BattleContext *ctx, const TileMap *m,
         if (actor->moveIds[i] < 0) continue;
         const MoveDef *mv = GetMoveDef(actor->moveIds[i]);
         if (mv->power <= 0) continue;
+        int pow = mv->power;
         if (targetPartyIdx >= 0 && (mv->range == RANGE_MELEE || mv->range == RANGE_RANGED)) {
             TilePos tp = TileOf(&ctx->party->members[targetPartyIdx]);
             if (!ActorMoveReaches(m, actor, tp, mv->range)) continue;
+            // A throw at point-blank range is halved (ApplyRangeFalloff), so
+            // score it that way — a Tackle can beat a Kettie in the face.
+            if (mv->range == RANGE_RANGED && TileChebyshev(TileOf(actor), tp) <= 1) pow /= 2;
         }
-        if (mv->power > bestPow) { bestPow = mv->power; bestMove = i; }
+        if (pow > bestPow) { bestPow = pow; bestMove = i; }
     }
     return bestMove;
+}
+
+// True when the actor's strongest damaging move is a ranged one — such an
+// enemy stops walking as soon as its target is in throwing range with a
+// clear line, instead of closing to melee and lobbing at point-blank.
+static bool AIPrefersRanged(const Combatant *actor)
+{
+    int bestPow = -1;
+    bool ranged = false;
+    for (int i = 0; i < CREATURE_MAX_MOVES; i++) {
+        if (actor->moveIds[i] < 0) continue;
+        if (actor->moveDurability[i] == 0) continue;
+        const MoveDef *mv = GetMoveDef(actor->moveIds[i]);
+        if (mv->power <= 0) continue;
+        if (mv->range != RANGE_MELEE && mv->range != RANGE_RANGED) continue;
+        if (mv->power > bestPow) { bestPow = mv->power; ranged = (mv->range == RANGE_RANGED); }
+    }
+    return ranged;
 }
 
 // Plan the enemy's turn: pick target, seed move-budget, stash goal. Actual
@@ -1321,6 +1433,15 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
             else if (IsKeyPressed(KEY_DOWN)  || IsKeyPressed(KEY_S)) dy = 1;
             else if (IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A)) dx = -1;
             else if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) dx = 1;
+            if (dx != 0 || dy != 0) { ctx->movePathLen = 0; ctx->movePathPos = 0; }
+
+            // A queued path (from a tap on a reachable tile) feeds one step
+            // per tween until it runs out.
+            if (dx == 0 && dy == 0 && ctx->movePathPos < ctx->movePathLen) {
+                TilePos next = ctx->movePath[ctx->movePathPos++];
+                dx = next.x - actor->tileX;
+                dy = next.y - actor->tileY;
+            }
 
             // Tap anywhere on the map → step one tile toward the tap (dominant
             // axis wins, matching AIStepToward). Tapping the actor's own tile
@@ -1338,6 +1459,23 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
                         ctx->state         = BS_ACTION_MENU;
                         break;
                     }
+                    // Tap on a lit tile → walk the whole path there. Any
+                    // other tap keeps the old single step toward it.
+                    bool lit = false;
+                    for (int i = 0; i < ctx->reachCount; i++) {
+                        if (ctx->reachTiles[i].x == tx && ctx->reachTiles[i].y == ty) { lit = true; break; }
+                    }
+                    if (lit) {
+                        ctx->movePathLen = FindReachPath(ctx, map, actor, (TilePos){ tx, ty },
+                                                         ctx->moveBudget, ctx->movePath,
+                                                         BATTLE_REACH_MAX);
+                        ctx->movePathPos = 0;
+                        if (ctx->movePathPos < ctx->movePathLen) {
+                            TilePos next = ctx->movePath[ctx->movePathPos++];
+                            ddx = next.x - actor->tileX;
+                            ddy = next.y - actor->tileY;
+                        }
+                    }
                     int adx = ddx < 0 ? -ddx : ddx;
                     int ady = ddy < 0 ? -ddy : ddy;
                     if (adx >= ady) dx = ddx < 0 ? -1 : 1;
@@ -1348,6 +1486,10 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
             if ((dx != 0 || dy != 0) && ctx->moveBudget > 0) {
                 int nx = actor->tileX + dx;
                 int ny = actor->tileY + dy;
+                if (!CombatTileWalkable(map, ctx, actor, nx, ny)) {
+                    ctx->movePathLen = 0;   // path blocked — stop walking it
+                    ctx->movePathPos = 0;
+                }
                 if (CombatTileWalkable(map, ctx, actor, nx, ny)) {
                     int prevX = actor->tileX;
                     int prevY = actor->tileY;
@@ -1357,9 +1499,11 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
                                            TILE_SIZE * TILE_SCALE,
                                            BATTLE_MOVE_ANIM_DUR);
                     ctx->moveBudget--;
+                    BuildReachSet(ctx, map, actor, ctx->moveBudget);
                 }
             }
         }
+        ctx->reachAnimT += dt;
 
         if (IsKeyPressed(KEY_X) || IsKeyPressed(KEY_BACKSPACE) ||
             IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
@@ -1393,6 +1537,12 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
         if (dyg < 0) dyg = -dyg;
         int chebG = (dxg > dyg) ? dxg : dyg;
         bool atGoal = (chebG <= 1);
+        // Ranged attackers hold position once the target is in range with
+        // a clear line — no need to walk into flipper reach.
+        if (!atGoal && AIPrefersRanged(actor) &&
+            ActorMoveReaches(map, actor, ctx->enemyMoveGoal, RANGE_RANGED)) {
+            atGoal = true;
+        }
         if (atGoal || ctx->enemyStepsRemaining <= 0) {
             ctx->selectedMove = AIPickBestMove(ctx, map, actor, ctx->targetEnemyIdx);
             ctx->state = BS_EXECUTE;
@@ -1437,6 +1587,9 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
             // dims MOVE to signal it's spent).
             Combatant *actor = GetCurrentActor(ctx);
             ctx->moveBudget  = actor ? CombatantMoveBudget(actor, map) : 0;
+            BuildReachSet(ctx, map, actor, ctx->moveBudget);
+            ctx->movePathLen = 0;
+            ctx->movePathPos = 0;
             ctx->state       = BS_MOVE_PHASE;
         }
         break;
@@ -1680,24 +1833,27 @@ void BattleDrawWorldOverlay(const BattleContext *ctx, const TileMap *map)
     for (int i = 0; i < ctx->enemyCount; i++)   DrawStunStars(&ctx->enemies[i], tp);
     for (int i = 0; i < ctx->party->count; i++) DrawStunStars(&ctx->party->members[i], tp);
 
-    // Reachable-tile hints during MOVE phase (orthogonal neighbours within
-    // budget). Just the four immediate neighbours — good enough UX for a
-    // 2-tile default budget, and cheap to draw.
+    // Reachable tiles during the MOVE phase. Each tile ripples in from the
+    // actor outward (nearer tiles first), grows from a dot to a rounded
+    // plate with an ease-out, then breathes gently. Tiles at the edge of
+    // the budget are paler so the player reads "how far" at a glance.
     if (ctx->state == BS_MOVE_PHASE) {
-        const Combatant *actor =
-            (ctx->currentTurn < ctx->turnCount &&
-             !ctx->turnOrder[ctx->currentTurn].isEnemy)
-                ? &ctx->party->members[ctx->turnOrder[ctx->currentTurn].idx]
-                : NULL;
-        if (actor) {
-            static const int ndx[4] = { 1, -1,  0,  0 };
-            static const int ndy[4] = { 0,  0,  1, -1 };
-            for (int i = 0; i < 4; i++) {
-                int x = actor->tileX + ndx[i];
-                int y = actor->tileY + ndy[i];
-                DrawRectangle(x * tp, y * tp, tp, tp,
-                              (Color){120, 200, 120, 60});
-            }
+        float now   = (float)GetTime();
+        float pulse = 0.5f + 0.5f * sinf(now * 3.0f);
+        for (int i = 0; i < ctx->reachCount; i++) {
+            float delay = (float)(ctx->reachDist[i] - 1) * 0.06f;
+            float t = (ctx->reachAnimT - delay) / 0.22f;
+            if (t <= 0.0f) continue;
+            if (t > 1.0f) t = 1.0f;
+            float ease = 1.0f - (1.0f - t) * (1.0f - t) * (1.0f - t);
+            float far  = (float)ctx->reachDist[i] / (float)(ctx->moveBudget > 0 ? ctx->moveBudget : 1);
+            float inset = tp * (0.5f - 0.42f * ease) + (1.0f - pulse) * 1.5f;
+            Rectangle r = { (float)(ctx->reachTiles[i].x * tp) + inset,
+                            (float)(ctx->reachTiles[i].y * tp) + inset,
+                            (float)tp - inset * 2.0f, (float)tp - inset * 2.0f };
+            float a = ease * (0.34f - 0.12f * far);
+            DrawRectangleRounded(r, 0.3f, 6, Fade(gPH.waterDark, a + 0.08f * pulse));
+            DrawRectangleRoundedLinesEx(r, 0.3f, 6, 1.5f, Fade(gPH.ink, ease * 0.55f));
         }
     }
 
