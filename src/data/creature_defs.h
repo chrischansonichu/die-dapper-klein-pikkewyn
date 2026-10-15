@@ -40,7 +40,7 @@ static inline int MoveGroupSlotStart(int group) {
     }
 }
 #define MOVE_GROUP_SLOT(group, n) (MoveGroupSlotStart(group) + (n))
-#define CREATURE_DEF_COUNT 12
+#define CREATURE_DEF_COUNT 15
 
 typedef enum CreatureClass {
     CLASS_PENGUIN = 0,
@@ -106,5 +106,12 @@ const ClassGrowth *GetClassGrowth(CreatureClass cclass);
 #define CREATURE_LOOKOUT      9   // stands watch, ranged first — Kettie
 #define CREATURE_YARD_BOSS   10   // heavy — Knobkierie; guards the yard gates
 #define CREATURE_BRAK        11   // yard dog — quick bite, folds fast
+// Lokasie finale (stage 6). Pierie is the kidnapped chick — a bound temp
+// ally on the grid who joins the party for good once the fight ends. The
+// sangoma never takes damage; his three smoking charms are the real target
+// (ranged attacks only — a Kettie stone drops one in a single hit).
+#define CREATURE_PIERIE      12   // moulting chick — Tackle + Tide Mend (the party's first magic)
+#define CREATURE_SANGOMA     13   // the finale's caster — snares and drags, surrenders when the charms fall
+#define CREATURE_CHARM       14   // stationary charm bundle on a pole — no turns, shoot it down
 
 #endif // CREATURE_DEFS_H

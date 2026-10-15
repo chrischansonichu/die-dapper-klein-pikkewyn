@@ -43,6 +43,7 @@ void CombatantInit(Combatant *c, int creatureId, int level)
     c->armorItemId = -1;
     c->enraged        = false;
     c->forcedMoveSlot = -1;
+    c->aiCooldown     = 0;
     for (int i = 0; i < COMBATANT_PARTY_MAX; i++) c->damageTakenFrom[i] = 0;
     c->skillPoints = 0;
     for (int i = 0; i < SKILL_TREES_PER_CLASS; i++) c->skillRanks[i] = 0;
@@ -339,14 +340,21 @@ Vector2 CombatantVisualPixelPos(const Combatant *c, int tileSizePx)
     return p;
 }
 
-void ApplyStatusMove(Combatant *targets[], int count, const MoveDef *move, bool isEnemy)
+int ApplyStatusMove(Combatant *targets[], int count, const MoveDef *move, bool isEnemy)
 {
     (void)isEnemy;
+    int total = 0;
     for (int i = 0; i < count; i++) {
         if (!targets[i] || !targets[i]->alive) continue;
         if (move->id == 4) {  // ColonyRoar: raise ATK 25%
             targets[i]->atkMod = targets[i]->atkMod * 125 / 100;
             if (targets[i]->atkMod > 200) targets[i]->atkMod = 200; // ceiling
         }
+        if (move->effect == MOVE_FX_HEAL_PARTY) {  // Tide Mend
+            int amount = targets[i]->maxHp * MOVE_HEAL_PARTY_PCT / 100;
+            if (amount < MOVE_HEAL_PARTY_MIN) amount = MOVE_HEAL_PARTY_MIN;
+            total += CombatantHeal(targets[i], amount);
+        }
     }
+    return total;
 }

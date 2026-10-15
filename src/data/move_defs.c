@@ -41,6 +41,14 @@ const MoveDef gMoveDefs[MOVE_COUNT] = {
     { MOVE_FLIPPER_SLAP,  "Flipper Slap",  "A light slap that can daze",     20, RANGE_MELEE, -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_MELEE, DMG_BLUNT, false, 0, 0, MOVE_FX_STUN },
     { MOVE_SWAP_PLACES,   "Swap Places",   "Trade places with a friend",      0, RANGE_ALLY,  -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_NONE,  DMG_NONE,  false, 0, 0, MOVE_FX_SWAP_ALLY },
     { MOVE_TO_THE_RESCUE, "To the Rescue", "Rush to a friend, hit all foes near", 50, RANGE_ALLY, -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_MELEE, DMG_BLUNT, true,  0, 0, MOVE_FX_RESCUE_ALLY },
+    // Lokasie finale. Tide Mend is Pierie's magic — the sangoma's work that
+    // rubbed off on him — and the party's first magic move: a friendly AOE
+    // heal. Charm Knot and Draw In are the sangoma's: the knot is a power-0
+    // ranged snare, Draw In a light ranged hit that drags the target to his
+    // doorway (the mirror of the player's Swap Places).
+    { MOVE_TIDE_MEND,     "Tide Mend",     "A cool wave heals the whole party", 0, RANGE_AOE,   -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_MAGIC, DMG_NONE,  false, 0, 0, MOVE_FX_HEAL_PARTY },
+    { MOVE_CHARM_KNOT,    "Charm Knot",    "A knotted cord tangles one foe",    0, RANGE_RANGED, -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_MAGIC, DMG_NONE,  false, 0, 0, MOVE_FX_SNARE },
+    { MOVE_DRAW_IN,       "Draw In",       "The cord snaps tight and drags",   30, RANGE_RANGED, -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_MAGIC, DMG_BLUNT, false, 0, 0, MOVE_FX_PULL },
 };
 
 const char *AttackClassName(AttackClass c)

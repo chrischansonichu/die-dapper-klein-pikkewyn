@@ -29,6 +29,9 @@ typedef enum CombatantStatus {
     STATUS_BOUND = 1 << 0,
     // Dazed: the combatant loses its next turn, then the flag clears.
     STATUS_STUNNED = 1 << 1,
+    // Tangled in the sangoma's charm cord: same skip-a-turn rule as STUNNED,
+    // kept separate so the narration can say what happened.
+    STATUS_SNARED  = 1 << 2,
 } CombatantStatus;
 
 typedef struct Combatant {
@@ -77,6 +80,9 @@ typedef struct Combatant {
     // Cannon Volley for the very next turn so the player feels the boss flip
     // a switch rather than rolling another round of basic attacks.
     int   forcedMoveSlot;
+    // Generic AI pacing counter, decremented once per turn by the AI. The
+    // sangoma uses it so Charm Knot can't be thrown every single turn.
+    int   aiCooldown;
     // Per-party-slot cumulative damage dealt to this combatant during the
     // current battle. Enemy AI uses this to focus the party member who has
     // hit hardest. Zeroed in CombatantInit so fresh battles start clean.
@@ -116,7 +122,9 @@ int  CalculateDamage(const Combatant *attacker, const Combatant *defender, const
 // clamped to [35, 99]. Internally rolls GetRandomValue, so call once per
 // intended strike. Friendly fire and buffs should skip this and always land.
 bool RollHit(const Combatant *attacker, const Combatant *defender);
-void ApplyStatusMove(Combatant *targets[], int count, const MoveDef *move, bool isEnemy);
+// Apply a power-0 move to the given targets. Returns the total effect amount
+// for narration (HP restored for heals, 0 for buffs).
+int  ApplyStatusMove(Combatant *targets[], int count, const MoveDef *move, bool isEnemy);
 int  CombatantXpReward(const Combatant *c);
 bool CombatantAddXp(Combatant *c, int amount);  // returns true if leveled up
 

@@ -41,6 +41,16 @@ const CreatureDef gCreatureDefs[CREATURE_DEF_COUNT] = {
     { CREATURE_LOOKOUT,      "Lookout",         CLASS_HUMAN,   10, 4,  2,  6,  3,   {   0,   10,   -1,   -1,   -1,  -1,  -1}, 1.0f, false },
     { CREATURE_YARD_BOSS,    "Yard Boss",       CLASS_HUMAN,   30, 5,  6,  2,  1,   {   0,    9,   -1,   -1,   -1,  -1,  -1}, 1.2f, false },
     { CREATURE_BRAK,         "Brak",            CLASS_CANINE,  10, 4,  2,  7,  3,   {   0,   -1,   -1,   -1,   -1,  -1,  -1}, 0.9f, false },
+    // Lokasie finale. Pierie is small and quick, and his Special slot holds
+    // Tide Mend (id 14) — the first magic in the party. The sangoma is a
+    // caster: Charm Knot (15) snares a party member for a turn, Draw In (16)
+    // drags one to his doorway; Tackle is his only melee. He cannot be hurt
+    // (battle.c refuses damage on him) and gives up when the charms are gone,
+    // so his HP is just a roster bar. Charms have no moves and never act —
+    // BuildTurnOrder skips them; they exist to be shot down.
+    { CREATURE_PIERIE,       "Pierie",          CLASS_PENGUIN,  8, 2,  2,  7,  4,   {   0,   -1,   -1,   -1,   14,  -1,  -1}, 0.85f, false },
+    { CREATURE_SANGOMA,      "Sangoma",         CLASS_HUMAN,   40, 4,  5,  4,  3,   {   0,   -1,   -1,   -1,   15,  16,  -1}, 1.3f, false },
+    { CREATURE_CHARM,        "Charm",           CLASS_HUMAN,   30, 1, 14,  1,  0,   {  -1,   -1,   -1,   -1,   -1,  -1,  -1}, 1.0f, false },
 };
 
 // Penguins grow nimbly (high DEX, modest power). Humans are bulky and hit hard

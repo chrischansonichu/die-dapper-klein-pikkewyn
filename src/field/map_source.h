@@ -66,6 +66,7 @@ typedef struct MapBuildContext {
     // Builders never write to this directly; updates flow through the
     // interaction handler in field.c, which mutates gs->storyFlags.
     uint64_t    storyFlags;
+    uint64_t    storyFlags2;   // second word (STORY_FLAG2_*), same rules
 
     int        *spawnTileX;
     int        *spawnTileY;

@@ -139,6 +139,13 @@ typedef struct BattleContext {
     // (enemy attacks deal half damage), 1 = hard (full).
     int     difficulty;
 
+    // Lokasie finale. finaleActive is set by BattleBegin when the sangoma is
+    // on the field; finaleSurrendered latches at the round end after the last
+    // charm falls, and from then on the fight counts as won (every enemy
+    // stands down — nobody has to faint).
+    bool    finaleActive;
+    bool    finaleSurrendered;
+
     // Dev-only: mirrored from GameState->devGodMode at battle start. When
     // true, enemy hits against the party deal 0 damage. UI to flip the flag
     // is gated behind DEV_BUILD; the runtime check itself is always live so

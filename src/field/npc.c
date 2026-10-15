@@ -257,6 +257,16 @@ static void DrawPenguinVillager(int px, int py, int sz, int dir) {
                       0xC102, false);
 }
 
+// Pierie — a moulting chick. Same penguin silhouette, three-quarter size,
+// with the grey-brown down a juvenile wears before the black-and-white
+// comes in; no hat, no cane.
+static void DrawPierie(int px, int py, int sz, int dir) {
+    int h = (int)(sz * 0.78f);
+    DrawPenguinPerson(px + (sz - h) / 2, py + (sz - h), h, dir,
+                      (Color){0xC8, 0xBE, 0xAE, 255}, (Color){0, 0, 0, 0},
+                      0xC107, false);
+}
+
 static void DrawKeeper(int px, int py, int sz, int dir) {
     // Grass-bellied — the trader in the village.
     DrawPenguinPerson(px, py, sz, dir,
@@ -517,6 +527,7 @@ void NpcDraw(const Npc *n, Camera2D cam)
         case NPC_BLACKSMITH:    DrawBlacksmith(px, py, sz, n->dir);   break;
         case NPC_CORMORANT:     DrawCormorant(px, py, sz, n->dir);    break;
         case NPC_RYNO:          DrawRyno(px, py, sz, n->dir);         break;
+        case NPC_PIERIE:        DrawPierie(px, py, sz, n->dir);       break;
         case NPC_RESIDENT: {
             // Human residents use the crew's humanoid template (friendly
             // variant). Thandi is a child — three-quarter height, feet on

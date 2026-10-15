@@ -74,10 +74,16 @@
 #define STORY_FLAG_LOK_SIGN_READ     (1ull << 61)  // S1 welcome sign read
 #define STORY_FLAG_HUB_LEFT          (1ull << 62)  // first warp out of the hub taken — touch cues stop
 
+// Second flag word (GameState.storyFlags2). The first word is full at bit 62;
+// everything from the lokasie finale onward lives here. Same rule: never
+// renumber, only append.
+#define STORY_FLAG2_LOK_FINALE_DONE   (1ull << 0)   // sangoma surrendered, Pierie rescued
+#define STORY_FLAG2_LOK_SANGOMA_TALKED (1ull << 1)  // first talk with the sangoma after the fight
+
 // Finished dungeons, one bit each, stored in GameState.dungeonsCompleted.
 // Same rule as the story flags: never renumber, only append — saves keep them.
 #define DUNGEON_DONE_HARBOR   (1u << 0)   // Captain beaten on Harbor F7
-#define DUNGEON_DONE_LOKASIE  (1u << 1)   // Sinkbaai finale (not built yet)
+#define DUNGEON_DONE_LOKASIE  (1u << 1)   // Sinkbaai finale — sangoma surrendered
 
 //----------------------------------------------------------------------------------
 // GameState - persistent state that survives map transitions and battles.
@@ -171,6 +177,8 @@ typedef struct GameState {
     // Persistent one-bit world events — see STORY_FLAG_* macros above. Tracks
     // read logbooks, lit lanterns, opened alcove chests. Survives save/load.
     uint64_t storyFlags;
+    // Overflow word — see STORY_FLAG2_*. Saved alongside storyFlags.
+    uint64_t storyFlags2;
 
     // Bitmask of DUNGEON_DONE_*. Each new bit pays every party member one
     // skill point (GameStateCompleteDungeon). Saved; captainDefeated is

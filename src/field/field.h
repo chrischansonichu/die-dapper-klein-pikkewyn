@@ -127,6 +127,14 @@ typedef struct FieldState {
     float         shipArriveT;
     bool          shipCamHold;
     float         camReturnT;
+
+    // Lokasie finale. The hut-door scene sets finalePending; once its
+    // dialogue closes, FieldUpdate spawns the sangoma, his crew, the three
+    // charms and the bound Pierie, then starts the fight. finaleIncludeAll
+    // tells the aggro cluster to take every active enemy on the map so the
+    // scene can't split on distance.
+    bool          finalePending;
+    bool          finaleIncludeAll;
 } FieldState;
 
 void FieldInit(FieldState *f, struct GameState *gs);

@@ -33,12 +33,14 @@ typedef enum NpcType {
     NPC_CORMORANT,   // Jan's adoptive family on the tutorial island
     NPC_RYNO,        // traveling penguin — tutorial guide; dialogue scripted in field.c
     NPC_RESIDENT,    // lokasie resident (human, friendly) — personaId picks the look + script
+    NPC_PIERIE,      // the kidnapped chick — captive in the lokasie finale, joins the party after
 } NpcType;
 
 // Npc.personaId values for NPC_RESIDENT — the lokasie's friendly faces.
 #define LOK_PERSONA_KID    1   // Thandi — saw the sack (stage 1)
 #define LOK_PERSONA_OUMA   2   // Ouma Nomsa — knows the ditch (stage 3)
 #define LOK_PERSONA_SPAZA  3   // Bra Vusi — spaza keeper on the road (stage 5)
+#define LOK_PERSONA_SANGOMA 4  // the sangoma after his surrender (stage 6)
 
 struct FieldEnemy;
 

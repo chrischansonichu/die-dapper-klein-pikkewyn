@@ -313,6 +313,8 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
     if (n->type == NPC_PENGUIN_ELDER &&
         ow->gs->currentMapId == MAP_OVERWORLD_HUB &&
         ow->gs->captainDefeated) {
+        if (ow->gs->storyFlags2 & STORY_FLAG2_LOK_FINALE_DONE)
+            return StrPages("hub.elder.lok_done", pages, NPC_MAX_DIALOGUE_PAGES);
         if (!(ow->gs->storyFlags & STORY_FLAG_LOK_BRIEFED)) {
             ow->gs->storyFlags |= STORY_FLAG_LOK_BRIEFED;
             return StrPages("hub.elder.lok", pages, NPC_MAX_DIALOGUE_PAGES);
@@ -347,6 +349,12 @@ static int BuildNpcInteraction(FieldState *ow, int npcIdx,
                 return StrPages("lok.spaza.first", pages, NPC_MAX_DIALOGUE_PAGES);
             }
             return StrPages("lok.spaza.again", pages, NPC_MAX_DIALOGUE_PAGES);
+        case LOK_PERSONA_SANGOMA:
+            if (!(ow->gs->storyFlags2 & STORY_FLAG2_LOK_SANGOMA_TALKED)) {
+                ow->gs->storyFlags2 |= STORY_FLAG2_LOK_SANGOMA_TALKED;
+                return StrPages("lok.sangoma.after.first", pages, NPC_MAX_DIALOGUE_PAGES);
+            }
+            return StrPages("lok.sangoma.after.again", pages, NPC_MAX_DIALOGUE_PAGES);
         default:
             break;
         }
@@ -750,10 +758,19 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
             return;
         }
         case OBJ_HUT_DOOR: {
-            // End of the line for this build — the sangoma's door stays shut.
+            // The finale. Knocking opens the door on the sangoma, Pierie
+            // in hand; the intro pages play, then FieldUpdate stages the
+            // yard (crew, charms, the bound chick) and starts the fight.
+            // After the surrender the door just stands open.
             const char *pages[STR_MAX_PAGES];
-            int n = StrPages("lok.hut.door", pages, STR_MAX_PAGES);
+            if (ow->gs->storyFlags2 & STORY_FLAG2_LOK_FINALE_DONE) {
+                int n = StrPages("lok.hut.door.open", pages, STR_MAX_PAGES);
+                DialogueBegin(&ow->dialogue, pages, n, 30.0f);
+                return;
+            }
+            int n = StrPages("lok.finale.intro", pages, STR_MAX_PAGES);
             DialogueBegin(&ow->dialogue, pages, n, 30.0f);
+            ow->finalePending = true;
             return;
         }
         case OBJ_FISH_PEN: {
@@ -1047,6 +1064,16 @@ static int FieldEnemyAggroCluster(const FieldState *ow, int seedIdx,
     int written = 0;
     if (written < maxOut) outIdxs[written++] = seedIdx;
 
+    // Scripted set-piece (the lokasie finale): everyone on the map is in
+    // the fight, whatever the distance or sightline.
+    if (ow->finaleIncludeAll) {
+        for (int i = 0; i < ow->enemyCount && written < maxOut; i++) {
+            if (i == seedIdx || !ow->enemies[i].active) continue;
+            outIdxs[written++] = i;
+        }
+        return written;
+    }
+
     bool seedIsCaptor = FieldEnemyIsCaptor(ow, seedIdx);
 
     if (seedIsCaptor) {
@@ -1243,7 +1270,8 @@ static void StartDungeonBattle(FieldState *ow, int seedIdx,
         ow->gs->party.count < PARTY_MAX) {
         int janLevel = ow->gs->party.count > 0
                          ? ow->gs->party.members[0].level : 1;
-        int allyCreatureId = CREATURE_SEAL; // only captive type today
+        int allyCreatureId = (ow->npcs[allyNpcIdx].type == NPC_PIERIE)
+                                 ? CREATURE_PIERIE : CREATURE_SEAL;
         int newIdx = GameStateAddMember(ow->gs, allyCreatureId, janLevel);
         if (newIdx >= 0) {
             CombatantAddStatus(&ow->gs->party.members[newIdx], STATUS_BOUND);
@@ -1473,10 +1501,36 @@ static int DropInventoryOnRescue(Inventory *inv, int *outItems, int *outWeapons)
 static void ResolveBattleEnd(FieldState *ow, int result)
 {
     BattleContext *ctx = &ow->battle;
-    const char *ptrs[DROP_MSG_PAGES + 5];
+    const char *ptrs[DROP_MSG_PAGES + 12];
+    const int ptrsMax = (int)(sizeof(ptrs) / sizeof(ptrs[0]));
     int pageCount = 0;
+    bool finaleWon = false;
 
     if (result == 1 /* victory */) {
+        // Lokasie finale: the sangoma surrendered. He stays in his doorway
+        // as a friendly resident for the surrender speech (and for every
+        // later visit, via the S6 builder); the crew and the charms go.
+        // His pages lead, then drops, then Pierie joining, then the rest.
+        for (int k = 0; k < ctx->enemyCount; k++) {
+            int idx = ctx->enemyFieldIdx[k];
+            if (idx < 0 || idx >= ow->enemyCount) continue;
+            if (ow->enemies[idx].creatureId != CREATURE_SANGOMA) continue;
+            finaleWon = true;
+            // Same seat the S6 builder gives him on later visits — beside
+            // the door, not in it, so the door object doesn't draw over him.
+            if (ow->npcCount < FIELD_MAX_NPCS) {
+                Npc *sg = &ow->npcs[ow->npcCount++];
+                NpcInit(sg, 10, 12, 1, NPC_RESIDENT);
+                sg->personaId = LOK_PERSONA_SANGOMA;
+            }
+            for (int i = 0; i < ow->objectCount; i++)
+                if (ow->objects[i].type == OBJ_HUT_DOOR) ow->objects[i].active = true;
+            ow->gs->storyFlags2 |= STORY_FLAG2_LOK_FINALE_DONE;
+            const char *sur[STR_MAX_PAGES];
+            int n = StrPages("lok.sangoma.surrender", sur, STR_MAX_PAGES);
+            for (int i = 0; i < n && pageCount < ptrsMax; i++) ptrs[pageCount++] = sur[i];
+            break;
+        }
         // Deactivate each field enemy that participated, roll drops on the
         // first one that produces any narration.
         bool bossDown = false;
@@ -1509,7 +1563,7 @@ static void ResolveBattleEnd(FieldState *ow, int result)
             }
             e->active = false;
         }
-        for (int i = 0; i < dropPages && pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0])); i++) {
+        for (int i = 0; i < dropPages && pageCount < ptrsMax; i++) {
             ptrs[pageCount++] = gDropMsg[i];
         }
         // Tutorial fights — beating the first kelp gull advances the story
@@ -1586,18 +1640,27 @@ static void ResolveBattleEnd(FieldState *ow, int result)
         if (keepAlly && partyIdx < ow->gs->party.count) {
             Combatant *ally = &ow->gs->party.members[partyIdx];
             CombatantClearStatus(ally, STATUS_BOUND);
+            CombatantClearStatus(ally, STATUS_SNARED);
             ow->npcs[npcIdx].active = false;
+            bool isPierie = ally->def && ally->def->id == CREATURE_PIERIE;
             snprintf(gRescueGreet, RESCUE_GREET_LEN,
-                     Str("seal.greet"), ally->name);
-            ptrs[pageCount++] = gRescueGreet;
-            if (pageCount < (int)(sizeof(ptrs)/sizeof(ptrs[0]))) {
-                ptrs[pageCount++] = Str("party.leader.tip");
-            }
+                     Str(isPierie ? "pierie.greet" : "seal.greet"), ally->name);
+            if (pageCount < ptrsMax) ptrs[pageCount++] = gRescueGreet;
+            if (pageCount < ptrsMax) ptrs[pageCount++] = Str("party.leader.tip");
         } else {
             PartyRemoveMember(&ow->gs->party, partyIdx);
         }
         ow->gs->tempAllyPartyIdx = -1;
         ow->gs->tempAllyNpcIdx   = -1;
+    }
+
+    // Finale wrap-up, after Pierie has joined: his magic, then the level's
+    // skill point (GameStateCompleteDungeon pays every current member, so it
+    // must run with Pierie already in the roster).
+    if (finaleWon) {
+        if (pageCount < ptrsMax) ptrs[pageCount++] = Str("lok.finale.magic");
+        if (GameStateCompleteDungeon(ow->gs, DUNGEON_DONE_LOKASIE) && pageCount < ptrsMax)
+            ptrs[pageCount++] = Str("victory.skillpoint");
     }
 
     if (result == 2 /* defeat */) {
@@ -1671,6 +1734,13 @@ static void ResolveBattleEnd(FieldState *ow, int result)
         ow->gs->pendingSpawnDir  = fromLokasie ?  1 :  3;
     }
 
+    // Turn-skip statuses are battle-local; don't let a snare or daze from
+    // the last round cost a turn at the start of the next fight.
+    for (int i = 0; i < ow->gs->party.count; i++) {
+        CombatantClearStatus(&ow->gs->party.members[i], STATUS_STUNNED);
+        CombatantClearStatus(&ow->gs->party.members[i], STATUS_SNARED);
+    }
+
     ow->mode = FIELD_FREE;
     memset(&ow->battle, 0, sizeof(ow->battle));
 
@@ -1729,6 +1799,7 @@ void FieldInit(FieldState *ow, GameState *gs)
         .objectCount = &ow->objectCount,
         .objectMax   = FIELD_MAX_OBJECTS,
         .storyFlags  = gs->storyFlags,
+        .storyFlags2 = gs->storyFlags2,
         .spawnTileX  = &spawnX,
         .spawnTileY  = &spawnY,
         .spawnDir    = &spawnDir,
@@ -2173,6 +2244,49 @@ void FieldUpdate(FieldState *ow, float dt)
         int n = StrPages("lok.news", news, STR_MAX_PAGES);
         DialogueBegin(&ow->dialogue, news, n, 30.0f);
         return;
+    }
+
+    // Lokasie finale staging: the hut-door intro has closed, so put the
+    // cast in the yard and start the fight. Positions are fixed to the S6
+    // tmx (Jan knocks from (9,12), the doorway is (9,11)): the sangoma in
+    // his doorway, Pierie roped two tiles from Jan so every tile around
+    // him is inside the sangoma's Draw In reach (RANGED_MOVE_REACH), the
+    // yard boss and brak flanking the chick, three charms on poles around
+    // the yard. The sangoma and the yard boss are Pierie's captors.
+    if (ow->finalePending && !ow->dialogue.active && ow->mode == FIELD_FREE) {
+        ow->finalePending = false;
+        if (ow->enemyCount + 6 <= FIELD_MAX_ENEMIES && ow->npcCount < FIELD_MAX_NPCS) {
+            // The door object would draw over the sangoma standing in it.
+            for (int i = 0; i < ow->objectCount; i++)
+                if (ow->objects[i].type == OBJ_HUT_DOOR) ow->objects[i].active = false;
+
+            int sangomaIdx = ow->enemyCount++;
+            EnemyInit(&ow->enemies[sangomaIdx], 9, 11, 0, BEHAVIOR_STAND,
+                      CREATURE_SANGOMA, 12, 0, (Color){0xB8, 0x40, 0x38, 255});
+            int bossIdx = ow->enemyCount++;
+            EnemyInit(&ow->enemies[bossIdx], 12, 12, 1, BEHAVIOR_STAND,
+                      CREATURE_YARD_BOSS, 12, 0, (Color){0x3C, 0x4A, 0x6A, 255});
+            EnemySetDrops(&ow->enemies[bossIdx], ITEM_SNOEK, 60, /*Knobkierie*/ 9, 40);
+            int brakIdx = ow->enemyCount++;
+            EnemyInit(&ow->enemies[brakIdx], 12, 14, 1, BEHAVIOR_STAND,
+                      CREATURE_BRAK, 11, 0, (Color){0xC0, 0x98, 0x60, 255});
+            static const int kCharmX[3] = { 5, 9, 15 };
+            static const int kCharmY[3] = { 13, 16, 15 };
+            for (int c = 0; c < 3; c++) {
+                int ci = ow->enemyCount++;
+                EnemyInit(&ow->enemies[ci], kCharmX[c], kCharmY[c], 0, BEHAVIOR_STAND,
+                          CREATURE_CHARM, 1, 0, (Color){0xC8, 0x98, 0x58, 255});
+            }
+            int pierieIdx = ow->npcCount++;
+            Npc *pierie = &ow->npcs[pierieIdx];
+            NpcInit(pierie, 11, 13, 1, NPC_PIERIE);
+            NpcSetCaptors(pierie, sangomaIdx, bossIdx);
+
+            ow->finaleIncludeAll = true;
+            TriggerCaptiveRescueBattle(ow, pierieIdx);
+            ow->finaleIncludeAll = false;
+            return;
+        }
     }
 
     // Lokasie stage arrivals — one-shot scene-setting on the beach (S1) and
@@ -2688,6 +2802,7 @@ static const char *TutorialObjectiveText(const FieldState *ow)
     if (!ow->gs) return NULL;
     // Lokasie: one line per stage, keyed by floor ("lok.obj.1".."lok.obj.6").
     if (ow->gs->currentMapId == MAP_LOKASIE) {
+        if (ow->gs->storyFlags2 & STORY_FLAG2_LOK_FINALE_DONE) return Str("lok.obj.done");
         static char key[24];
         snprintf(key, sizeof(key), "lok.obj.%d", ow->gs->currentFloor);
         return Str(key);

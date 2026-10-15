@@ -263,8 +263,13 @@ static const ObjSpec kObjsS5[] = {
     { "Drums1", 22,  7, OBJ_DECOR, DECOR_DRUMS, 0 },
 };
 
-// Stage 6 — Sangoma se Erf. No enemies yet: the compound is the level's
-// destination, and the fight/story inside the hut is a later build.
+// Stage 6 — Sangoma se Erf. No enemies at build time: the finale's cast
+// (sangoma, crew, charms, the bound Pierie) is spawned by field.c when the
+// hut-door scene plays, so a rebuilt map never shows half a fight. After
+// the surrender the sangoma sits by his door as a friendly resident.
+static const NpcSpec kNpcsS6Done[] = {
+    { "SangomaSeat", 10, 12, 0, LOK_PERSONA_SANGOMA },
+};
 static const ObjSpec kObjsS6[] = {
     { "HutDoor",  9, 11, OBJ_HUT_DOOR, 0, 0 },
     { "Drums1",   3, 15, OBJ_DECOR, DECOR_DRUMS, 0 },
@@ -351,8 +356,15 @@ void BuildLokasieStage(MapBuildContext *ctx, int stage)
     }
 
     // --- Residents (friendly). Dialogue is scripted in field.c by persona.
-    for (int i = 0; i < sd->npcCount && *ctx->npcCount < ctx->npcMax; i++) {
-        const NpcSpec *ns = &sd->npcs[i];
+    const NpcSpec *npcs = sd->npcs;
+    int npcCount = sd->npcCount;
+    if (stage == LOKASIE_STAGE_COUNT &&
+        (ctx->storyFlags2 & STORY_FLAG2_LOK_FINALE_DONE)) {
+        npcs     = kNpcsS6Done;
+        npcCount = (int)(sizeof(kNpcsS6Done) / sizeof(kNpcsS6Done[0]));
+    }
+    for (int i = 0; i < npcCount && *ctx->npcCount < ctx->npcMax; i++) {
+        const NpcSpec *ns = &npcs[i];
         ObjTile(objs, objCount, ns->obj, ns->fx, ns->fy, &x, &y);
         Npc *n = &ctx->npcs[(*ctx->npcCount)++];
         NpcInit(n, x, y, ns->dir, NPC_RESIDENT);

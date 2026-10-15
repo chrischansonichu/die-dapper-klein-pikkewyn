@@ -89,6 +89,55 @@ static void AppendNarration(char *buf, const char *fmt, const char *name)
     snprintf(buf + len, NARRATION_LEN - len, fmt, name);
 }
 
+// ---------- Lokasie finale helpers ----------
+
+static bool IsCharm(const Combatant *c)
+{
+    return c && c->def && c->def->id == CREATURE_CHARM;
+}
+
+static bool IsSangoma(const Combatant *c)
+{
+    return c && c->def && c->def->id == CREATURE_SANGOMA;
+}
+
+static int CountCharmsAlive(const BattleContext *ctx)
+{
+    int n = 0;
+    for (int i = 0; i < ctx->enemyCount; i++)
+        if (ctx->enemies[i].alive && IsCharm(&ctx->enemies[i])) n++;
+    return n;
+}
+
+// String key explaining why `target` shrugs off `mv`, or NULL when the hit
+// lands normally. The sangoma is never hurt — his charms are the fight. A
+// charm only comes down from range... unless the party has no ranged weapon
+// left at all, in which case a flipper will do (no softlock on a lost
+// Kettie). Key "battle.veil" formats the target's name; "battle.charm.immune"
+// formats the actor's.
+static const char *ImmuneKey(const BattleContext *ctx, const Combatant *target,
+                             const MoveDef *mv)
+{
+    if (IsSangoma(target)) return "battle.veil";
+    if (IsCharm(target) && mv && mv->attackClass != ATTACK_CLASS_RANGED &&
+        PartyHasWeaponKind(ctx->party, ATTACK_CLASS_RANGED, DMG_NONE)) {
+        return "battle.charm.immune";
+    }
+    return NULL;
+}
+
+// Append the "charm fell" line after a charm's faint narration — a count
+// while any still burn, the veil-breaks line on the last one.
+static void AppendCharmFallen(BattleContext *ctx)
+{
+    size_t len = strlen(ctx->narration);
+    if (len >= NARRATION_LEN - 2) return;
+    ctx->narration[len++] = ' ';
+    int left = CountCharmsAlive(ctx);
+    if (left > 0) snprintf(ctx->narration + len, NARRATION_LEN - len, Str("battle.charm.down"), left);
+    else          snprintf(ctx->narration + len, NARRATION_LEN - len, "%s", Str("battle.charm.last"));
+}
+
 // Ranged weapons swung at melee distance (Chebyshev ≤ 1) do half damage — a
 // thrown shell to the face has no arc to pick up speed. Non-ranged moves are
 // pass-through. Always floors to at least 1 so a glancing hit still registers.
@@ -141,6 +190,7 @@ static void BuildTurnOrder(BattleContext *ctx)
     for (int i = 0; i < ctx->enemyCount; i++) {
         const Combatant *m = &ctx->enemies[i];
         if (!m->alive) continue;
+        if (IsCharm(m)) continue;   // a charm on a pole takes no turns
         TurnEntry e = { true, i, CombatantEffectiveSpeed(m, ctx->map) };
         ctx->turnOrder[ctx->turnCount++] = e;
     }
@@ -486,7 +536,72 @@ static void AITakeTurn(BattleContext *ctx, const TileMap *m)
 
     ctx->enemyMoveGoal       = goal;
     ctx->enemyStepsRemaining = CombatantMoveBudget(actor, m);
-    (void)m;
+    if (actor->aiCooldown > 0) actor->aiCooldown--;
+    // The sangoma works from his doorway and never walks into the yard.
+    if (IsSangoma(actor)) ctx->enemyStepsRemaining = 0;
+}
+
+// The sangoma's turn. Someone standing next to the bound chick (cutting him
+// loose) gets dragged off with Draw In; otherwise, when the knot is off
+// cooldown, Charm Knot snares the current target for a turn. Returns the
+// slot to use, or -1 to fall through to the generic power-based pick
+// (Tackle when adjacent, Draw In at range). Writes targetEnemyIdx /
+// targetTile so ExecuteAction aims at the chosen member.
+static int AISangomaPlan(BattleContext *ctx, const TileMap *m, Combatant *actor)
+{
+    int snareSlot = -1, pullSlot = -1;
+    for (int s = 0; s < CREATURE_MAX_MOVES; s++) {
+        if (actor->moveIds[s] == MOVE_CHARM_KNOT) snareSlot = s;
+        if (actor->moveIds[s] == MOVE_DRAW_IN)    pullSlot  = s;
+    }
+    if (pullSlot >= 0) {
+        for (int i = 0; i < ctx->party->count; i++) {
+            const Combatant *c = &ctx->party->members[i];
+            if (!c->alive || CombatantHasStatus(c, STATUS_BOUND)) continue;
+            if (TileChebyshev(TileOf(actor), TileOf(c)) <= 1) continue;
+            if (!ActorMoveReaches(m, actor, TileOf(c), RANGE_RANGED)) continue;
+            bool nextToCaptive = false;
+            for (int j = 0; j < ctx->party->count; j++) {
+                const Combatant *b = &ctx->party->members[j];
+                if (!b->alive || !CombatantHasStatus(b, STATUS_BOUND)) continue;
+                if (TileChebyshev(TileOf(c), TileOf(b)) <= 1) { nextToCaptive = true; break; }
+            }
+            if (!nextToCaptive) continue;
+            ctx->targetEnemyIdx = i;
+            ctx->targetTile     = TileOf(c);
+            return pullSlot;
+        }
+    }
+    if (snareSlot >= 0 && actor->aiCooldown <= 0) {
+        int pick = -1;
+        int first = ctx->targetEnemyIdx;
+        for (int k = 0; k < ctx->party->count + 1 && pick < 0; k++) {
+            int i = (k == 0) ? first : k - 1;
+            if (i < 0 || i >= ctx->party->count) continue;
+            const Combatant *c = &ctx->party->members[i];
+            if (!c->alive) continue;
+            if (CombatantHasStatus(c, STATUS_BOUND) || CombatantHasStatus(c, STATUS_SNARED)) continue;
+            if (!ActorMoveReaches(m, actor, TileOf(c), RANGE_RANGED)) continue;
+            pick = i;
+        }
+        if (pick >= 0) {
+            actor->aiCooldown   = 2;
+            ctx->targetEnemyIdx = pick;
+            ctx->targetTile     = TileOf(&ctx->party->members[pick]);
+            return snareSlot;
+        }
+    }
+    return -1;
+}
+
+// Pick the enemy's move once it has finished moving.
+static int AIPlanMove(BattleContext *ctx, const TileMap *m, Combatant *actor)
+{
+    if (IsSangoma(actor)) {
+        int slot = AISangomaPlan(ctx, m, actor);
+        if (slot >= 0) return slot;
+    }
+    return AIPickBestMove(ctx, m, actor, ctx->targetEnemyIdx);
 }
 
 // ---------- Move select + target select ----------
@@ -820,6 +935,31 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
         ExecuteDash(ctx, m, actor, TileOf(target), mv->dashTiles);
     }
 
+    // Charm Knot: a power-0 ranged snare. Needs a hostile target in reach;
+    // rolls to hit like any attack, then the target loses its next turn.
+    if (mv->effect == MOVE_FX_SNARE) {
+        bool hostile = target && (targetIsEnemy != actorIsEn);
+        if (!hostile || !ActorMoveReaches(m, actor, TileOf(target), mv->range)) {
+            snprintf(ctx->narration, NARRATION_LEN,
+                     "%s used %s - but the strike hit nothing!", actor->name, mv->name);
+            ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
+            return;
+        }
+        PlayAttackAnimFor(ctx, mv, actor, actorIsEn, te->idx,
+                          target, targetIsEnemy, targetIdx);
+        if (!RollHit(actor, target)) {
+            BattleAnimMarkMiss(&ctx->anim);
+            snprintf(ctx->narration, NARRATION_LEN, Str("battle.snare.miss"),
+                     actor->name, target->name);
+        } else {
+            CombatantAddStatus(target, STATUS_SNARED);
+            snprintf(ctx->narration, NARRATION_LEN, Str("battle.snare.hit"),
+                     actor->name, target->name);
+        }
+        ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
+        return;
+    }
+
     if (mv->power == 0) {
         snprintf(ctx->narration, NARRATION_LEN, "%s used %s!", actor->name, mv->name);
         ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
@@ -859,6 +999,20 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
         return;
     }
 
+    // Finale: the veiled sangoma, and charms swung at with a flipper.
+    if (!friendly) {
+        const char *imm = ImmuneKey(ctx, target, mv);
+        if (imm) {
+            PlayAttackAnimFor(ctx, mv, actor, actorIsEn, te->idx,
+                              target, targetIsEnemy, targetIdx);
+            BattleAnimMarkMiss(&ctx->anim);
+            snprintf(ctx->narration, NARRATION_LEN, Str(imm),
+                     IsSangoma(target) ? target->name : actor->name);
+            ConsumeMoveUse(ctx, actorIsEn, ctx->selectedMove);
+            return;
+        }
+    }
+
     if (!friendly && !RollHit(actor, target)) {
         PlayAttackAnimFor(ctx, mv, actor, actorIsEn, te->idx,
                           target, targetIsEnemy, targetIdx);
@@ -874,6 +1028,12 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
     // Blacksmith upgrade bonus: +10% damage per upgrade level on this slot.
     dmg = (dmg * WeaponPowerBonusPct(actor->moveUpgradeLevel[ctx->selectedMove])) / 100;
     dmg = ApplyRangeFalloff(dmg, actor, target, mv);
+    // A thrown stone (ranged blunt — the Kettie) knocks a charm clean off
+    // its pole in one hit; other ranged weapons chip it down.
+    if (IsCharm(target) && mv->attackClass == ATTACK_CLASS_RANGED &&
+        mv->damageType == DMG_BLUNT) {
+        dmg = target->hp;
+    }
     if (friendly) {
         dmg = dmg / 10;
         if (dmg < 1) dmg = 1;
@@ -916,6 +1076,7 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
             Combatant *e = &ctx->enemies[i];
             if (!e->alive || e == target) continue;
             if (TileChebyshev(TileOf(e), TileOf(target)) > 1) continue;
+            if (ImmuneKey(ctx, e, mv)) continue;
             if (!splitTarget || e->hp < splitTarget->hp) { splitTarget = e; splitIdx = i; }
         }
         if (splitTarget) {
@@ -962,6 +1123,31 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
     }
     if (enraged) AppendEnrageLine(ctx->narration, target);
     if (stunned) AppendNarration(ctx->narration, Str("battle.stun.applied"), target->name);
+    if (!target->alive && IsCharm(target)) AppendCharmFallen(ctx);
+    // Draw In: the cord drags the target onto the free tile beside the actor
+    // that is closest to where they stood. Already adjacent → nothing to do.
+    if (mv->effect == MOVE_FX_PULL && !friendly && target->alive &&
+        TileChebyshev(TileOf(actor), TileOf(target)) > 1) {
+        TilePos from = TileOf(target);
+        TilePos best = from;
+        int bestDist = 0x7fffffff;
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                TilePos tp = { actor->tileX + dx, actor->tileY + dy };
+                if (!CombatTileWalkable(m, ctx, target, tp.x, tp.y)) continue;
+                int d = TileChebyshev(from, tp);
+                if (d < bestDist) { bestDist = d; best = tp; }
+            }
+        }
+        if (bestDist != 0x7fffffff) {
+            target->tileX = best.x;
+            target->tileY = best.y;
+            CombatantStartMoveAnim(target, from.x, from.y, TILE_SIZE * TILE_SCALE,
+                                   BATTLE_MOVE_ANIM_DUR);
+            AppendNarration(ctx->narration, Str("battle.pull.done"), target->name);
+        }
+    }
     if (splitTarget) {
         size_t len = strlen(ctx->narration);
         if (len < NARRATION_LEN - 2) {
@@ -1044,6 +1230,7 @@ static void ExecuteAllyMove(BattleContext *ctx, const TileMap *m)
         Combatant *t = &ctx->enemies[i];
         if (!t->alive) continue;
         if (TileChebyshev(TileOf(actor), TileOf(t)) > 1) continue;
+        if (ImmuneKey(ctx, t, mv)) continue;
         if (!RollHit(actor, t)) continue;
         int dmg = CalculateDamage(actor, t, mv);
         t->hp -= dmg;
@@ -1106,7 +1293,15 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 for (int i = 0; i < ctx->party->count; i++)
                     if (ctx->party->members[i].alive) pts[cnt++] = &ctx->party->members[i];
             }
-            ApplyStatusMove(pts, cnt, mv, te->isEnemy);
+            int healed = ApplyStatusMove(pts, cnt, mv, te->isEnemy);
+            if (mv->effect == MOVE_FX_HEAL_PARTY) {
+                PlayAttackAnimFor(ctx, mv, actor, te->isEnemy, te->idx,
+                                  actor, te->isEnemy, te->idx);
+                snprintf(ctx->narration, NARRATION_LEN, Str("battle.mend.done"),
+                         actor->name, mv->name, healed);
+                ConsumeMoveUse(ctx, te->isEnemy, ctx->selectedMove);
+                return;
+            }
         }
         snprintf(ctx->narration, NARRATION_LEN, "%s used %s!", actor->name, mv->name);
         ConsumeMoveUse(ctx, te->isEnemy, ctx->selectedMove);
@@ -1126,6 +1321,7 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
             for (int i = 0; i < ctx->enemyCount; i++) {
                 Combatant *t = &ctx->enemies[i];
                 if (!t->alive) continue;
+                if (hostileAoe && ImmuneKey(ctx, t, mv)) continue;
                 if (hostileAoe && !RollHit(actor, t)) { misses++; continue; }
                 int dmg = CalculateDamage(actor, t, mv);
                 dmg = (dmg * WeaponPowerBonusPct(actor->moveUpgradeLevel[ctx->selectedMove])) / 100;
@@ -1216,6 +1412,7 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
 
 static bool AllEnemiesFainted(const BattleContext *ctx)
 {
+    if (ctx->finaleSurrendered) return true;
     for (int i = 0; i < ctx->enemyCount; i++)
         if (ctx->enemies[i].alive) return false;
     return true;
@@ -1257,6 +1454,10 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
     ctx->menuNotice       = NULL;
     ctx->menuNoticeT      = 0.0f;
     ctx->preemptiveAttack = preemptive;
+    ctx->finaleActive     = false;
+    ctx->finaleSurrendered = false;
+    for (int i = 0; i < ctx->enemyCount; i++)
+        if (IsSangoma(&ctx->enemies[i])) ctx->finaleActive = true;
     ctx->menu             = (BattleMenuState){0};
     ctx->anim             = (BattleAnim){0};
     for (int i = 0; i < PARTY_MAX; i++) ctx->partyMoveCursor[i] = 0;
@@ -1397,6 +1598,13 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
             // Dazed: lose this turn, then shake it off.
             CombatantClearStatus(actor, STATUS_STUNNED);
             snprintf(ctx->narration, NARRATION_LEN, Str("battle.stun.skip"), actor->name);
+            ctx->state = BS_NARRATION;
+            break;
+        }
+        if (actor && CombatantHasStatus(actor, STATUS_SNARED)) {
+            // Tangled in the charm cord: lose this turn, then tear free.
+            CombatantClearStatus(actor, STATUS_SNARED);
+            snprintf(ctx->narration, NARRATION_LEN, Str("battle.snare.skip"), actor->name);
             ctx->state = BS_NARRATION;
             break;
         }
@@ -1544,7 +1752,7 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
             atGoal = true;
         }
         if (atGoal || ctx->enemyStepsRemaining <= 0) {
-            ctx->selectedMove = AIPickBestMove(ctx, map, actor, ctx->targetEnemyIdx);
+            ctx->selectedMove = AIPlanMove(ctx, map, actor);
             ctx->state = BS_EXECUTE;
             break;
         }
@@ -1555,7 +1763,7 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
         if (actor->tileX == prevX && actor->tileY == prevY) {
             // Fully blocked this turn — no path found. Bail out and act from
             // the current tile (will likely "pass" since no move reaches).
-            ctx->selectedMove = AIPickBestMove(ctx, map, actor, ctx->targetEnemyIdx);
+            ctx->selectedMove = AIPlanMove(ctx, map, actor);
             ctx->state = BS_EXECUTE;
             break;
         }
@@ -1751,6 +1959,15 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
         break;
 
     case BS_ROUND_END:
+        // Finale: the last charm is down — the sangoma stops, and with him
+        // the crew. One narration page, then the round end reads as a win.
+        if (ctx->finaleActive && !ctx->finaleSurrendered &&
+            CountCharmsAlive(ctx) == 0) {
+            ctx->finaleSurrendered = true;
+            snprintf(ctx->narration, NARRATION_LEN, "%s", Str("battle.sangoma.yield"));
+            ctx->state = BS_NARRATION;
+            break;
+        }
         if (AllEnemiesFainted(ctx)) {
             if (!ctx->xpNarrationShown) {
                 int livingCount = 0;
@@ -1832,6 +2049,25 @@ void BattleDrawWorldOverlay(const BattleContext *ctx, const TileMap *map)
 
     for (int i = 0; i < ctx->enemyCount; i++)   DrawStunStars(&ctx->enemies[i], tp);
     for (int i = 0; i < ctx->party->count; i++) DrawStunStars(&ctx->party->members[i], tp);
+
+    // The sangoma's veil: a slow ring of smoke around him while any charm
+    // still burns, so the player can see what the charms are doing.
+    if (ctx->finaleActive && CountCharmsAlive(ctx) > 0) {
+        for (int i = 0; i < ctx->enemyCount; i++) {
+            const Combatant *c = &ctx->enemies[i];
+            if (!c->alive || !IsSangoma(c)) continue;
+            Vector2 pos = CombatantVisualPixelPos(c, tp);
+            float cx = pos.x + tp * 0.5f;
+            float cy = pos.y + tp * 0.55f;
+            float t  = (float)GetTime();
+            for (int k = 0; k < 6; k++) {
+                float ang = t * 0.9f + (float)k * 1.0472f;
+                float rad = tp * (0.52f + 0.05f * sinf(t * 2.0f + k));
+                DrawCircle((int)(cx + cosf(ang) * rad), (int)(cy + sinf(ang) * rad * 0.6f),
+                           tp * 0.07f, (Color){gPH.inkLight.r, gPH.inkLight.g, gPH.inkLight.b, 110});
+            }
+        }
+    }
 
     // Reachable tiles during the MOVE phase. Each tile ripples in from the
     // actor outward (nearer tiles first), grows from a dot to a rounded

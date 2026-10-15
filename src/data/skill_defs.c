@@ -53,8 +53,8 @@ SkillClass SkillClassForCreature(int creatureId)
     case CREATURE_JAN:
     case CREATURE_SEAL:
         return SKILL_CLASS_RIDER;
-    // Pierie maps to SKILL_CLASS_CALLER once the lokasie finale adds the
-    // creature — see PLANS.md.
+    case CREATURE_PIERIE:
+        return SKILL_CLASS_CALLER;
     default:
         return SKILL_CLASS_NONE;
     }

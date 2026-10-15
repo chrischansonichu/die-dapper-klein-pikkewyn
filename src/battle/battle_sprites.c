@@ -75,6 +75,60 @@ static void DrawJanSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
                   (int)(sz * 0.14f), (int)(sz * 0.08f), orange);
 }
 
+// ----- Pierie --------------------------------------------------------------
+// The moulting chick: Jan's silhouette shrunk a little, in juvenile
+// grey-brown down with a paler front. The down edge is drawn as a loose
+// wobble so he reads as fluffy, not sleek.
+static void DrawPierieSprite(Rectangle r, bool faceLeft, float alpha, bool flash)
+{
+    float cx = r.x + r.width / 2.0f;
+    float sz = r.height;
+    float px = cx - sz / 2.0f;
+    float py = r.y;
+
+    Color down   = Tint((Color){0x8A, 0x80, 0x74, 255}, alpha, flash);
+    Color front  = Tint((Color){0xC8, 0xBE, 0xAE, 255}, alpha, flash);
+    Color orange = Tint((Color){0xD8, 0x96, 0x3A, 255}, alpha, flash);
+    Color white  = Tint(gPH.panel, alpha, flash);
+    Color eyeBlk = Tint(gPH.inkDark, alpha, flash);
+    Color ink    = Tint(gPH.ink, alpha, flash);
+
+    Rectangle body = { px + sz * 0.16f, py + sz * 0.22f, sz * 0.68f, sz * 0.68f };
+    DrawRectangleRounded(body, 0.6f, 14, down);
+    // Fluff: a few short wobbled ticks sticking out of the silhouette.
+    for (int i = 0; i < 4; i++) {
+        float fy = body.y + sz * (0.12f + 0.16f * i);
+        PHWobbleLine((Vector2){body.x, fy}, (Vector2){body.x - sz * 0.05f, fy - sz * 0.03f},
+                     1.2f, 1.4f, ink, 0xD301 + i);
+        PHWobbleLine((Vector2){body.x + body.width, fy},
+                     (Vector2){body.x + body.width + sz * 0.05f, fy - sz * 0.03f},
+                     1.2f, 1.4f, ink, 0xD311 + i);
+    }
+    Rectangle belly = { px + sz * 0.30f, py + sz * 0.42f, sz * 0.40f, sz * 0.42f };
+    DrawRectangleRounded(belly, 0.6f, 12, front);
+
+    float eyeY  = py + sz * 0.36f;
+    float eyeLX = cx - sz * 0.11f;
+    float eyeRX = cx + sz * 0.11f;
+    float pupilDX = faceLeft ? -1.0f : 1.0f;
+    DrawCircle((int)eyeLX, (int)eyeY, 3, white);
+    DrawCircle((int)eyeRX, (int)eyeY, 3, white);
+    DrawCircle((int)(eyeLX + pupilDX), (int)eyeY, 1, eyeBlk);
+    DrawCircle((int)(eyeRX + pupilDX), (int)eyeY, 1, eyeBlk);
+
+    float bx = cx;
+    float by = py + sz * 0.48f;
+    if (faceLeft) {
+        DrawTriangle((Vector2){bx + 2, by - 2}, (Vector2){bx - 5, by}, (Vector2){bx + 2, by + 2}, orange);
+    } else {
+        DrawTriangle((Vector2){bx - 2, by - 2}, (Vector2){bx - 2, by + 2}, (Vector2){bx + 5, by}, orange);
+    }
+    DrawRectangle((int)(px + sz * 0.30f), (int)(py + sz * 0.88f),
+                  (int)(sz * 0.13f), (int)(sz * 0.08f), orange);
+    DrawRectangle((int)(px + sz * 0.57f), (int)(py + sz * 0.88f),
+                  (int)(sz * 0.13f), (int)(sz * 0.08f), orange);
+}
+
 // ----- Shared sailor (procedural rounded) -------------------------------
 // Delegates to the field's procedural sailor — same rounded visual
 // language as the Elder Penguin / Seal. Facing-row is picked by `faceLeft`
@@ -253,8 +307,11 @@ void DrawCombatantSprite(int creatureId, Rectangle r, bool isEnemy,
         case CREATURE_LOOKOUT:
         case CREATURE_YARD_BOSS:
         case CREATURE_BRAK:
+        case CREATURE_SANGOMA:
+        case CREATURE_CHARM:
             DrawSailorFromAtlas(creatureId, rr, faceLeft, alpha, flashWhite);
             break;
+        case CREATURE_PIERIE:       DrawPierieSprite(rr,   faceLeft, alpha, flashWhite); break;
         default: {
             // Fallback: the old colored box, so unknown creatures still render.
             Color c = isEnemy ? (Color){0xA8, 0x50, 0x54, 255} : (Color){0x50, 0x68, 0xA0, 255};

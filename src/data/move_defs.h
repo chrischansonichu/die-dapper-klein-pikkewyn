@@ -9,7 +9,7 @@
 
 #define MOVE_NAME_LEN  32
 #define MOVE_DESC_LEN  64
-#define MOVE_COUNT     14
+#define MOVE_COUNT     17
 
 typedef enum MoveRange {
     RANGE_MELEE = 0,    // must be in front column, hits adjacent enemy
@@ -30,7 +30,13 @@ typedef enum MoveEffect {
     MOVE_FX_STUN,          // on hit, MOVE_STUN_CHANCE_PCT to stun the target for one turn
     MOVE_FX_SWAP_ALLY,     // actor and the chosen ally trade tiles
     MOVE_FX_RESCUE_ALLY,   // actor jumps next to the chosen ally, then hits every adjacent enemy
+    MOVE_FX_SNARE,         // power-0 ranged: on hit the target loses its next turn (STATUS_SNARED)
+    MOVE_FX_PULL,          // on hit, drag the target onto a free tile next to the actor
+    MOVE_FX_HEAL_PARTY,    // power-0 friendly AOE: heal every living ally by MOVE_HEAL_PARTY_PCT
 } MoveEffect;
+
+#define MOVE_HEAL_PARTY_PCT 25
+#define MOVE_HEAL_PARTY_MIN 4
 
 #define MOVE_STUN_CHANCE_PCT 50
 
@@ -107,6 +113,10 @@ typedef struct MoveDef {
 #define MOVE_FLIPPER_SLAP  11
 #define MOVE_SWAP_PLACES   12
 #define MOVE_TO_THE_RESCUE 13
+// Lokasie finale moves (see creature_defs.c: Pierie + the sangoma).
+#define MOVE_TIDE_MEND     14
+#define MOVE_CHARM_KNOT    15
+#define MOVE_DRAW_IN       16
 
 // Forward declaration - defined in move_defs.c
 extern const MoveDef gMoveDefs[MOVE_COUNT];

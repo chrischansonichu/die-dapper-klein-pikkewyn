@@ -125,6 +125,21 @@ static SailorStyle StyleForCreature(int creatureId, float alpha, bool flash)
         s.hatStyle  = 4;
         s.hasBeard  = true;
         break;
+    case CREATURE_SANGOMA:
+        // White-and-red cloth, beads at the collar, a red doek. Taller than
+        // the crew (spriteScale) and the only lokasie face without a hat
+        // from the street.
+        s.skin      = Tint((Color){0x5E, 0x3A, 0x22, 255}, alpha, flash);
+        s.coat      = Tint((Color){0xF0, 0xEE, 0xE4, 255}, alpha, flash);   // white cloth
+        s.coatShade = Tint((Color){0xB8, 0x40, 0x38, 255}, alpha, flash);
+        s.collar    = Tint((Color){0xB8, 0x40, 0x38, 255}, alpha, flash);   // red band
+        s.stripe    = Tint((Color){0xE8, 0xC8, 0x50, 255}, alpha, flash);
+        s.hat       = Tint((Color){0xB8, 0x40, 0x38, 255}, alpha, flash);   // red doek
+        s.hatBand   = Tint((Color){0xF0, 0xEE, 0xE4, 255}, alpha, flash);
+        s.boots     = Tint(gPH.inkDark, alpha, flash);
+        s.hatStyle  = 6;
+        s.hasBeard  = true;
+        break;
     case CREATURE_DECKHAND:
     default:
         s.coat      = Tint((Color){0x50, 0x68, 0xA0, 255}, alpha, flash);
@@ -262,6 +277,52 @@ static void DrawBrak(Rectangle r, int dir, float alpha, bool flash)
     }
 }
 
+// Charm — a smoking bundle of herbs and feathers lashed to the top of a
+// pole. The finale's real targets: no face, no feet, just a post with a
+// gourd, a feather fan, and a curl of smoke while it still burns.
+static void DrawCharm(Rectangle r, float alpha, bool flash)
+{
+    Color post  = Tint((Color){0x6A, 0x50, 0x38, 255}, alpha, flash);
+    Color gourd = Tint((Color){0xC8, 0x98, 0x58, 255}, alpha, flash);
+    Color cord  = Tint((Color){0xB8, 0x40, 0x38, 255}, alpha, flash);
+    Color bead  = Tint((Color){0xE8, 0xC8, 0x50, 255}, alpha, flash);
+    Color feath = Tint((Color){0xF0, 0xEE, 0xE4, 255}, alpha, flash);
+    Color ink   = Tint(gPH.ink, alpha, flash);
+
+    float sz = r.height;
+    float cx = r.x + r.width * 0.5f;
+    float py = r.y;
+
+    // Post with a wobbled ink edge.
+    DrawRectangle((int)(cx - sz * 0.04f), (int)(py + sz * 0.30f),
+                  (int)(sz * 0.08f), (int)(sz * 0.62f), post);
+    PHWobbleLine((Vector2){cx - sz * 0.04f, py + sz * 0.30f},
+                 (Vector2){cx - sz * 0.04f, py + sz * 0.92f}, 0.6f, 1.2f, ink, 0xC401);
+    // Feather fan behind the gourd.
+    for (int i = -2; i <= 2; i++) {
+        float ang = -1.5708f + (float)i * 0.35f;
+        DrawLineEx((Vector2){cx, py + sz * 0.34f},
+                   (Vector2){cx + cosf(ang) * sz * 0.22f, py + sz * 0.34f + sinf(ang) * sz * 0.22f},
+                   sz * 0.05f, feath);
+    }
+    // Gourd + cord wrap + beads.
+    DrawEllipse((int)cx, (int)(py + sz * 0.38f), sz * 0.16f, sz * 0.20f, gourd);
+    DrawLineEx((Vector2){cx - sz * 0.16f, py + sz * 0.40f},
+               (Vector2){cx + sz * 0.16f, py + sz * 0.36f}, 2.0f, cord);
+    DrawLineEx((Vector2){cx - sz * 0.15f, py + sz * 0.46f},
+               (Vector2){cx + sz * 0.15f, py + sz * 0.43f}, 2.0f, cord);
+    DrawCircle((int)(cx - sz * 0.08f), (int)(py + sz * 0.52f), sz * 0.035f, bead);
+    DrawCircle((int)(cx + sz * 0.06f), (int)(py + sz * 0.54f), sz * 0.035f, bead);
+    // Smoke drifting up off the bundle.
+    float t = (float)GetTime();
+    for (int i = 0; i < 3; i++) {
+        float sy = py + sz * 0.16f - i * sz * 0.07f - fmodf(t * 8.0f + i * 3.0f, sz * 0.08f);
+        DrawCircle((int)(cx + sinf(t * 1.7f + i) * sz * 0.06f), (int)sy, sz * 0.05f,
+                   (Color){gPH.inkLight.r, gPH.inkLight.g, gPH.inkLight.b,
+                           (unsigned char)(90 * alpha)});
+    }
+}
+
 static void DrawHumanoid(const SailorStyle *sp, Rectangle r, int dir, int seed);
 
 // Paper Harbor sailor — humanoid but simplified to the same shape vocabulary
@@ -282,6 +343,10 @@ void EnemySpritesDrawSailor(int creatureId, Rectangle r, int dir, int frame,
     }
     if (creatureId == CREATURE_BRAK) {
         DrawBrak(r, dir, alpha, flashWhite);
+        return;
+    }
+    if (creatureId == CREATURE_CHARM) {
+        DrawCharm(r, alpha, flashWhite);
         return;
     }
 
@@ -312,6 +377,15 @@ void EnemySpritesDrawResident(int personaId, Rectangle r, int dir)
         s.hatBand   = (Color){0xE8, 0xC8, 0x60, 255};
         s.hatStyle  = 6;
         break;
+    case LOK_PERSONA_SANGOMA: {
+        // Same cloth as the fight, friendly eyes now. Reuse the crew
+        // palette so he is recognisably the same man.
+        SailorStyle f = StyleForCreature(CREATURE_SANGOMA, 1.0f, false);
+        f.friendly = true;
+        f.eye      = gPH.inkDark;
+        DrawHumanoid(&f, r, dir, 0xE900 + personaId * 23);
+        return;
+    }
     case LOK_PERSONA_SPAZA:
         s.coat      = (Color){0x5E, 0x8A, 0x6C, 255};   // green apron
         s.coatShade = (Color){0x40, 0x62, 0x4C, 255};

@@ -88,9 +88,12 @@ wizard.
 
 ## Level 2 — the lokasie
 
-**Status (2026-09-09): stages 1–6 landed** (`src/field/map_lokasie.c`,
-`maps/lokasie_s1..6.tmx`, tileset `tools/lokasie.png`). The finale is
-still open — see "Next" below.
+**Status (2026-10-14): stages 1–6 and the finale landed**
+(`src/field/map_lokasie.c`, `maps/lokasie_s1..6.tmx`, tileset
+`tools/lokasie.png`; finale staging + resolution in `field.c`, rules in
+`battle.c`). The fight plays in the compound yard in front of the
+rondavel, not inside it — the S6 tmx already had the yard, and an
+interior would have been a seventh map for one scene.
 
 - Setting: **Sinkbaai**, a lokasie on the shore. Six stages: Strandkant
   (beach) → Die Stege (alleys) → Die Sloot (storm-water ditch) → Die
@@ -113,19 +116,50 @@ still open — see "Next" below.
   tier 1). Both fill the last empty cells of the class×type grid and are
   meant to keep mattering: blunt for locks/crates, ranged blunt for
   knocking things down (bells, lanterns, hanging stuff) in later levels.
-- **Next:** the finale in the rondavel. Jan has to rescue **Pierie**
-  from the **sangoma**. In the course of it the rescued penguin **gains
-  some magic** (the sangoma's work rubbing off) — this is how magic
-  enters the party, timed with the "magic at end of level 2" unlock
-  above. Pierie presumably joins as the first magic-class ally
-  (party/recruit flow already exists via the seal). Sangoma as an
-  ambiguous figure, not a cartoon villain — worth writing carefully;
-  Ouma's line ("a good man once, before the yard boys started paying
-  him") is the seed. The S6 hut door is a placeholder object
-  (`OBJ_HUT_DOOR`, `lok.hut.door.*`) until then.
-- Story flags: bits 45–61 are spoken for; **bits 62–63 are the last two
-  in the u64** — the finale or Level 3 needs a second flag word in
-  GameState + a save bump.
+- **Finale (built 2026-10-14):** knocking on the S6 hut door plays the
+  intro, then the yard is staged and the fight starts through the
+  captive-rescue path (Pierie is an `NPC_PIERIE` captive, so he joins
+  the party the way the seal does). Pierie keeps **Tide Mend** — the
+  party's first magic. The sangoma surrenders, repents and turns to
+  Jesus Christ, and sits by his door as a friendly resident
+  (`LOK_PERSONA_SANGOMA`) on later visits. Ouma's "good man once" line
+  is what he returns to.
+- Story flags: the first u64 is full (bit 62 = HUB_LEFT). The finale
+  opened `GameState.storyFlags2` (`STORY_FLAG2_*`, save v10) — Level 3
+  appends there.
+
+### Finale fight design (built 2026-10-14)
+
+The Captain fight is a stat check with one HP-threshold flip (enrage +
+summons + forced Cannon Volley). The sangoma fight does not repeat that
+shape:
+
+- **Rescue, not kill.** Pierie is on the grid from turn one with
+  `STATUS_BOUND` (clears on slash/pierce damage to his cell). The
+  sangoma is never killed.
+- **Charms gate the fight, not HP.** Three charms (`CREATURE_CHARM`) on
+  poles around the yard. They take no turns and only fall to **ranged**
+  attacks; a Kettie stone (ranged blunt) drops one in a single hit,
+  other thrown weapons chip. If the party has no ranged weapon left at
+  all, a flipper works — no softlock on a lost Kettie. While any charm
+  stands the sangoma is veiled (a smoke ring is drawn on him) and no
+  attack damages him (`ImmuneKey` in battle.c). Win = all three charms
+  down → `finaleSurrendered` at round end; nobody has to faint.
+- **Crew is the damage, sangoma is the problem.** Yard Boss + brak do
+  the hitting. The sangoma works from his doorway and never moves:
+  Charm Knot (`MOVE_FX_SNARE`, STATUS_SNARED = lose a turn, 2-turn
+  cooldown via `Combatant.aiCooldown`), Draw In (`MOVE_FX_PULL`, drags
+  whoever stands next to the bound chick back to his doorway — the
+  mirror of the player's Swap Places), Tackle when adjacent.
+- **Pierie joins mid-fight.** Cut his ropes and he acts: Tackle + Tide
+  Mend (`MOVE_FX_HEAL_PARTY`, 25% max HP to every ally, min 4).
+- **Ends with surrender.** One in-battle page when the last charm
+  falls, then the surrender speech, Pierie's join, the magic page and
+  the skill point as post-battle dialogue.
+
+No party-side summon was needed — the captive-rescue flow covers the
+join. Tuning stays low; a child must be able to miss a charm shot and
+recover.
 
 ## Mini games
 

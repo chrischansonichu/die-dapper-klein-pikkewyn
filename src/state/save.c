@@ -32,7 +32,8 @@
 //   `captainDefeated` (it was never saved — a reload brought the Captain back).
 //   Same bump: a third Special move slot (CREATURE_MAX_MOVES 6 → 7) and the
 //   party `leaderIdx`.
-#define SAVE_VERSION 9u
+// Bumped 9 → 10 (2026-10-14): GameState gained `storyFlags2` (lokasie finale).
+#define SAVE_VERSION 10u
 
 // Flat per-combatant record. creatureId lets us re-resolve the CreatureDef
 // pointer on load. We snapshot effective stats rather than re-deriving them
@@ -74,6 +75,7 @@ typedef struct SaveData {
     int32_t  rescueResumeMapId;
     int32_t  blacksmithScrap;
     uint64_t storyFlags;
+    uint64_t storyFlags2;
     uint32_t dungeonsCompleted;
 
     int32_t       partyCount;
@@ -167,6 +169,7 @@ bool SaveGame(const GameState *gs, int playerTileX, int playerTileY, int playerD
     s.rescueResumeMapId = gs->rescueResumeMapId;
     s.blacksmithScrap   = gs->blacksmithScrap;
     s.storyFlags        = gs->storyFlags;
+    s.storyFlags2       = gs->storyFlags2;
     s.dungeonsCompleted = gs->dungeonsCompleted;
 
     s.partyCount = gs->party.count;
@@ -225,6 +228,7 @@ bool LoadGame(GameState *gs, int *outPlayerX, int *outPlayerY, int *outPlayerDir
     gs->rescueSourceMapId = -1;
     gs->blacksmithScrap   = s.blacksmithScrap;
     gs->storyFlags        = s.storyFlags;
+    gs->storyFlags2       = s.storyFlags2;
     gs->dungeonsCompleted = s.dungeonsCompleted;
     gs->captainDefeated   = (s.dungeonsCompleted & DUNGEON_DONE_HARBOR) != 0;
 
