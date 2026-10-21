@@ -30,19 +30,29 @@ static const SkillClassDef kSkillClasses[SKILL_CLASS_COUNT] = {
             } },
         },
     },
-    // Pierie's trees are named but not designed yet.
+    // Pierie. Each tree grants at most one move so Screech, Undertow and
+    // the innate Tide Mend fit the three Special slots.
     [SKILL_CLASS_CALLER] = {
         "skill.class.caller",
         {
-            { "skill.tree.roar",     { { SKILL_FX_NONE, NULL, NULL },
-                                       { SKILL_FX_NONE, NULL, NULL },
-                                       { SKILL_FX_NONE, NULL, NULL } } },
-            { "skill.tree.mend",     { { SKILL_FX_NONE, NULL, NULL },
-                                       { SKILL_FX_NONE, NULL, NULL },
-                                       { SKILL_FX_NONE, NULL, NULL } } },
-            { "skill.tree.undertow", { { SKILL_FX_NONE, NULL, NULL },
-                                       { SKILL_FX_NONE, NULL, NULL },
-                                       { SKILL_FX_NONE, NULL, NULL } } },
+            // Offense
+            { "skill.tree.roar", {
+                { SKILL_FX_MOVE_SCREECH,  "skill.screech.name",    "skill.screech.desc"    },
+                { SKILL_FX_MAGIC_POWER,   "skill.loud.name",       "skill.loud.desc"       },
+                { SKILL_FX_SCREECH_STUN,  "skill.echo.name",       "skill.echo.desc"       },
+            } },
+            // Support
+            { "skill.tree.mend", {
+                { SKILL_FX_MEND_POWER,    "skill.deeptide.name",   "skill.deeptide.desc"   },
+                { SKILL_FX_MEND_CLEANSE,  "skill.cleanwater.name", "skill.cleanwater.desc" },
+                { SKILL_FX_MEND_REVIVE,   "skill.secondwind.name", "skill.secondwind.desc" },
+            } },
+            // Control
+            { "skill.tree.undertow", {
+                { SKILL_FX_MOVE_UNDERTOW, "skill.undertow.name",   "skill.undertow.desc"   },
+                { SKILL_FX_UNDERTOW_DRAG, "skill.drag.name",       "skill.drag.desc"       },
+                { SKILL_FX_MOVE_BUDGET,   "skill.current.name",    "skill.current.desc"    },
+            } },
         },
     },
 };
@@ -66,6 +76,8 @@ int SkillGrantedMove(SkillEffect fx)
     case SKILL_FX_MOVE_STUN:   return MOVE_FLIPPER_SLAP;
     case SKILL_FX_MOVE_SWAP:   return MOVE_SWAP_PLACES;
     case SKILL_FX_MOVE_RESCUE: return MOVE_TO_THE_RESCUE;
+    case SKILL_FX_MOVE_SCREECH:  return MOVE_SCREECH;
+    case SKILL_FX_MOVE_UNDERTOW: return MOVE_UNDERTOW;
     default:                   return -1;
     }
 }

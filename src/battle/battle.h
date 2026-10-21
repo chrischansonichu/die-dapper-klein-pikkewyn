@@ -145,6 +145,10 @@ typedef struct BattleContext {
     // stands down — nobody has to faint).
     bool    finaleActive;
     bool    finaleSurrendered;
+    // Set once BS_ROUND_END has advanced the turn order for this round
+    // end. The charm-fire narration bounces back through BS_ROUND_END, and
+    // this stops it advancing (and burning) twice.
+    bool    roundAdvanced;
 
     // Dev-only: mirrored from GameState->devGodMode at battle start. When
     // true, enemy hits against the party deal 0 damage. UI to flip the flag

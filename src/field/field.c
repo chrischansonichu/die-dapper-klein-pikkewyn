@@ -741,10 +741,11 @@ static void BeginObjectInteraction(FieldState *ow, int objIdx)
             return;
         }
         case OBJ_PADLOCK: {
-            // Rusted padlock on the shed gate. Needs a real blunt WEAPON —
-            // a flipper Tackle is blunt but doesn't count; the Knobkierie
-            // the yard boss drops is the intended key.
-            if (PartyHasWeaponKind(&ow->gs->party, ATTACK_CLASS_NONE, DMG_BLUNT)) {
+            // Rusted padlock on the shed gate. Needs a real blunt MELEE
+            // weapon — a flipper Tackle is blunt but doesn't count, and a
+            // Kettie stone is blunt but thrown; the Knobkierie the yard
+            // boss drops is the intended key.
+            if (PartyHasWeaponKind(&ow->gs->party, ATTACK_CLASS_MELEE, DMG_BLUNT)) {
                 const char *smash[STR_MAX_PAGES];
                 int n = StrPages("lok.lock.smash", smash, STR_MAX_PAGES);
                 DialogueBegin(&ow->dialogue, smash, n, 30.0f);

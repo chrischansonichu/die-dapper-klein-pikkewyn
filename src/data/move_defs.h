@@ -9,7 +9,7 @@
 
 #define MOVE_NAME_LEN  32
 #define MOVE_DESC_LEN  64
-#define MOVE_COUNT     17
+#define MOVE_COUNT     19
 
 typedef enum MoveRange {
     RANGE_MELEE = 0,    // must be in front column, hits adjacent enemy
@@ -117,6 +117,9 @@ typedef struct MoveDef {
 #define MOVE_TIDE_MEND     14
 #define MOVE_CHARM_KNOT    15
 #define MOVE_DRAW_IN       16
+// Pierie's skill-granted magic (skill_defs.c, Tide Caller trees).
+#define MOVE_SCREECH       17
+#define MOVE_UNDERTOW      18
 
 // Forward declaration - defined in move_defs.c
 extern const MoveDef gMoveDefs[MOVE_COUNT];

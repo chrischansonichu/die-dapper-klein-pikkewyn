@@ -54,6 +54,18 @@ Wave Rider trees (✔ = built):
 | ✔ Long Reach — melee reaches 2 tiles (needs LOS) | ✔ Swap Places — move: trade tiles with an ally ≤ 3 tiles away (same as ranged weapons) | ✔ Split Shot — ranged hits also deal 50% to the weakest enemy next to the target |
 | ✔ Flipper Slap — move: half-power Tackle, 50% chance to stun one turn | ✔ To the Rescue — move: jump next to an ally ≤ 3 tiles away (same as ranged weapons), hit all adjacent enemies, no friendly fire | Through Walls — ranged ignores LOS (undecided) |
 
+Tide Caller trees (Pierie, built 2026-10-21; Tide Mend is innate, so each
+tree grants at most one move and the three Special slots suffice):
+
+| Roar (offense) | Mend (support) | Undertow (control) |
+| --- | --- | --- |
+| ✔ Screech — move: ranged magic, one target, power 55 | ✔ Deep Tide — Tide Mend heals 40% (base 25%) | ✔ Undertow — move: AOE magic over every enemy, power 45 |
+| ✔ Loud Voice — magic moves ×1.3 | ✔ Clean Water — Tide Mend cuts ropes, clears daze + snare | ✔ Riptide — Undertow drags each hit enemy one tile closer |
+| ✔ Ringing Ears — Screech has the 50% daze | ✔ Second Wind — Tide Mend revives fainted allies at 25% HP | ✔ Swift Current — +2 move tiles per turn |
+
+Magic has no cost today (no MP); "rare and costly" is still open — a
+per-battle use cap on magic moves is the likely shape.
+
 Move-granting nodes put their move in a Special slot
 (`CombatantSyncSkillMoves`); Special slots went 2 → 3 so all three fit.
 Ally moves use `RANGE_ALLY` + `MoveDef.effect`. Stun is `STATUS_STUNNED`.
@@ -70,7 +82,6 @@ Open:
   sprite.
 - Stun works on bosses at the same 50%. A resist for `canEnrage` creatures
   is parked — add it only if the Captain gets stun-locked.
-- Tide Caller trees (Roar / Mend / Undertow) are names only.
 - The lokasie finale must call `GameStateCompleteDungeon(gs,
   DUNGEON_DONE_LOKASIE)`, map Pierie's creature id to
   `SKILL_CLASS_CALLER` in `SkillClassForCreature`, and append
@@ -145,6 +156,10 @@ shape:
   stands the sangoma is veiled (a smoke ring is drawn on him) and no
   attack damages him (`ImmuneKey` in battle.c). Win = all three charms
   down → `finaleSurrendered` at round end; nobody has to faint.
+- **Charms burn (added 2026-10-21).** At the top of every round each
+  standing charm scorches every party member on the eight tiles around
+  it (maxHp/8, min 2, halved on easy; bound members are exempt). The
+  tiles are tinted orange during the fight so the burn is readable.
 - **Crew is the damage, sangoma is the problem.** Yard Boss + brak do
   the hitting. The sangoma works from his doorway and never moves:
   Charm Knot (`MOVE_FX_SNARE`, STATUS_SNARED = lose a turn, 2-turn

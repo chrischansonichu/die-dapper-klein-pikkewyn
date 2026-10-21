@@ -39,6 +39,17 @@ typedef enum SkillEffect {
     SKILL_FX_MOVE_STUN,      // Flipper Slap
     SKILL_FX_MOVE_SWAP,      // Swap Places
     SKILL_FX_MOVE_RESCUE,    // To the Rescue
+    // Tide Caller (Pierie). Append only — ranks are saved by tree position,
+    // not by effect, but the move ids below are referenced by number.
+    SKILL_FX_MOVE_SCREECH,   // Screech — single-target ranged magic
+    SKILL_FX_MAGIC_POWER,    // magic moves deal +SKILL_MAGIC_POWER_PCT
+    SKILL_FX_SCREECH_STUN,   // Screech may daze (MOVE_STUN_CHANCE_PCT)
+    SKILL_FX_MEND_POWER,     // Tide Mend heals SKILL_MEND_POWER_PCT instead of the base
+    SKILL_FX_MEND_CLEANSE,   // Tide Mend cuts ropes, clears daze + snare
+    SKILL_FX_MEND_REVIVE,    // Tide Mend revives fainted allies at SKILL_MEND_REVIVE_PCT
+    SKILL_FX_MOVE_UNDERTOW,  // Undertow — AOE magic
+    SKILL_FX_UNDERTOW_DRAG,  // Undertow pulls each hit enemy one tile closer
+    SKILL_FX_MOVE_BUDGET,    // +SKILL_MOVE_BUDGET_BONUS tiles per turn
 } SkillEffect;
 
 // Tuning for the passive effects. Kept here so the UI text and the combat
@@ -47,6 +58,10 @@ typedef enum SkillEffect {
 #define SKILL_MELEE_REACH_BONUS 1     // extra Chebyshev tiles for melee
 #define SKILL_DEFENSE_BONUS     3     // flat DEF added before defMod
 #define SKILL_SPLIT_SHOT_PCT    50    // share of the main hit dealt to the second enemy
+#define SKILL_MAGIC_POWER_PCT   130   // magic damage multiplier, percent
+#define SKILL_MEND_POWER_PCT    40    // Tide Mend heal with Deep Tide (base is MOVE_HEAL_PARTY_PCT)
+#define SKILL_MEND_REVIVE_PCT   25    // HP a revived ally comes back with
+#define SKILL_MOVE_BUDGET_BONUS 2     // extra tiles per turn
 
 typedef struct SkillNodeDef {
     SkillEffect effect;

@@ -340,10 +340,14 @@ Vector2 CombatantVisualPixelPos(const Combatant *c, int tileSizePx)
     return p;
 }
 
-int ApplyStatusMove(Combatant *targets[], int count, const MoveDef *move, bool isEnemy)
+int ApplyStatusMove(const Combatant *actor, Combatant *targets[], int count,
+                    const MoveDef *move, bool isEnemy)
 {
     (void)isEnemy;
     int total = 0;
+    int healPct = MOVE_HEAL_PARTY_PCT;
+    if (actor && CombatantHasSkill(actor, SKILL_FX_MEND_POWER)) healPct = SKILL_MEND_POWER_PCT;
+    bool cleanse = actor && CombatantHasSkill(actor, SKILL_FX_MEND_CLEANSE);
     for (int i = 0; i < count; i++) {
         if (!targets[i] || !targets[i]->alive) continue;
         if (move->id == 4) {  // ColonyRoar: raise ATK 25%
@@ -351,9 +355,14 @@ int ApplyStatusMove(Combatant *targets[], int count, const MoveDef *move, bool i
             if (targets[i]->atkMod > 200) targets[i]->atkMod = 200; // ceiling
         }
         if (move->effect == MOVE_FX_HEAL_PARTY) {  // Tide Mend
-            int amount = targets[i]->maxHp * MOVE_HEAL_PARTY_PCT / 100;
+            int amount = targets[i]->maxHp * healPct / 100;
             if (amount < MOVE_HEAL_PARTY_MIN) amount = MOVE_HEAL_PARTY_MIN;
             total += CombatantHeal(targets[i], amount);
+            if (cleanse) {
+                CombatantClearStatus(targets[i], STATUS_BOUND);
+                CombatantClearStatus(targets[i], STATUS_STUNNED);
+                CombatantClearStatus(targets[i], STATUS_SNARED);
+            }
         }
     }
     return total;

@@ -49,6 +49,11 @@ const MoveDef gMoveDefs[MOVE_COUNT] = {
     { MOVE_TIDE_MEND,     "Tide Mend",     "A cool wave heals the whole party", 0, RANGE_AOE,   -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_MAGIC, DMG_NONE,  false, 0, 0, MOVE_FX_HEAL_PARTY },
     { MOVE_CHARM_KNOT,    "Charm Knot",    "A knotted cord tangles one foe",    0, RANGE_RANGED, -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_MAGIC, DMG_NONE,  false, 0, 0, MOVE_FX_SNARE },
     { MOVE_DRAW_IN,       "Draw In",       "The cord snaps tight and drags",   30, RANGE_RANGED, -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_MAGIC, DMG_BLUNT, false, 0, 0, MOVE_FX_PULL },
+    // Pierie's Tide Caller moves (skill-granted). Screech is a sonic jab —
+    // ranged magic, one target; Undertow is a wave over every enemy. Both
+    // are blunt so they never cut ropes or kelp; that stays a job for edges.
+    { MOVE_SCREECH,       "Screech",       "A piercing cry at one enemy",     55, RANGE_RANGED, -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_MAGIC, DMG_BLUNT, false, 0, 0, MOVE_FX_NONE },
+    { MOVE_UNDERTOW,      "Undertow",      "A wave drags at every enemy",     45, RANGE_AOE,    -1, false, 1, MOVE_GROUP_SPECIAL, ATTACK_CLASS_MAGIC, DMG_BLUNT, true,  0, 0, MOVE_FX_NONE },
 };
 
 const char *AttackClassName(AttackClass c)

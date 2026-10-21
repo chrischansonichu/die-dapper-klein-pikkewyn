@@ -23,6 +23,7 @@ int CombatantMoveBudget(const Combatant *c, const TileMap *map)
     int spd = CombatantEffectiveSpeed(c, map);
     int extra = (spd - 4) / 4;
     if (extra < 0) extra = 0;
+    if (CombatantHasSkill(c, SKILL_FX_MOVE_BUDGET)) extra += SKILL_MOVE_BUDGET_BONUS;
     return 2 + extra;
 }
 
@@ -136,6 +137,85 @@ static void AppendCharmFallen(BattleContext *ctx)
     int left = CountCharmsAlive(ctx);
     if (left > 0) snprintf(ctx->narration + len, NARRATION_LEN - len, Str("battle.charm.down"), left);
     else          snprintf(ctx->narration + len, NARRATION_LEN - len, "%s", Str("battle.charm.last"));
+}
+
+// Loud Voice: a party caster's magic hits harder.
+static int ApplyMagicPower(int dmg, const Combatant *actor, const MoveDef *mv)
+{
+    if (!mv || mv->attackClass != ATTACK_CLASS_MAGIC) return dmg;
+    if (!CombatantHasSkill(actor, SKILL_FX_MAGIC_POWER)) return dmg;
+    return (dmg * SKILL_MAGIC_POWER_PCT) / 100;
+}
+
+static bool CombatTileWalkable(const TileMap *m, const BattleContext *ctx,
+                               const Combatant *self, int x, int y);
+
+// Riptide: step `t` one tile toward `actor` along the dominant axis when
+// that tile is free. Returns true if it moved.
+static bool DragOneTileToward(const BattleContext *ctx, const TileMap *m,
+                              Combatant *t, const Combatant *actor)
+{
+    int dx = actor->tileX - t->tileX;
+    int dy = actor->tileY - t->tileY;
+    if ((dx >= -1 && dx <= 1) && (dy >= -1 && dy <= 1)) return false;
+    int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+    int sx = 0, sy = 0;
+    if (adx >= ady) sx = dx > 0 ? 1 : -1; else sy = dy > 0 ? 1 : -1;
+    int nx = t->tileX + sx, ny = t->tileY + sy;
+    if (!CombatTileWalkable(m, ctx, t, nx, ny)) {
+        // Try the other axis before giving up.
+        sx = 0; sy = 0;
+        if (adx >= ady) { if (dy != 0) sy = dy > 0 ? 1 : -1; }
+        else            { if (dx != 0) sx = dx > 0 ? 1 : -1; }
+        if (sx == 0 && sy == 0) return false;
+        nx = t->tileX + sx; ny = t->tileY + sy;
+        if (!CombatTileWalkable(m, ctx, t, nx, ny)) return false;
+    }
+    int px = t->tileX, py = t->tileY;
+    t->tileX = nx; t->tileY = ny;
+    CombatantStartMoveAnim(t, px, py, TILE_SIZE * TILE_SCALE, BATTLE_MOVE_ANIM_DUR);
+    return true;
+}
+
+// Charm fire: at the top of every round each standing charm scorches every
+// party member on the eight tiles around it. Small, flat, and telegraphed
+// (the tiles are tinted on the player's turn) — it makes standing next to a
+// pole a choice, not a trap. Bound members are tied away from the poles.
+// Writes the narration and returns the number of members hit.
+static int ApplyCharmFire(BattleContext *ctx)
+{
+    int hits = 0, total = 0, lastIdx = -1, lastDmg = 0, lastCharm = -1;
+    for (int i = 0; i < ctx->party->count; i++) {
+        Combatant *mbr = &ctx->party->members[i];
+        if (!mbr->alive || CombatantHasStatus(mbr, STATUS_BOUND)) continue;
+        int dmg = 0, adjCharm = -1;
+        for (int k = 0; k < ctx->enemyCount; k++) {
+            const Combatant *ch = &ctx->enemies[k];
+            if (!ch->alive || !IsCharm(ch)) continue;
+            if (TileChebyshev(TileOf(mbr), TileOf(ch)) > 1) continue;
+            int d = mbr->maxHp / 8;
+            if (d < 2) d = 2;
+            if (ctx->difficulty == 0) d = (d + 1) / 2;
+            if (ctx->godMode) d = 0;
+            dmg += d;
+            adjCharm = k;
+        }
+        if (adjCharm < 0) continue;
+        lastCharm = adjCharm;
+        mbr->hp -= dmg;
+        if (mbr->hp <= 0) { mbr->hp = 0; mbr->alive = false; }
+        hits++; total += dmg; lastIdx = i; lastDmg = dmg;
+    }
+    if (hits == 0) return 0;
+    const Combatant *last = &ctx->party->members[lastIdx];
+    const Combatant *ch   = &ctx->enemies[lastCharm];
+    BattleAnimPlayAttack(&ctx->anim, BATK_SPECIAL, (Color){0xE0, 0x90, 0x48, 255},
+                         ch->tileX, ch->tileY, last->tileX, last->tileY,
+                         true, lastCharm, false, lastIdx);
+    if (!last->alive) BattleAnimQueueFaint(&ctx->anim, false, lastIdx);
+    if (hits == 1) snprintf(ctx->narration, NARRATION_LEN, Str("battle.charm.fire.one"), last->name, lastDmg);
+    else           snprintf(ctx->narration, NARRATION_LEN, Str("battle.charm.fire.many"), total, hits);
+    return hits;
 }
 
 // Ranged weapons swung at melee distance (Chebyshev ≤ 1) do half damage — a
@@ -1028,6 +1108,7 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
     // Blacksmith upgrade bonus: +10% damage per upgrade level on this slot.
     dmg = (dmg * WeaponPowerBonusPct(actor->moveUpgradeLevel[ctx->selectedMove])) / 100;
     dmg = ApplyRangeFalloff(dmg, actor, target, mv);
+    if (!actorIsEn) dmg = ApplyMagicPower(dmg, actor, mv);
     // A thrown stone (ranged blunt — the Kettie) knocks a charm clean off
     // its pole in one hit; other ranged weapons chip it down.
     if (IsCharm(target) && mv->attackClass == ATTACK_CLASS_RANGED &&
@@ -1059,7 +1140,9 @@ static void ApplyMoveToTile(BattleContext *ctx, const TileMap *m)
 
     // Flipper Slap and friends: a landed hostile hit may daze the target.
     bool stunned = false;
-    if (mv->effect == MOVE_FX_STUN && !friendly && target->hp > 0 &&
+    bool canStun = (mv->effect == MOVE_FX_STUN) ||
+                   (mv->id == MOVE_SCREECH && CombatantHasSkill(actor, SKILL_FX_SCREECH_STUN));
+    if (canStun && !friendly && target->hp > 0 &&
         GetRandomValue(1, 100) <= MOVE_STUN_CHANCE_PCT) {
         CombatantAddStatus(target, STATUS_STUNNED);
         stunned = true;
@@ -1278,7 +1361,7 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
     if (mv->power == 0) {
         if (mv->range == RANGE_SELF) {
             Combatant *pts[1] = { actor };
-            ApplyStatusMove(pts, 1, mv, te->isEnemy);
+            ApplyStatusMove(actor, pts, 1, mv, te->isEnemy);
         } else if (mv->range == RANGE_AOE) {
             bool targetSideIsEnemyOfActor = mv->aoeTargetsEnemies;
             bool targetOnEnemyGrid = te->isEnemy
@@ -1293,12 +1376,32 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 for (int i = 0; i < ctx->party->count; i++)
                     if (ctx->party->members[i].alive) pts[cnt++] = &ctx->party->members[i];
             }
-            int healed = ApplyStatusMove(pts, cnt, mv, te->isEnemy);
+            int healed = ApplyStatusMove(actor, pts, cnt, mv, te->isEnemy);
             if (mv->effect == MOVE_FX_HEAL_PARTY) {
                 PlayAttackAnimFor(ctx, mv, actor, te->isEnemy, te->idx,
                                   actor, te->isEnemy, te->idx);
                 snprintf(ctx->narration, NARRATION_LEN, Str("battle.mend.done"),
                          actor->name, mv->name, healed);
+                if (CombatantHasSkill(actor, SKILL_FX_MEND_CLEANSE)) {
+                    size_t len = strlen(ctx->narration);
+                    if (len < NARRATION_LEN - 2)
+                        snprintf(ctx->narration + len, NARRATION_LEN - len, " %s",
+                                 Str("battle.mend.cleanse"));
+                }
+                // Second Wind: fainted friends (never on the enemy grid for
+                // a party caster) get back up with a quarter of their HP.
+                if (!te->isEnemy && !targetOnEnemyGrid &&
+                    CombatantHasSkill(actor, SKILL_FX_MEND_REVIVE)) {
+                    for (int i = 0; i < ctx->party->count; i++) {
+                        Combatant *mbr = &ctx->party->members[i];
+                        if (mbr->alive) continue;
+                        mbr->alive = true;
+                        mbr->hp = mbr->maxHp * SKILL_MEND_REVIVE_PCT / 100;
+                        if (mbr->hp < 1) mbr->hp = 1;
+                        AppendNarration(ctx->narration, Str("battle.mend.revive"), mbr->name);
+                    }
+                    BuildTurnOrder(ctx);
+                }
                 ConsumeMoveUse(ctx, te->isEnemy, ctx->selectedMove);
                 return;
             }
@@ -1314,7 +1417,7 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                                    ? !targetSideIsEnemyOfActor
                                    :  targetSideIsEnemyOfActor;
         bool hostileAoe = targetSideIsEnemyOfActor;
-        int totalDmg = 0, hits = 0, misses = 0, lastIdx = -1;
+        int totalDmg = 0, hits = 0, misses = 0, lastIdx = -1, dragged = 0;
         bool lastKilled = false;
         Combatant *enragedTarget = NULL;
         if (targetOnEnemyGrid) {
@@ -1325,7 +1428,13 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                 if (hostileAoe && !RollHit(actor, t)) { misses++; continue; }
                 int dmg = CalculateDamage(actor, t, mv);
                 dmg = (dmg * WeaponPowerBonusPct(actor->moveUpgradeLevel[ctx->selectedMove])) / 100;
+                if (!te->isEnemy) dmg = ApplyMagicPower(dmg, actor, mv);
                 t->hp -= dmg;
+                // Riptide: the wave also pulls each hit enemy a tile closer.
+                if (mv->id == MOVE_UNDERTOW && t->hp > 0 && !IsCharm(t) &&
+                    CombatantHasSkill(actor, SKILL_FX_UNDERTOW_DRAG)) {
+                    if (DragOneTileToward(ctx, m, t, actor)) dragged++;
+                }
                 if (!te->isEnemy && te->idx >= 0 && te->idx < PARTY_MAX) {
                     t->damageTakenFrom[te->idx] += dmg;
                 }
@@ -1403,6 +1512,12 @@ static void ExecuteAction(BattleContext *ctx, const TileMap *m)
                      actor->name, mv->name, totalDmg, hits);
         }
         if (enragedTarget) AppendEnrageLine(ctx->narration, enragedTarget);
+        if (dragged > 0) {
+            size_t len = strlen(ctx->narration);
+            if (len < NARRATION_LEN - 2)
+                snprintf(ctx->narration + len, NARRATION_LEN - len, " %s",
+                         Str("battle.undertow.drag"));
+        }
         ConsumeMoveUse(ctx, te->isEnemy, ctx->selectedMove);
         return;
     }
@@ -1456,6 +1571,7 @@ void BattleBegin(BattleContext *ctx, Party *party, const TileMap *map,
     ctx->preemptiveAttack = preemptive;
     ctx->finaleActive     = false;
     ctx->finaleSurrendered = false;
+    ctx->roundAdvanced    = false;
     for (int i = 0; i < ctx->enemyCount; i++)
         if (IsSangoma(&ctx->enemies[i])) ctx->finaleActive = true;
     ctx->menu             = (BattleMenuState){0};
@@ -2009,7 +2125,25 @@ void BattleUpdate(BattleContext *ctx, const TileMap *map,
             break;
         }
         if (PartyIsDefeated(ctx->party)) { ctx->state = BS_DEFEAT; break; }
-        AdvanceTurn(ctx);
+        if (!ctx->roundAdvanced) {
+            AdvanceTurn(ctx);
+            ctx->roundAdvanced = true;
+            // A fresh round in the finale: the charms spit fire. The page
+            // comes back here (roundAdvanced set) for the defeat check.
+            if (ctx->currentTurn == 0 && ctx->finaleActive &&
+                !ctx->finaleSurrendered && ApplyCharmFire(ctx) > 0) {
+                ctx->state = BattleAnimDone(&ctx->anim) ? BS_NARRATION : BS_ANIM;
+                break;
+            }
+        }
+        ctx->roundAdvanced = false;
+        // The fire may have dropped the member whose turn it now is.
+        while (ctx->currentTurn < ctx->turnCount) {
+            const Combatant *c = GetCurrentActor(ctx);
+            if (c && c->alive) break;
+            ctx->currentTurn++;
+        }
+        if (ctx->currentTurn >= ctx->turnCount) { BuildTurnOrder(ctx); ctx->currentTurn = 0; }
         ctx->state = BS_TURN_START;
         break;
 
@@ -2049,6 +2183,28 @@ void BattleDrawWorldOverlay(const BattleContext *ctx, const TileMap *map)
 
     for (int i = 0; i < ctx->enemyCount; i++)   DrawStunStars(&ctx->enemies[i], tp);
     for (int i = 0; i < ctx->party->count; i++) DrawStunStars(&ctx->party->members[i], tp);
+
+    // Charm fire reach: a warm tint on the eight tiles around every
+    // standing charm, so the burn is a choice the player can read.
+    if (ctx->finaleActive) {
+        float pulse = 0.5f + 0.5f * sinf((float)GetTime() * 2.5f);
+        for (int i = 0; i < ctx->enemyCount; i++) {
+            const Combatant *c = &ctx->enemies[i];
+            if (!c->alive || !IsCharm(c)) continue;
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    if (dx == 0 && dy == 0) continue;
+                    int x = c->tileX + dx, y = c->tileY + dy;
+                    if (!map || x < 0 || y < 0 || x >= map->width || y >= map->height) continue;
+                    if (TileMapIsSolid(map, x, y)) continue;
+                    Rectangle fr = { (float)(x * tp) + 3.0f, (float)(y * tp) + 3.0f,
+                                     (float)tp - 6.0f, (float)tp - 6.0f };
+                    DrawRectangleRounded(fr, 0.3f, 6,
+                        (Color){0xE0, 0x90, 0x48, (unsigned char)(40 + 30 * pulse)});
+                }
+            }
+        }
+    }
 
     // The sangoma's veil: a slow ring of smoke around him while any charm
     // still burns, so the player can see what the charms are doing.

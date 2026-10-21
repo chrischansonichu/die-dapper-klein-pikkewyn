@@ -124,7 +124,8 @@ int  CalculateDamage(const Combatant *attacker, const Combatant *defender, const
 bool RollHit(const Combatant *attacker, const Combatant *defender);
 // Apply a power-0 move to the given targets. Returns the total effect amount
 // for narration (HP restored for heals, 0 for buffs).
-int  ApplyStatusMove(Combatant *targets[], int count, const MoveDef *move, bool isEnemy);
+int  ApplyStatusMove(const Combatant *actor, Combatant *targets[], int count,
+                     const MoveDef *move, bool isEnemy);
 int  CombatantXpReward(const Combatant *c);
 bool CombatantAddXp(Combatant *c, int amount);  // returns true if leveled up
 
